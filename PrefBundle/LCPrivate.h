@@ -15,7 +15,9 @@
 @end
 
 // 主面板控制器（Root.plist 入口）继承 PSListController
-@interface PSListController : UITableViewController
+@interface PSListController : UITableViewController {
+    id _specifiers;
+}
 @property (nonatomic, retain) id specifiers;
 - (id)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
 @end
