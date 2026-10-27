@@ -19,7 +19,8 @@
 
 static void LCLog(const char *msg) {
     NSLog(@"[LiveCap] %s", msg);
-    int fd = open("/tmp/livecap.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    // 写在 App 沙盒外的可读路径（/tmp 会被沙盒重定向到 App 自己的 tmp，Filza 看不到）
+    int fd = open("/var/mobile/Documents/livecap.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd >= 0) {
         write(fd, msg, strlen(msg));
         write(fd, "\n", 1);
@@ -766,8 +767,10 @@ static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
 #pragma mark - AVPlayer hook
 
 static void LCAttachTapToItem(AVPlayerItem *item) {
-    if (!item || item.audioMix != nil) return;
+    if (!item) return;
     @try {
+        // 不检查 item.audioMix：目标 App（如 YouTube）可能已设自己的 audioMix
+        // （音效/均衡），旧代码因此跳过挂载 tap → 音频抓不到。直接强制挂我们的 tap。
         AVMutableAudioMix *mix = [AVMutableAudioMix audioMix];
         AVMutableAudioMixInputParameters *params = [AVMutableAudioMixInputParameters audioMixInputParameters];
         // 栈上构造 callbacks（16 字节自然对齐，规避 arm64e 链接器对全局字面量指针重定位的检查；
@@ -789,7 +792,7 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         params.audioTapProcessor = tap;
         mix.inputParameters = @[params];
         item.audioMix = mix;
-        LCLog("tap: attached to item");
+        LCLog("tap: attached to item (forced)");
     } @catch (NSException *e) {
         LCLogF(@"tap: attach error %@", e);
     }
@@ -873,11 +876,12 @@ static void LCInstallShortcutItem(void) {
             icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypePlay]
             userInfo:nil]];
 
-        // 语言快捷切换（每个 App 单独记忆，长按图标即可改，不用进设置）
+        // 语言快捷切换（每个 App 单独记忆，长按图标即可改，不用进设置）。
+        // 中文是默认翻译目标，不做识别快捷；识别语言 = 英/日/韩（正好 4 项含开关）。
         NSArray *langs = @[
             @{@"t": @"com.sykes.livecap.lang.en", @"n": @"识别英语"},
             @{@"t": @"com.sykes.livecap.lang.ja", @"n": @"识别日语"},
-            @{@"t": @"com.sykes.livecap.lang.zh", @"n": @"识别中文"},
+            @{@"t": @"com.sykes.livecap.lang.ko", @"n": @"识别韩语"},
         ];
         for (NSDictionary *ld in langs) {
             [items addObject:[[UIApplicationShortcutItem alloc]
