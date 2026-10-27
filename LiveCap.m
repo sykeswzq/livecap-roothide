@@ -715,21 +715,6 @@ static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
     }
 }
 
-// union 强制 8 字节对齐，避免 arm64e 链接器 pointer-not-aligned 错误
-static union {
-    MTAudioProcessingTapCallbacks c;
-    uint64_t aligner;
-} kTapCallbacksStorage = {
-    .c = {
-        .version = 0,
-        .init = LCTapInit,
-        .prepare = LCTapPrepare,
-        .process = LCTapProcess,
-        .finalize = LCTapFinalize,
-        .clientInfo = NULL,
-    }
-};
-
 #pragma mark - AVPlayer hook
 
 static void LCAttachTapToItem(AVPlayerItem *item) {
@@ -737,8 +722,17 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
     @try {
         AVMutableAudioMix *mix = [AVMutableAudioMix audioMix];
         AVMutableAudioMixInputParameters *params = [AVMutableAudioMixInputParameters audioMixInputParameters];
+        // 栈上构造 callbacks（16 字节自然对齐，规避 arm64e 链接器对全局字面量指针重定位的检查；
+        // MTAudioProcessingTapCreate 会拷贝该结构）
+        MTAudioProcessingTapCallbacks callbacks = {0};
+        callbacks.version = 0;
+        callbacks.init = LCTapInit;
+        callbacks.prepare = LCTapPrepare;
+        callbacks.process = LCTapProcess;
+        callbacks.finalize = LCTapFinalize;
+        callbacks.clientInfo = NULL;
         MTAudioProcessingTapRef tap = NULL;
-        OSStatus st = MTAudioProcessingTapCreate(kCFAllocatorDefault, &kTapCallbacksStorage.c,
+        OSStatus st = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
                                                  kMTAudioProcessingTapCreationFlag_PostEffects, &tap);
         if (st != noErr || !tap) {
             LCLogF(@"tap: create failed st=%d", (int)st);
