@@ -817,7 +817,7 @@ static void LC_replaceCurrentItem(id self, SEL _cmd, AVPlayerItem *item) {
 // AVPlayerItem 创建即挂 tap：YouTube 等 App 不一定走 setCurrentItem/replaceCurrentItem，
 // 但任何播放都必须创建 AVPlayerItem，指定初始化器 initWithAsset:automaticallyLoadedAssetKeys:
 // 是所有创建路径的汇聚点。
-static void (*orig_itemInitAssetKeys)(id, SEL, AVAsset *, NSArray *);
+static id (*orig_itemInitAssetKeys)(id, SEL, AVAsset *, NSArray *);
 static id LC_itemInitAssetKeys(id self, SEL _cmd, AVAsset *asset, NSArray *keys) {
     if (orig_itemInitAssetKeys) self = orig_itemInitAssetKeys(self, _cmd, asset, keys);
     if (self) {
