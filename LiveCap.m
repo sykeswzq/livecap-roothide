@@ -856,15 +856,10 @@ static void LCToggleEnabled(void) {
 static BOOL LCShortcutInstalled = NO;
 
 static void LCInstallShortcutItem(void) {
-    if (LCShortcutInstalled) return;
+    // 每次调用都重新设置（去掉一次性保护）：目标 App（如 YouTube）自己也会写
+    // shortcutItems，会覆盖我们的菜单。didBecomeActive 时重新装一遍抢回来。
     @try {
         UIApplication *app = [UIApplication sharedApplication];
-        for (UIApplicationShortcutItem *it in app.shortcutItems) {
-            if ([it.type isEqualToString:@"com.sykes.livecap.toggle"]) {
-                LCShortcutInstalled = YES;
-                return;
-            }
-        }
         // 接管菜单（不保留 App 原有快捷项），并限制总数 ≤4：
         // iOS 主屏长按菜单最多显示 4 项，5 项会被截断（之前语言项就是这么消失的）。
         // 4 项 = 开关 + 英语/日语/中文；韩语在设置面板切换。
@@ -895,10 +890,18 @@ static void LCInstallShortcutItem(void) {
 
         app.shortcutItems = items;
         LCShortcutInstalled = YES;
-        LCLog("shortcut: installed (toggle+en+ja+zh)");
+        LCLog("shortcut: reinstalled (toggle+en+ja+zh)");
     } @catch (NSException *e) {
         LCLogF(@"shortcut: error %@", e);
     }
+}
+
+// 回到前台后延迟重装快捷菜单（防 App 自己的 shortcutItems 覆盖）
+static void LCScheduleShortcutRefresh(void) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        @try { LCInstallShortcutItem(); } @catch (NSException *e) {}
+    });
 }
 
 static NSString *LCLangDisplay(NSString *loc) {
@@ -995,7 +998,8 @@ static void LCAuthSpeech(void) {
     // notDetermined：只有目标 App 声明了 usage description 才请求（无声明时请求可能被系统终止）
     NSString *desc = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"NSSpeechRecognitionUsageDescription"];
     if (desc.length == 0) {
-        LCLog("speech: target app has no speech usage description, skip request (先在其他有语音输入的 App 里授权一次)");
+        LCLog("speech: target app has NO speech usage description -> 无法在本 App 弹授权框");
+        LCLog("speech: 请先在微信/QQ/讯飞等有语音输入的 App 里语音转文字一次，允许其使用语音识别（全局授权），再重开本 App");
         return;
     }
     LCLog("speech: requesting authorization (usage description present)");
@@ -1023,6 +1027,7 @@ static void LCLazyInit(void) {
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
                                                       object:nil queue:[NSOperationQueue mainQueue]
                                                   usingBlock:^(NSNotification *n) {
+        LCScheduleShortcutRefresh();  // 抢回被 App 覆盖的快捷菜单
         if ([[LCConfig shared] enabled]) {
             [[LCSubtitleOverlay shared] install];
         }
