@@ -1,5 +1,7 @@
 // LiveCapPrefs.m - 设置面板入口（纯 specifiers，无需自定义逻辑）
 // iOS 26 SDK 不再公开 Preferences 头文件，私有类声明见 LCPrivate.h
+// 注意：不可用 _specifiers 作缓存 ivar（与父类 PSListController 同名 ivar 冲突会导致 specifiers
+// 内存错位、部分行不渲染），改用自定义名 _lcSpecifiers。
 #import "LCPrivate.h"
 #import <stdio.h>
 #import <unistd.h>
@@ -13,7 +15,17 @@ static void PLog(const char *msg) {
     }
 }
 
-@interface LiveCapPrefsListController : PSListController
+static void PLogF(NSString *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    NSString *s = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    PLog([s UTF8String]);
+}
+
+@interface LiveCapPrefsListController : PSListController {
+    NSArray *_lcSpecifiers;
+}
 @end
 
 @implementation LiveCapPrefsListController
@@ -29,12 +41,22 @@ static void PLog(const char *msg) {
 }
 
 - (NSArray *)specifiers {
-    if (!_specifiers) {
-        PLog("prefs: loadSpecifiersFromPlistName Root");
-        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
-        PLog("prefs: specifiers loaded");
+    if (!_lcSpecifiers) {
+        PLog("prefs: loadSpecifiersFromPlistName Root start");
+        _lcSpecifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        PLogF(@"prefs: specifiers loaded count=%lu", (unsigned long)_lcSpecifiers.count);
+        if (_lcSpecifiers.count > 0) {
+            for (id spec in _lcSpecifiers) {
+                @try {
+                    PLogF(@"prefs:   item label=%@ cell=%@", [spec label] ?: @"-",
+                          [spec cellType] ?: @"-");
+                } @catch (NSException *e) {
+                    PLog("prefs:   item (label access error)");
+                }
+            }
+        }
     }
-    return _specifiers;
+    return _lcSpecifiers;
 }
 
 - (void)viewDidLoad {
@@ -44,4 +66,3 @@ static void PLog(const char *msg) {
 }
 
 @end
-

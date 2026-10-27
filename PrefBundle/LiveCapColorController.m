@@ -75,11 +75,23 @@ static void LCSetValue(NSString *key, id value) {
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    UIColorPickerViewController *p = [[UIColorPickerViewController alloc] init];
-    p.supportsAlpha = YES;
-    p.selectedColor = [self currentColor];
-    p.delegate = self;
-    [self presentViewController:p animated:YES completion:nil];
+    // 参考 XL-Roothide 下拉时间：点开弹「白色（默认）/自定义颜色」两个选项
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"文字颜色"
+                                                                   message:nil
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"白色（默认）" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        LCSetValue(@"textColorHex", @"#FFFFFFFF");
+        _swatch.backgroundColor = [UIColor whiteColor];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"自定义颜色" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        UIColorPickerViewController *p = [[UIColorPickerViewController alloc] init];
+        p.supportsAlpha = YES;
+        p.selectedColor = [self currentColor];
+        p.delegate = self;
+        [self presentViewController:p animated:YES completion:nil];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (UIColor *)currentColor {

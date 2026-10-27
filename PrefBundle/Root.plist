@@ -162,7 +162,7 @@
 			<key>default</key>
 			<string>16</string>
 			<key>keyboardType</key>
-			<string>number</string>
+			<string>UIKeyboardTypeNumberPad</string>
 			<key>placeholder</key>
 			<string>16</string>
 		</dict>
