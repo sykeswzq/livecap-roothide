@@ -830,6 +830,8 @@ static void LCSwizzleAVPlayer(void) {
 
 #pragma mark - 长按图标快捷开关（在目标 App 内通过主屏图标菜单切换）
 
+static void LCAuthSpeech(void);  // 前向声明（定义在文件末尾入口段）
+
 static void LCToggleEnabled(void) {
     NSString *path = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
     NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:path];
