@@ -827,6 +827,19 @@ static id LC_itemInitAssetKeys(id self, SEL _cmd, AVAsset *asset, NSArray *keys)
     return self;
 }
 
+static BOOL gInSetAudioMix = NO;
+static void (*orig_setAudioMix)(id, SEL, id);
+// 目标 App 播放时可能自己 setAudioMix（覆盖我们的 tap）→ 每次被覆盖后重挂我们的 tap
+static void LC_setAudioMix(id self, SEL _cmd, id mix) {
+    orig_setAudioMix(self, _cmd, mix);
+    if (gInSetAudioMix) return;
+    gInSetAudioMix = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try { LCAttachTapToItem(self); } @catch (NSException *e) {}
+        gInSetAudioMix = NO;
+    });
+}
+
 static void LCSwizzleAVPlayer(void) {
     @try {
         Method m1 = class_getInstanceMethod([AVPlayer class], @selector(setCurrentItem:));
@@ -847,6 +860,12 @@ static void LCSwizzleAVPlayer(void) {
             orig_itemInitAssetKeys = (void *)method_getImplementation(mi);
             method_setImplementation(mi, (IMP)LC_itemInitAssetKeys);
             LCLog("hook: item init OK");
+        }
+        Method ma = class_getInstanceMethod([AVPlayerItem class], @selector(setAudioMix:));
+        if (ma) {
+            orig_setAudioMix = (void *)method_getImplementation(ma);
+            method_setImplementation(ma, (IMP)LC_setAudioMix);
+            LCLog("hook: setAudioMix OK");
         }
     } @catch (NSException *e) {
         LCLogF(@"hook: error %@", e);
