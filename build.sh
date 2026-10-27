@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.3
+VER=1.0.4
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -51,10 +51,9 @@ xcrun --sdk iphoneos clang \
   -mios-version-min=13.0 \
   -isysroot "$SDK" \
   -o "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs" \
-  PrefBundle/LiveCapPrefs.m PrefBundle/LiveCapAppListController.m PrefBundle/LiveCapColorController.m
+  PrefBundle/LiveCapPrefs.m PrefBundle/LiveCapAppListController.m
 chmod 755 "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"
 cp PrefBundle/Info.plist "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/Info.plist"
-cp PrefBundle/Root.plist "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/Root.plist"
 cp PrefLoader.plist "$STAGE/Library/PreferenceLoader/Preferences/LiveCap.plist"
 
 echo "[3/4] verify install name + ldid + Mach-O header"

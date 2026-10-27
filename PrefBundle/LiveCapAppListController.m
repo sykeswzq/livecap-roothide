@@ -9,6 +9,22 @@
 
 #pragma mark - jbroot + filter 路径（自包含，不依赖 XLCommon）
 
+static NSString *LCAppID = @"com.sykes.livecap";
+
+static void LCSetPref(id value, NSString *key) {
+    @try {
+        if (value == nil) {
+            CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL,
+                                      (__bridge CFStringRef)LCAppID);
+        } else {
+            CFPreferencesSetAppValue((__bridge CFStringRef)key,
+                                     (__bridge CFPropertyListRef)value,
+                                     (__bridge CFStringRef)LCAppID);
+        }
+        CFPreferencesAppSynchronize((__bridge CFStringRef)LCAppID);
+    } @catch (NSException *e) {}
+}
+
 static NSString *LCJbRootPath(NSString *path) {
     @try {
         void *sym = dlsym(RTLD_DEFAULT, "jbroot");
@@ -306,6 +322,8 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
         else       [[self lc_selected] removeObject:bid];
         _filterWriteOK = LCWriteFilterBundles(
             [[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)]);
+        LCSetPref([[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)],
+                  @"injectApps");
         [_tv reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
     } @catch (NSException *e) {}
 }

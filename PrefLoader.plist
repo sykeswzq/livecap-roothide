@@ -9,7 +9,7 @@
 		<key>cell</key>
 		<string>PSLinkCell</string>
 		<key>detail</key>
-		<string>LiveCapPrefsListController</string>
+		<string>LCRootListController</string>
 		<key>isController</key>
 		<true/>
 		<key>label</key>

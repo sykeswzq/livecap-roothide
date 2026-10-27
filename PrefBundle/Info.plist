@@ -15,10 +15,10 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>1.0.4</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.1</string>
+	<string>1.0.4</string>
 	<key>NSPrincipalClass</key>
-	<string>LiveCapPrefsListController</string>
+	<string>LCRootListController</string>
 </dict>
 </plist>
