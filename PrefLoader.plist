@@ -6,9 +6,13 @@
 	<dict>
 		<key>bundle</key>
 		<string>LiveCapPrefs</string>
-		<key>plist</key>
-		<string>Root</string>
-		<key>title</key>
+		<key>cell</key>
+		<string>PSLinkCell</string>
+		<key>detail</key>
+		<string>LiveCapPrefsListController</string>
+		<key>isController</key>
+		<true/>
+		<key>label</key>
 		<string>实时字幕翻译</string>
 	</dict>
 </dict>
