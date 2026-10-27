@@ -715,7 +715,7 @@ static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
     }
 }
 
-static MTAudioProcessingTapCallbacks kTapCallbacks = {
+static MTAudioProcessingTapCallbacks kTapCallbacks __attribute__((aligned(8))) = {
     .version = 0,
     .init = LCTapInit,
     .prepare = LCTapPrepare,
