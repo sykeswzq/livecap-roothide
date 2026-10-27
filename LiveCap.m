@@ -842,7 +842,7 @@ static void LCToggleEnabled(void) {
     if (now) {
         [[LCSubtitleOverlay shared] install];
         [[LCSubtitleOverlay shared] showToast:@"实时字幕翻译：已开启"];
-        [[LCSpeech shared] startWithFormat:gProcessingFormat];
+        LCAuthSpeech();  // 授权检查 + 补启动识别
     } else {
         [[LCSpeech shared] stop];
         [[LCSubtitleOverlay shared] showToast:@"实时字幕翻译：已关闭"];
@@ -863,7 +863,10 @@ static void LCInstallShortcutItem(void) {
                 return;
             }
         }
-        NSMutableArray *items = [app.shortcutItems mutableCopy] ?: [NSMutableArray array];
+        // 接管菜单（不保留 App 原有快捷项），并限制总数 ≤4：
+        // iOS 主屏长按菜单最多显示 4 项，5 项会被截断（之前语言项就是这么消失的）。
+        // 4 项 = 开关 + 英语/日语/中文；韩语在设置面板切换。
+        NSMutableArray *items = [NSMutableArray array];
 
         // 总开关项
         [items addObject:[[UIApplicationShortcutItem alloc]
@@ -877,7 +880,6 @@ static void LCInstallShortcutItem(void) {
         NSArray *langs = @[
             @{@"t": @"com.sykes.livecap.lang.en", @"n": @"识别英语"},
             @{@"t": @"com.sykes.livecap.lang.ja", @"n": @"识别日语"},
-            @{@"t": @"com.sykes.livecap.lang.ko", @"n": @"识别韩语"},
             @{@"t": @"com.sykes.livecap.lang.zh", @"n": @"识别中文"},
         ];
         for (NSDictionary *ld in langs) {
@@ -891,7 +893,7 @@ static void LCInstallShortcutItem(void) {
 
         app.shortcutItems = items;
         LCShortcutInstalled = YES;
-        LCLog("shortcut: installed");
+        LCLog("shortcut: installed (toggle+en+ja+zh)");
     } @catch (NSException *e) {
         LCLogF(@"shortcut: error %@", e);
     }
@@ -972,6 +974,39 @@ static void LCSwizzleShortcut(void) {
 
 static BOOL LCLazyStarted = NO;
 
+// 语音识别授权：全局状态，需某个 App 触发。目标 App 声明了 NSSpeechRecognitionUsageDescription
+// （如 YouTube）时，注入进程里请求是安全的，授权成功即全局生效，随后补启动识别。
+static void LCAuthSpeech(void) {
+    SFSpeechRecognizerAuthorizationStatus st = [SFSpeechRecognizer authorizationStatus];
+    LCLogF(@"speech: auth status=%ld", (long)st);
+    if (st == SFSpeechRecognizerAuthorizationStatusAuthorized) {
+        if ([[LCConfig shared] enabled]) {
+            [[LCSpeech shared] startWithFormat:gProcessingFormat];
+        }
+        return;
+    }
+    if (st == SFSpeechRecognizerAuthorizationStatusDenied ||
+        st == SFSpeechRecognizerAuthorizationStatusRestricted) {
+        LCLog("speech: denied/restricted, 去 设置→隐私与安全→语音识别 开启");
+        return;
+    }
+    // notDetermined：只有目标 App 声明了 usage description 才请求（无声明时请求可能被系统终止）
+    NSString *desc = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"NSSpeechRecognitionUsageDescription"];
+    if (desc.length == 0) {
+        LCLog("speech: target app has no speech usage description, skip request (先在其他有语音输入的 App 里授权一次)");
+        return;
+    }
+    LCLog("speech: requesting authorization (usage description present)");
+    [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus st2) {
+        LCLogF(@"speech: request result %ld", (long)st2);
+        if (st2 == SFSpeechRecognizerAuthorizationStatusAuthorized) {
+            if ([[LCConfig shared] enabled]) {
+                [[LCSpeech shared] startWithFormat:gProcessingFormat];
+            }
+        }
+    }];
+}
+
 static void LCLazyInit(void) {
     if (LCLazyStarted) return;
     LCLazyStarted = YES;
@@ -981,7 +1016,8 @@ static void LCLazyInit(void) {
     LCSwizzleShortcut();
     LCLog("init: [3/4] install shortcut item");
     LCInstallShortcutItem();
-    LCLog("init: [4/4] observer active");
+    LCLog("init: [4/4] speech auth + active observer");
+    LCAuthSpeech();
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
                                                       object:nil queue:[NSOperationQueue mainQueue]
                                                   usingBlock:^(NSNotification *n) {
