@@ -732,6 +732,10 @@ static void LCTapPrepare(MTAudioProcessingTapRef tap, CMItemCount maxFrames,
         if (!client) return;
         if (processingFormat) {
             memcpy(&gProcessingFormat, processingFormat, sizeof(AudioStreamBasicDescription));
+            LCLogF(@"tap: prepare sr=%g ch=%u bits=%u",
+                   gProcessingFormat.mSampleRate,
+                   (unsigned)gProcessingFormat.mChannelsPerFrame,
+                   (unsigned)gProcessingFormat.mBitsPerChannel);
         }
         LCSpeech *speech = (__bridge LCSpeech *)client;
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -792,7 +796,7 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         params.audioTapProcessor = tap;
         mix.inputParameters = @[params];
         item.audioMix = mix;
-        LCLog("tap: attached to item (forced)");
+        LCLogF(@"tap: attached to item %p (forced)", item);
     } @catch (NSException *e) {
         LCLogF(@"tap: attach error %@", e);
     }
@@ -810,6 +814,19 @@ static void LC_replaceCurrentItem(id self, SEL _cmd, AVPlayerItem *item) {
     if (item) LCAttachTapToItem(item);
 }
 
+// AVPlayerItem 创建即挂 tap：YouTube 等 App 不一定走 setCurrentItem/replaceCurrentItem，
+// 但任何播放都必须创建 AVPlayerItem，指定初始化器 initWithAsset:automaticallyLoadedAssetKeys:
+// 是所有创建路径的汇聚点。
+static void (*orig_itemInitAssetKeys)(id, SEL, AVAsset *, NSArray *);
+static id LC_itemInitAssetKeys(id self, SEL _cmd, AVAsset *asset, NSArray *keys) {
+    if (orig_itemInitAssetKeys) self = orig_itemInitAssetKeys(self, _cmd, asset, keys);
+    if (self) {
+        LCLogF(@"item: init %p", self);
+        LCAttachTapToItem(self);
+    }
+    return self;
+}
+
 static void LCSwizzleAVPlayer(void) {
     @try {
         Method m1 = class_getInstanceMethod([AVPlayer class], @selector(setCurrentItem:));
@@ -823,6 +840,13 @@ static void LCSwizzleAVPlayer(void) {
             orig_replaceCurrentItem = (void *)method_getImplementation(m2);
             method_setImplementation(m2, (IMP)LC_replaceCurrentItem);
             LCLog("hook: replaceCurrentItem OK");
+        }
+        Method mi = class_getInstanceMethod([AVPlayerItem class],
+                                            @selector(initWithAsset:automaticallyLoadedAssetKeys:));
+        if (mi) {
+            orig_itemInitAssetKeys = (void *)method_getImplementation(mi);
+            method_setImplementation(mi, (IMP)LC_itemInitAssetKeys);
+            LCLog("hook: item init OK");
         }
     } @catch (NSException *e) {
         LCLogF(@"hook: error %@", e);
