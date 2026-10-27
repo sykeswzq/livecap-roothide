@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0-END
+VER=1.0.1
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -82,8 +82,8 @@ Version: $VER
 Architecture: $ARCH
 Depends: mobilesubstrate, preferenceloader, firmware (>= 13.0)
 Pre-Depends: rootless-compat (>= 0.9)
-Maintainer: sykeswzq
-Author: sykeswzq
+Maintainer: sykes
+Author: sykes
 Section: Tweaks
 Priority: optional
 Description: 任意App实时视频字幕翻译。抓取 AVPlayer 系 App 的音频，SFSpeech 实时转写 + OpenAI 兼容接口翻译，悬浮双语字幕。兼容 Dopamine2-roothide 白名单注入。目标App需在 Dopamine Inject Manager 白名单勾选。
