@@ -716,12 +716,12 @@ static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
 }
 
 static MTAudioProcessingTapCallbacks kTapCallbacks = {
-    0,
-    LCTapInit,
-    LCTapPrepare,
-    LCTapProcess,
-    LCTapFinalize,
-    NULL
+    .version = 0,
+    .init = LCTapInit,
+    .prepare = LCTapPrepare,
+    .process = LCTapProcess,
+    .finalize = LCTapFinalize,
+    .clientInfo = NULL
 };
 
 #pragma mark - AVPlayer hook
