@@ -66,6 +66,7 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) CGFloat manualX;
 @property (readonly) CGFloat manualY;
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y;
+- (void)setSourceLang:(NSString *)lang forBundle:(NSString *)bid;
 - (void)reload;
 @end
 
@@ -92,8 +93,20 @@ static NSString *LCJBRootPath(NSString *path) {
 }
 
 - (NSString *)sourceLang {
+    // 每个 App 单独覆盖：sourceLang_<bundleId> 优先，否则用全局 sourceLang
+    NSString *per = _d[[NSString stringWithFormat:@"sourceLang_%@", self.bundleId]];
+    if (per && per.length) return per;
     NSString *s = _d[@"sourceLang"];
     return (s && s.length) ? s : @"en-US";
+}
+
+- (void)setSourceLang:(NSString *)lang forBundle:(NSString *)bid {
+    NSString *path = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+    NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:path];
+    if (!d) d = [NSMutableDictionary dictionary];
+    d[[NSString stringWithFormat:@"sourceLang_%@", bid]] = lang;
+    [d writeToFile:path atomically:YES];
+    _d = d;
 }
 
 - (NSString *)targetLang {
@@ -815,14 +828,32 @@ static void LCInstallShortcutItem(void) {
                 return;
             }
         }
-        UIApplicationShortcutItem *item = [[UIApplicationShortcutItem alloc]
+        NSMutableArray *items = [app.shortcutItems mutableCopy] ?: [NSMutableArray array];
+
+        // 总开关项
+        [items addObject:[[UIApplicationShortcutItem alloc]
             initWithType:@"com.sykes.livecap.toggle"
             localizedTitle:@"开关实时字幕翻译"
             localizedSubtitle:nil
             icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypePlay]
-            userInfo:nil];
-        NSMutableArray *items = [app.shortcutItems mutableCopy] ?: [NSMutableArray array];
-        [items addObject:item];
+            userInfo:nil]];
+
+        // 语言快捷切换（每个 App 单独记忆，长按图标即可改，不用进设置）
+        NSArray *langs = @[
+            @{@"t": @"com.sykes.livecap.lang.en", @"n": @"识别英语"},
+            @{@"t": @"com.sykes.livecap.lang.ja", @"n": @"识别日语"},
+            @{@"t": @"com.sykes.livecap.lang.ko", @"n": @"识别韩语"},
+            @{@"t": @"com.sykes.livecap.lang.zh", @"n": @"识别中文"},
+        ];
+        for (NSDictionary *ld in langs) {
+            [items addObject:[[UIApplicationShortcutItem alloc]
+                initWithType:ld[@"t"]
+                localizedTitle:ld[@"n"]
+                localizedSubtitle:nil
+                icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypeSearch]
+                userInfo:nil]];
+        }
+
         app.shortcutItems = items;
         LCShortcutInstalled = YES;
         LCLog("shortcut: installed");
@@ -831,12 +862,44 @@ static void LCInstallShortcutItem(void) {
     }
 }
 
+static NSString *LCLangDisplay(NSString *loc) {
+    if ([loc isEqualToString:@"en-US"]) return @"英语";
+    if ([loc isEqualToString:@"ja-JP"]) return @"日语";
+    if ([loc isEqualToString:@"ko-KR"]) return @"韩语";
+    if ([loc isEqualToString:@"zh-CN"]) return @"中文";
+    return loc;
+}
+
 static void (*orig_performAction)(id, SEL, UIApplicationShortcutItem *, id);
 static void LC_performAction(id self, SEL _cmd, UIApplicationShortcutItem *item, id completionHandler) {
     @try {
         if (item && [item.type isEqualToString:@"com.sykes.livecap.toggle"]) {
             LCLog("shortcut: toggle tapped");
             LCToggleEnabled();
+            if (completionHandler) {
+                void (^handler)(BOOL) = (void (^)(BOOL))completionHandler;
+                handler(YES);
+            }
+            return;
+        }
+        if (item && [item.type hasPrefix:@"com.sykes.livecap.lang."]) {
+            NSString *code = [item.type substringFromIndex:[@"com.sykes.livecap.lang." length]];
+            NSString *loc = nil;
+            if ([code isEqualToString:@"en"]) loc = @"en-US";
+            else if ([code isEqualToString:@"ja"]) loc = @"ja-JP";
+            else if ([code isEqualToString:@"ko"]) loc = @"ko-KR";
+            else if ([code isEqualToString:@"zh"]) loc = @"zh-CN";
+            if (loc) {
+                NSString *bid = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
+                [[LCConfig shared] setSourceLang:loc forBundle:bid];
+                [[LCSpeech shared] stop];
+                if ([[LCConfig shared] enabled]) {
+                    [[LCSpeech shared] startWithFormat:gProcessingFormat];
+                }
+                [[LCSubtitleOverlay shared] showToast:
+                    [NSString stringWithFormat:@"本 App 识别语言：%@", LCLangDisplay(loc)]];
+                LCLogF(@"lang: set %@ for %@", loc, bid);
+            }
             if (completionHandler) {
                 void (^handler)(BOOL) = (void (^)(BOOL))completionHandler;
                 handler(YES);
