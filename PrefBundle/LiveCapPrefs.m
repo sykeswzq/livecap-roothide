@@ -1,4 +1,5 @@
 // LiveCapPrefs.m - 设置面板入口（纯 specifiers，无需自定义逻辑）
+// Rebuild marker: 1.0.3 重新触发编译
 // iOS 26 SDK 不再公开 Preferences 头文件，私有类声明见 LCPrivate.h
 // 注意：不可用 _specifiers 作缓存 ivar（与父类 PSListController 同名 ivar 冲突会导致 specifiers
 // 内存错位、部分行不渲染），改用自定义名 _lcSpecifiers。
