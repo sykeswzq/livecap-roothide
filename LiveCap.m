@@ -163,7 +163,7 @@ static NSString *LCJBRootPath(NSString *path) {
 }
 
 - (CGFloat)manualX {
-    id p = [self manualPositions][self bundleId];
+    id p = [self manualPositions][self.bundleId];
     if ([p isKindOfClass:[NSDictionary class]]) {
         NSNumber *v = p[@"x"];
         if (v && [v doubleValue] >= 0 && [v doubleValue] <= 1) return [v doubleValue];
@@ -172,7 +172,7 @@ static NSString *LCJBRootPath(NSString *path) {
 }
 
 - (CGFloat)manualY {
-    id p = [self manualPositions][self bundleId];
+    id p = [self manualPositions][self.bundleId];
     if ([p isKindOfClass:[NSDictionary class]]) {
         NSNumber *v = p[@"y"];
         if (v && [v doubleValue] >= 0 && [v doubleValue] <= 1) return [v doubleValue];
@@ -186,11 +186,11 @@ static NSString *LCJBRootPath(NSString *path) {
     if (!d) d = [NSMutableDictionary dictionary];
     NSMutableDictionary *pos = [NSMutableDictionary dictionaryWithDictionary:
         [d[@"manualPositions"] isKindOfClass:[NSDictionary class]] ? d[@"manualPositions"] : @{}];
-    pos[self bundleId] = @{@"x": @(x), @"y": @(y)};
+    pos[self.bundleId] = @{@"x": @(x), @"y": @(y)};
     d[@"manualPositions"] = pos;
     [d writeToFile:path atomically:YES];
     _d = d;  // 内存同步，下一次 show 直接生效
-    LCLogF("pos: saved for %@ x=%.2f y=%.2f", self bundleId, x, y);
+    LCLogF(@"pos: saved for %@ x=%.2f y=%.2f", self.bundleId, x, y);
 }
 
 @end
@@ -272,7 +272,7 @@ static NSString *LCJBRootPath(NSString *path) {
         NSError *err = nil;
         NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
         if (err || !payload) {
-            LCLogF("translate: json err %@", err);
+            LCLogF(@"translate: json err %@", err);
             return;
         }
         req.HTTPBody = payload;
@@ -280,12 +280,13 @@ static NSString *LCJBRootPath(NSString *path) {
         NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
             completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
             if (taskErr) {
-                LCLogF("translate: req err %@", taskErr);
+                LCLogF(@"translate: req err %@", taskErr);
                 return;
             }
-            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
-            if (err || !json) {
-                LCLogF("translate: parse err %@", err);
+            NSError *__autoreleasing parseErr = nil;
+            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseErr];
+            if (parseErr || !json) {
+                LCLogF(@"translate: parse err %@", parseErr);
                 return;
             }
             NSArray *choices = json[@"choices"];
@@ -613,7 +614,7 @@ static AudioStreamBasicDescription gProcessingFormat;
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
         if (error) {
-            LCLogF("speech: task error %@", error);
+            LCLogF(@"speech: task error %@", error);
             self->_recording = NO;
             return;
         }
@@ -624,7 +625,7 @@ static AudioStreamBasicDescription gProcessingFormat;
             if ([self->_accum length] > 0) {
                 self->_pendingFinal = [self->_accum copy];
                 [self->_accum setString:@""];
-                LCLogF("speech: final [%@]", self->_pendingFinal);
+                LCLogF(@"speech: final [%@]", self->_pendingFinal);
                 [[LCSubtitleOverlay shared] showOriginal:self->_pendingFinal translation:nil];
                 // 合并开关：翻译跟随总开关
                 [[LCTranslator shared] translate:self->_pendingFinal
@@ -717,9 +718,9 @@ static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
 static MTAudioProcessingTapCallbacks kTapCallbacks = {
     0,
     LCTapInit,
-    LCTapFinalize,
     LCTapPrepare,
     LCTapProcess,
+    LCTapFinalize,
     NULL
 };
 
@@ -734,7 +735,7 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         OSStatus st = MTAudioProcessingTapCreate(kCFAllocatorDefault, &kTapCallbacks,
                                                  kMTAudioProcessingTapCreationFlag_PostEffects, &tap);
         if (st != noErr || !tap) {
-            LCLogF("tap: create failed st=%d", (int)st);
+            LCLogF(@"tap: create failed st=%d", (int)st);
             return;
         }
         params.audioTapProcessor = tap;
@@ -742,7 +743,7 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         item.audioMix = mix;
         LCLog("tap: attached to item");
     } @catch (NSException *e) {
-        LCLogF("tap: attach error %@", e);
+        LCLogF(@"tap: attach error %@", e);
     }
 }
 
@@ -773,7 +774,7 @@ static void LCSwizzleAVPlayer(void) {
             LCLog("hook: replaceCurrentItem OK");
         }
     } @catch (NSException *e) {
-        LCLogF("hook: error %@", e);
+        LCLogF(@"hook: error %@", e);
     }
 }
 
@@ -789,7 +790,7 @@ static void LCToggleEnabled(void) {
     d[@"enabled"] = @(now);
     [d writeToFile:path atomically:YES];
     [[LCConfig shared] reload];
-    LCLogF("toggle: now=%d", now);
+    LCLogF(@"toggle: now=%d", now);
     if (now) {
         [[LCSubtitleOverlay shared] install];
         [[LCSubtitleOverlay shared] showToast:@"实时字幕翻译：已开启"];
@@ -826,7 +827,7 @@ static void LCInstallShortcutItem(void) {
         LCShortcutInstalled = YES;
         LCLog("shortcut: installed");
     } @catch (NSException *e) {
-        LCLogF("shortcut: error %@", e);
+        LCLogF(@"shortcut: error %@", e);
     }
 }
 
@@ -865,7 +866,7 @@ static void LCSwizzleShortcut(void) {
         }
         LCLog("hook: shortcut action OK");
     } @catch (NSException *e) {
-        LCLogF("hook: shortcut error %@", e);
+        LCLogF(@"hook: shortcut error %@", e);
     }
 }
 
