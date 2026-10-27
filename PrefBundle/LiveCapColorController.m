@@ -1,6 +1,6 @@
 // LiveCapColorController.m - 文字颜色自定义（参考 XL-Roothide 下拉时间：系统取色器 + hex 存储）
 #import <UIKit/UIKit.h>
-#import <Preferences/PSViewController.h>
+#import "LCPrivate.h"
 #import <dlfcn.h>
 
 static NSString *LCPrefsFile(void) {

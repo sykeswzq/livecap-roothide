@@ -91,6 +91,12 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>识别语言支持按 App 单独设置：在主屏幕长按已注入 App 的桌面图标，快捷菜单里直接选「识别英语/日语/韩语/中文」，不用进设置来回改。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>翻译 API（自定义）</string>
 		</dict>

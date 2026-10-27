@@ -14,6 +14,12 @@
 - (id)parentController;
 @end
 
+// 主面板控制器（Root.plist 入口）继承 PSListController
+@interface PSListController : UITableViewController
+@property (nonatomic, retain) id specifiers;
+- (id)loadSpecifiersFromPlistName:(NSString *)name target:(id)target;
+@end
+
 #pragma mark - 列出已安装 App
 
 @interface LSApplicationProxy : NSObject

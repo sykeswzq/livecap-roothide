@@ -1,5 +1,6 @@
 // LiveCapPrefs.m - 设置面板入口（纯 specifiers，无需自定义逻辑）
-#import <Preferences/PSListController.h>
+// iOS 26 SDK 不再公开 Preferences 头文件，私有类声明见 LCPrivate.h
+#import "LCPrivate.h"
 
 @interface LiveCapPrefsListController : PSListController
 @end
