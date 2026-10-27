@@ -589,6 +589,7 @@ static AudioStreamBasicDescription gProcessingFormat;
     NSString *_pendingFinal;
     NSMutableString *_accum;
     CFAbsoluteTime _lastPartialAt;
+    CFAbsoluteTime _lastAppendAt;
 }
 
 + (instancetype)shared {
@@ -600,6 +601,15 @@ static AudioStreamBasicDescription gProcessingFormat;
 
 - (void)startWithFormat:(AudioStreamBasicDescription)asbd {
     if (_recording) return;
+    // 授权检查：目标 App 往往没有语音识别 usage description，主动 requestAuthorization
+    // 在无描述时可能触发系统级终止（注入进程被杀）。改为只查状态、不主动请求；
+    // 授权是系统全局的（设置→隐私→语音识别），用户在其他有语音功能的 App 里授权一次即可。
+    SFSpeechRecognizerAuthorizationStatus st = [SFSpeechRecognizer authorizationStatus];
+    if (st != SFSpeechRecognizerAuthorizationStatusAuthorized) {
+        LCLogF(@"speech: auth status=%ld (not authorized, skip; 去 设置→隐私→语音识别 授权)", (long)st);
+        _recording = NO;
+        return;
+    }
     NSLocale *locale = [NSLocale localeWithLocaleIdentifier:[LCConfig shared].sourceLang];
     SFSpeechRecognizer *rec = [[SFSpeechRecognizer alloc] initWithLocale:locale];
     if (!rec || !rec.isAvailable) {
@@ -665,20 +675,33 @@ static AudioStreamBasicDescription gProcessingFormat;
 - (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames {
     if (!_recording || !_request || frames == 0) return;
     if (![[LCConfig shared] enabled]) return;  // 合并开关关闭时忽略音频
-    AVAudioFormat *fmt = [[AVAudioFormat alloc] initWithStreamDescription:&gProcessingFormat];
-    if (!fmt) return;
-    AVAudioPCMBuffer *pcm = [[AVAudioPCMBuffer alloc] initWithPCMFormat:fmt frameCapacity:frames];
-    pcm.frameLength = frames;
-    BOOL interleaved = !(gProcessingFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved);
-    if (interleaved) {
-        memcpy(pcm.floatChannelData[0], list->mBuffers[0].mData, list->mBuffers[0].mDataByteSize);
-    } else {
-        UInt32 nch = MIN(list->mNumberBuffers, fmt.channelCount);
-        for (UInt32 i = 0; i < nch; i++) {
-            memcpy(pcm.floatChannelData[i], list->mBuffers[i].mData, list->mBuffers[i].mDataByteSize);
+    // 音频渲染线程：节流到 ~80ms 一次，降低高频对象分配压力
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (now - _lastAppendAt < 0.08) return;
+    _lastAppendAt = now;
+    @autoreleasepool {
+        @try {
+            AVAudioFormat *fmt = [[AVAudioFormat alloc] initWithStreamDescription:&gProcessingFormat];
+            if (!fmt) return;
+            AVAudioPCMBuffer *pcm = [[AVAudioPCMBuffer alloc] initWithPCMFormat:fmt frameCapacity:frames];
+            if (!pcm) return;
+            pcm.frameLength = frames;
+            BOOL interleaved = !(gProcessingFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved);
+            if (interleaved) {
+                if (list->mBuffers[0].mData && list->mBuffers[0].mDataByteSize > 0)
+                    memcpy(pcm.floatChannelData[0], list->mBuffers[0].mData, list->mBuffers[0].mDataByteSize);
+            } else {
+                UInt32 nch = MIN(list->mNumberBuffers, fmt.channelCount);
+                for (UInt32 i = 0; i < nch; i++) {
+                    if (list->mBuffers[i].mData && list->mBuffers[i].mDataByteSize > 0)
+                        memcpy(pcm.floatChannelData[i], list->mBuffers[i].mData, list->mBuffers[i].mDataByteSize);
+                }
+            }
+            [_request appendAudioPCMBuffer:pcm];
+        } @catch (NSException *e) {
+            LCLogF(@"speech: append err %@", e);
         }
     }
-    [_request appendAudioPCMBuffer:pcm];
 }
 
 - (void)stop {
@@ -702,29 +725,41 @@ static void LCTapFinalize(MTAudioProcessingTapRef tap) {}
 
 static void LCTapPrepare(MTAudioProcessingTapRef tap, CMItemCount maxFrames,
                          const AudioStreamBasicDescription *processingFormat) {
-    // 记录格式供后续 PCM 转换
-    void *client = MTAudioProcessingTapGetStorage(tap);
-    if (!client) return;
-    if (processingFormat) {
-        memcpy(&gProcessingFormat, processingFormat, sizeof(AudioStreamBasicDescription));
+    @try {
+        // 记录格式供后续 PCM 转换
+        void *client = MTAudioProcessingTapGetStorage(tap);
+        if (!client) return;
+        if (processingFormat) {
+            memcpy(&gProcessingFormat, processingFormat, sizeof(AudioStreamBasicDescription));
+        }
+        LCSpeech *speech = (__bridge LCSpeech *)client;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                [speech startWithFormat:gProcessingFormat];
+            } @catch (NSException *e) {
+                LCLogF(@"tap: prepare start err %@", e);
+            }
+        });
+    } @catch (NSException *e) {
+        LCLogF(@"tap: prepare err %@", e);
     }
-    LCSpeech *speech = (__bridge LCSpeech *)client;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [speech startWithFormat:gProcessingFormat];
-    });
 }
 
 static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
                          MTAudioProcessingTapFlags flags, AudioBufferList *bufferListInOut,
                          CMItemCount *numberFramesOut, MTAudioProcessingTapFlags *flagsOut) {
-    OSStatus status = MTAudioProcessingTapGetSourceAudio(tap, numberFrames, bufferListInOut, flagsOut,
-                                                         NULL, numberFramesOut);
-    if (status == noErr) {
-        void *client = MTAudioProcessingTapGetStorage(tap);
-        LCSpeech *speech = (__bridge LCSpeech *)client;
-        if (speech) {
-            [speech appendBufferList:bufferListInOut frames:(UInt32)*numberFramesOut];
+    @try {
+        OSStatus status = MTAudioProcessingTapGetSourceAudio(tap, numberFrames, bufferListInOut, flagsOut,
+                                                             NULL, numberFramesOut);
+        if (status == noErr) {
+            void *client = MTAudioProcessingTapGetStorage(tap);
+            LCSpeech *speech = (__bridge LCSpeech *)client;
+            if (speech) {
+                [speech appendBufferList:bufferListInOut frames:(UInt32)*numberFramesOut];
+            }
         }
+    } @catch (NSException *e) {
+        LCLogF(@"tap: process err %@", e);
     }
 }
 
@@ -935,6 +970,33 @@ static void LCSwizzleShortcut(void) {
 
 #pragma mark - 入口
 
+static BOOL LCLazyStarted = NO;
+
+static void LCLazyInit(void) {
+    if (LCLazyStarted) return;
+    LCLazyStarted = YES;
+    LCLog("init: [1/4] swizzle avplayer");
+    LCSwizzleAVPlayer();
+    LCLog("init: [2/4] swizzle shortcut");
+    LCSwizzleShortcut();
+    LCLog("init: [3/4] install shortcut item");
+    LCInstallShortcutItem();
+    LCLog("init: [4/4] observer active");
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
+                                                      object:nil queue:[NSOperationQueue mainQueue]
+                                                  usingBlock:^(NSNotification *n) {
+        if ([[LCConfig shared] enabled]) {
+            [[LCSubtitleOverlay shared] install];
+        }
+    }];
+    UIApplication *app = [UIApplication sharedApplication];
+    if (app.applicationState == UIApplicationStateActive && [[LCConfig shared] enabled]) {
+        LCLog("init: active, install overlay");
+        [[LCSubtitleOverlay shared] install];
+    }
+    LCLog("init: done");
+}
+
 __attribute__((constructor))
 static void LCInit(void) {
     const char *exe = getprogname();
@@ -947,44 +1009,15 @@ static void LCInit(void) {
     if (strncmp(exe, "/usr", 4) == 0) return;
     if (strncmp(exe, "/bin", 4) == 0) return;
 
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+    // 注入后先等 App 完全启动（3s），再在下一轮主线程空闲时做 hook，
+    // 最大程度避免干扰 App 自身初始化。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        LCLog("init: start");
-        LCSwizzleAVPlayer();
-        LCSwizzleShortcut();
-        LCInstallShortcutItem();
-
-        // SFSpeech 授权是跨 App 共享的：任一 App 授权过即全局可用。
-        // iOS16 上目标 App 无 usage description 时 requestAuthorization 返回 denied（不崩溃）。
-        [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus st) {
-            switch (st) {
-                case SFSpeechRecognizerAuthorizationStatusAuthorized:
-                    LCLog("speech: authorized");
-                    break;
-                case SFSpeechRecognizerAuthorizationStatusDenied:
-                    LCLog("speech: denied（若目标App无语音识别权限，请先在系统设置→隐私→语音识别 确认已授权）");
-                    break;
-                case SFSpeechRecognizerAuthorizationStatusRestricted:
-                    LCLog("speech: restricted");
-                    break;
-                default:
-                    LCLog("speech: notDetermined");
-                    break;
-            }
-        }];
-
-        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
-                                                          object:nil queue:[NSOperationQueue mainQueue]
-                                                      usingBlock:^(NSNotification *n) {
-            if ([[LCConfig shared] enabled]) {
-                [[LCSubtitleOverlay shared] install];
-            }
-        }];
-
-        UIApplication *app = [UIApplication sharedApplication];
-        if (app.applicationState == UIApplicationStateActive && [[LCConfig shared] enabled]) {
-            LCLog("init: active, install overlay");
-            [[LCSubtitleOverlay shared] install];
+        LCLog("init: wake");
+        @try {
+            LCLazyInit();
+        } @catch (NSException *e) {
+            LCLogF(@"init: error %@", e);
         }
     });
 }
