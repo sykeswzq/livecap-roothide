@@ -1,0 +1,63 @@
+#!/bin/sh
+# postinst：预写默认配置 + 让设置面板能改写 filter + 刷新注入缓存
+LOG=/var/mobile/Documents/livecap_install.log
+mkdir -p /var/mobile/Documents
+chmod 777 /var/mobile/Documents
+echo "=== postinst $(date) ===" > "$LOG"
+
+# 默认配置（面板与 tweak 共用 /var/mobile/Library/Preferences/com.sykes.livecap.plist）
+CFG=/var/mobile/Library/Preferences/com.sykes.livecap.plist
+if [ ! -f "$CFG" ]; then
+  cat > "$CFG" << 'CFGEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>enabled</key>
+	<true/>
+	<key>sourceLang</key>
+	<string>en-US</string>
+	<key>targetLang</key>
+	<string>zh-CN</string>
+	<key>apiBase</key>
+	<string>https://apihub.agnes-ai.cn/v1</string>
+	<key>apiKey</key>
+	<string>sk-ZunoSlgppZBgp19GwuQe6OiJiO2427oGnP4J60Ny30pS0n19</string>
+	<key>model</key>
+	<string>agnes-3.0-flash</string>
+	<key>fontSize</key>
+	<string>16</string>
+	<key>boldText</key>
+	<false/>
+	<key>textColorHex</key>
+	<string>#FFFFFFFF</string>
+	<key>backgroundStyle</key>
+	<string>frost</string>
+	<key>manualPositions</key>
+	<dict/>
+</dict>
+</plist>
+CFGEOF
+  chmod 666 "$CFG"
+  echo "config written" >> "$LOG"
+fi
+
+# 面板写入后 cfprefsd 缓存问题：强制重读，保证面板/tweak 读到的都是最新
+killall -9 cfprefsd 2>/dev/null || true
+
+# 让设置面板能改写 filter（roothide Bundles 精确匹配，需按勾选写包名）
+chmod 666 "$(dirname "$0")/../../Library/MobileSubstrate/DynamicLibraries/LiveCap.plist" 2>/dev/null || true
+chmod 666 "Library/MobileSubstrate/DynamicLibraries/LiveCap.plist" 2>/dev/null || true
+chown root:wheel /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib 2>/dev/null || true
+chown root:wheel /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist 2>/dev/null || true
+chmod 755 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib 2>/dev/null || true
+chmod 644 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist 2>/dev/null || true
+
+# 刷新图标缓存 + 让注入生效（重启 runningboardd 清理残留注入状态）
+for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
+  if [ -x "$k" ]; then "$k" runningboardd >> "$LOG" 2>&1 || true; break; fi
+done
+killall runningboardd 2>/dev/null || true
+
+echo "=== postinst done ===" >> "$LOG"
+exit 0

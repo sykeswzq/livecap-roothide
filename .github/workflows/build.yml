@@ -1,0 +1,103 @@
+name: Build LiveCap roothide deb
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "*.deb"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: echo "VER=$(grep '^VER=' build.sh | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Install build tools
+        run: |
+          command -v dpkg-deb >/dev/null 2>&1 || brew install dpkg
+          if command -v ldid >/dev/null 2>&1; then
+            echo "ldid: already present"
+          elif brew install ldid-procursus 2>/dev/null; then
+            echo "ldid: brew ldid-procursus"
+          elif brew install procursus/ldid/ldid 2>/dev/null; then
+            echo "ldid: brew tap"
+          else
+            TAG=v2.1.5-procursus7
+            if [ "$(uname -m)" = "arm64" ]; then ASSET=ldid_macosx_arm64; else ASSET=ldid_macosx_x86_64; fi
+            curl -sL --fail --max-time 180 -o /tmp/ldid_bin \
+              "https://github.com/ProcursusTeam/ldid/releases/download/$TAG/$ASSET"
+            mkdir -p "$HOME/.local/bin"
+            mv /tmp/ldid_bin "$HOME/.local/bin/ldid"
+            chmod +x "$HOME/.local/bin/ldid"
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          fi
+          command -v ldid >/dev/null 2>&1 || { echo "ERROR: ldid not available"; exit 1; }
+          echo "ldid OK"
+
+      - name: Clean stale debs
+        run: rm -f *.deb
+
+      - name: Build
+        run: bash build.sh
+
+      - name: Verify deb
+        run: |
+          set -e
+          DEB=$(ls com.sykes.livecap_*_iphoneos-arm64e.deb | head -1)
+          echo "deb: $DEB"
+          if dpkg-deb -c "$DEB" | grep -E '\./var/(jb|roothide)/'; then
+            echo "ERROR: 检测到 ./var/jb 或 ./var/roothide 前缀"; exit 1
+          fi
+          dpkg-deb -c "$DEB" | grep -E '\./Library/MobileSubstrate/DynamicLibraries/LiveCap\.dylib' || { echo "ERROR: 缺 dylib"; exit 1; }
+          dpkg-deb -c "$DEB" | grep -E '\./Library/MobileSubstrate/DynamicLibraries/LiveCap\.plist' || { echo "ERROR: 缺 filter plist"; exit 1; }
+          dpkg-deb -c "$DEB" | grep -E '\./Library/PreferenceBundles/LiveCapPrefs\.bundle/LiveCapPrefs' || { echo "ERROR: 缺设置面板 bundle"; exit 1; }
+          dpkg-deb -c "$DEB" | grep -E '\./Library/PreferenceLoader/Preferences/LiveCap\.plist' || { echo "ERROR: 缺 PreferenceLoader 入口"; exit 1; }
+          echo "  (1) OK 路径与文件齐全"
+
+          rm -rf /tmp/lccheck && mkdir -p /tmp/lccheck
+          dpkg-deb -x "$DEB" /tmp/lccheck
+          DYLIB=/tmp/lccheck/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib
+          m=$(python3 -c 'import sys;d=open(sys.argv[1],"rb").read(4);print(d.hex())' "$DYLIB")
+          [ "$m" = "cafebabe" ] || [ "$m" = "cffaedfe" ] || { echo "ERROR: dylib magic=$m"; exit 1; }
+          IDS="$(otool -D "$DYLIB" | grep -v 'architecture' | grep -v '^$' | sort -u)"
+          echo "  install name: $IDS"
+          echo "$IDS" | grep -q "@loader_path/.jbroot" || { echo "ERROR: LC_ID_DYLIB 不规范: $IDS"; exit 1; }
+
+          TPLIST=/tmp/lccheck/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist
+          /usr/libexec/PlistBuddy -c "Print :Filter:Bundles" "$TPLIST" | grep -q "com.google.ios.youtube" || { echo "ERROR: Filter 缺 YouTube"; exit 1; }
+          if /usr/libexec/PlistBuddy -c "Print" "$TPLIST" | grep -qE '\*'; then
+            echo "ERROR: Filter 含通配符"; exit 1
+          fi
+          echo "  (2) OK dylib 头正常 + install name 规范 + Filter 正确"
+
+          rm -rf /tmp/lcctl && mkdir -p /tmp/lcctl
+          dpkg-deb -e "$DEB" /tmp/lcctl
+          [ -f /tmp/lcctl/postinst ] || { echo "ERROR: postinst missing"; exit 1; }
+          [ -x /tmp/lcctl/postinst ] || { echo "ERROR: postinst not executable"; exit 1; }
+          echo "  (3) OK postinst 存在且可执行"
+          echo "全部校验通过"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: livecap-deb
+          path: "*.deb"
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.deb"
+          tag_name: v${{ steps.ver.outputs.VER }}
+          name: LiveCap v${{ steps.ver.outputs.VER }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Filter</key>
+	<dict>
+		<key>Bundles</key>
+		<array>
+			<string>com.google.ios.youtube</string>
+			<string>com.zhiliaoapp.musically</string>
+			<string>com.bilibili.app.blue</string>
+			<string>com.ss.iphone.ugc.Aweme</string>
+			<string>com.tencent.qiyivideo</string>
+			<string>com.tencent.live4iphone</string>
+			<string>com.youku.YouKu</string>
+			<string>com.twitch.Twitch</string>
+			<string>com.netflix.Netflix</string>
+			<string>com.instagram.instagram</string>
+			<string>com.facebook.Facebook</string>
+		</array>
+	</dict>
+</dict>
+</plist>

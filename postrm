@@ -1,0 +1,4 @@
+#!/bin/sh
+# postrm：重启 runningboardd 清理残留注入
+killall runningboardd 2>/dev/null
+exit 0
