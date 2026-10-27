@@ -48,10 +48,9 @@ static void PLogF(NSString *fmt, ...) {
         if (_lcSpecifiers.count > 0) {
             for (id spec in _lcSpecifiers) {
                 @try {
-                    PLogF(@"prefs:   item label=%@ cell=%@", [spec label] ?: @"-",
-                          [spec cellType] ?: @"-");
+                    PLogF(@"prefs:   item %@", [spec description]);
                 } @catch (NSException *e) {
-                    PLog("prefs:   item (label access error)");
+                    PLog("prefs:   item (description error)");
                 }
             }
         }
