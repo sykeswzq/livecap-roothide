@@ -1954,22 +1954,34 @@ static void LCHookAudioUnitRender(void) {
 // 路线 A：注入系统音频守护进程，任何 App 播放都过这里的混音 AU → 拿解码后 PCM，不针对单个 App。
 // 本模块运行在 mediaserverd（root daemon）内：无 UIKit，实时音频线程内零分配零锁。
 static FILE *gLCMediaLogF = NULL;
+static int gLCMediaLogWarned = 0;
+static long gLCMediaLogNsLog = 0;
 static void LCMediaLog(const char *fmt, ...) {
     if (!gLCMediaLogF) {
-        gLCMediaLogF = fopen("/tmp/livecap_media.log", "a");
-        if (gLCMediaLogF) {
-            fprintf(gLCMediaLogF, "=== LiveCap mediaserverd tap session ===\n");
-        } else {
-            NSLog(@"[LiveCap] media: fopen /tmp/livecap_media.log FAILED errno=%d", errno);
+        // daemon 沙盒通常禁止 /tmp：依次尝试 /var/log（root daemon 通用日志目录）→ /var/mobile/Documents
+        const char *paths[] = { "/var/log/livecap_media.log", "/var/mobile/Documents/livecap_media.log", NULL };
+        for (int i = 0; paths[i] && !gLCMediaLogF; i++) {
+            gLCMediaLogF = fopen(paths[i], "a");
+            if (gLCMediaLogF) {
+                fprintf(gLCMediaLogF, "=== LiveCap mediaserverd tap session (path=%s) ===\n", paths[i]);
+            }
+        }
+        if (!gLCMediaLogF && !gLCMediaLogWarned) {
+            gLCMediaLogWarned = 1;
+            NSLog(@"[LiveCap] media: fopen ALL log paths FAILED errno=%d", errno);
         }
     }
     if (!gLCMediaLogF) {
-        // /tmp 不可写时回退到系统日志，确保崩溃点/执行路径可见
-        va_list ap2;
-        va_start(ap2, fmt);
-        NSString *msg = [[NSString alloc] initWithFormat:[NSString stringWithUTF8String:fmt] arguments:ap2];
-        va_end(ap2);
-        NSLog(@"[LiveCap] media: %@", msg);
+        // 全路径不可写时回退系统日志，但限频（音频回调每秒触发，不能每秒刷 os_log）
+        long now = time(NULL);
+        if (now != gLCMediaLogNsLog) {
+            gLCMediaLogNsLog = now;
+            va_list ap2;
+            va_start(ap2, fmt);
+            NSString *msg = [[NSString alloc] initWithFormat:[NSString stringWithUTF8String:fmt] arguments:ap2];
+            va_end(ap2);
+            NSLog(@"[LiveCap] media: %@", msg);
+        }
         return;
     }
     va_list ap;
