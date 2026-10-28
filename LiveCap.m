@@ -19,12 +19,27 @@
 
 static void LCLog(const char *msg) {
     NSLog(@"[LiveCap] %s", msg);
-    // 写在 App 沙盒外的可读路径（/tmp 会被沙盒重定向到 App 自己的 tmp，Filza 看不到）
-    int fd = open("/var/mobile/Documents/livecap.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (fd >= 0) {
-        write(fd, msg, strlen(msg));
-        write(fd, "\n", 1);
-        close(fd);
+    @autoreleasepool {
+        NSString *line = [NSString stringWithFormat:@"[%lld] %s\n",
+                          (long long)[[NSDate date] timeIntervalSince1970], msg];
+        NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
+        // 主写 App 沙盒容器 Documents（App Store App 一定可写；Filza 搜 livecap.log 可见）
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        if (paths.count) {
+            NSString *p = [paths[0] stringByAppendingPathComponent:@"livecap.log"];
+            if ([[NSFileManager defaultManager] fileExistsAtPath:p]) {
+                @try {
+                    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
+                    [fh seekToEndOfFile];
+                    [fh writeData:data];
+                    [fh closeFile];
+                } @catch (NSException *e) {}
+            } else {
+                [data writeToFile:p atomically:YES];
+            }
+        }
+        // 尽力写全局路径（App Store 沙盒可能拒绝，失败静默）
+        [data writeToFile:@"/var/mobile/Documents/livecap.log" atomically:YES];
     }
 }
 
@@ -1063,6 +1078,9 @@ static void LCAuthSpeech(void) {
 static void LCLazyInit(void) {
     if (LCLazyStarted) return;
     LCLazyStarted = YES;
+    LCLogF("init: [0/4] dylib loaded in %@ v%@",
+           [[NSBundle mainBundle] bundleIdentifier] ?: @"?",
+           [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?");
     LCLog("init: [1/4] swizzle avplayer");
     LCSwizzleAVPlayer();
     LCLog("init: [2/4] swizzle shortcut");
