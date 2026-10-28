@@ -1131,6 +1131,10 @@ static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
 
 static void LCAttachTapToItem(AVPlayerItem *item) {
     if (!item) return;
+    // 关联对象去重：同一 item 只挂一次（currentItem getter 会被高频调用，不能每次重建 tap）
+    static void *LCAttachKey = &LCAttachKey;
+    if (objc_getAssociatedObject(item, LCAttachKey)) return;
+    objc_setAssociatedObject(item, LCAttachKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     @try {
         // 不检查 item.audioMix：目标 App（如 YouTube）可能已设自己的 audioMix
         // （音效/均衡），旧代码因此跳过挂载 tap → 音频抓不到。直接强制挂我们的 tap。
@@ -1171,6 +1175,17 @@ static void (*orig_replaceCurrentItem)(id, SEL, AVPlayerItem *);
 static void LC_replaceCurrentItem(id self, SEL _cmd, AVPlayerItem *item) {
     orig_replaceCurrentItem(self, _cmd, item);
     if (item) LCAttachTapToItem(item);
+}
+
+// 兜底 hook：AVPlayer.currentItem getter —— YouTube 等 App 创建/切换 item 的路径无法枚举，
+// 但任何播放器渲染/状态查询都会读 currentItem。读到 item 即挂 tap（关联对象去重，幂等）。
+static AVPlayerItem *(*orig_currentItem)(id, SEL);
+static AVPlayerItem *LC_currentItem(id self, SEL _cmd) {
+    AVPlayerItem *item = orig_currentItem(self, _cmd);
+    if (item) {
+        @try { LCAttachTapToItem(item); } @catch (NSException *e) {}
+    }
+    return item;
 }
 
 // AVPlayerItem 创建即挂 tap：YouTube 等 App 不一定走 setCurrentItem/replaceCurrentItem，
@@ -1254,6 +1269,12 @@ static void LCSwizzleAVPlayer(void) {
             orig_replaceCurrentItem = (void *)method_getImplementation(m2);
             method_setImplementation(m2, (IMP)LC_replaceCurrentItem);
             LCLog("hook: replaceCurrentItem OK");
+        }
+        Method mci = class_getInstanceMethod([AVPlayer class], @selector(currentItem));
+        if (mci) {
+            orig_currentItem = (void *)method_getImplementation(mci);
+            method_setImplementation(mci, (IMP)LC_currentItem);
+            LCLog("hook: currentItem OK");
         }
         Method mi = class_getInstanceMethod([AVPlayerItem class],
                                             @selector(initWithAsset:automaticallyLoadedAssetKeys:));
