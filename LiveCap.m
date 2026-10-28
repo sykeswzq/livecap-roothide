@@ -300,7 +300,7 @@ static NSString *LCJBRootPath(NSString *path) {
             @"Output ONLY the translated text. No explanations, no quotation marks, no extra punctuation. "
             @"Keep line breaks where they make sense.", target];
 
-        // 优先腾讯云混元（用户已配 SecretId/Key，ASR+翻译同一密钥）
+        // 1) 腾讯云机器翻译（用户已配 SecretId/Key，免费 500 万字符/月；未开通时返回错误则跳过）
         NSString *secretId = [[LCConfig shared] tencentSecretId];
         NSString *secretKey = [[LCConfig shared] tencentSecretKey];
         if (secretId.length && secretKey.length) {
@@ -309,61 +309,62 @@ static NSString *LCJBRootPath(NSString *path) {
                         completion:completion];
             return;
         }
-        // 回退 agnes（OpenAI 兼容；apiKey 为空则跳过）
-        NSString *apiKey = [[LCConfig shared] apiKey];
-        if (apiKey.length == 0) {
-            LCLog("translate: no tencent keys, no agnes key -> skipped");
-            return;
-        }
-        NSDictionary *body = @{
-            @"model": [LCConfig shared].model ?: @"agnes-3.0-flash",
-            @"messages": @[
-                @{@"role": @"system", @"content": sysPrompt},
-                @{@"role": @"user", @"content": trimmed}
-            ],
-            @"temperature": @0
-        };
-
-        NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
-            [NSURL URLWithString:[[[LCConfig shared] apiBase] stringByAppendingString:@"/chat/completions"]]];
-        req.HTTPMethod = @"POST";
-        [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-        [req setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
-        req.timeoutInterval = 12.0;
-        NSError *__autoreleasing err = nil;
-        NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
-        if (err || !payload) {
-            LCLogF(@"translate: json err %@", err);
-            return;
-        }
-        req.HTTPBody = payload;
-
-        NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
-            completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
-            if (taskErr) {
-                LCLogF(@"translate: req err %@", taskErr);
-                return;
-            }
-            NSError *__autoreleasing parseErr = nil;
-            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseErr];
-            if (parseErr || !json) {
-                LCLogF(@"translate: parse err %@", parseErr);
-                return;
-            }
-            NSArray *choices = json[@"choices"];
-            if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) return;
-            NSString *content = choices[0][@"message"][@"content"];
-            if (![content isKindOfClass:[NSString class]] || content.length == 0) return;
-            NSString *result = [content stringByTrimmingCharactersInSet:
-                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            _cache[cacheKey] = result;
-            if (_cache.count > 300) [_cache removeAllObjects];
-            if (completion) {
-                dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
-            }
-        }];
-        [task resume];
+        // 2) MyMemory 免费翻译兜底（无需开通/密钥，立即可用）
+        [self mymemoryTranslate:trimmed targetLang:target cacheKey:cacheKey completion:completion];
     });
+}
+
+// 语言代码：BCP-47 -> MyMemory 格式（zh 用 zh-CN，其余取前缀）
+static NSString *LCShortLang(NSString *lc) {
+    if ([lc hasPrefix:@"zh"]) return @"zh-CN";
+    if ([lc hasPrefix:@"ja"]) return @"ja";
+    if ([lc hasPrefix:@"ko"]) return @"ko";
+    if ([lc hasPrefix:@"fr"]) return @"fr";
+    if ([lc hasPrefix:@"de"]) return @"de";
+    if ([lc hasPrefix:@"es"]) return @"es";
+    if ([lc hasPrefix:@"ru"]) return @"ru";
+    if ([lc hasPrefix:@"ar"]) return @"ar";
+    return @"en";
+}
+
+// MyMemory 免费翻译（GET api.mymemory.translated.net，无需密钥）
+- (void)mymemoryTranslate:(NSString *)text targetLang:(NSString *)target
+                 cacheKey:(NSString *)cacheKey completion:(void (^)(NSString *result))completion {
+    NSString *src = LCShortLang([LCConfig shared].sourceLang);
+    NSString *dst = LCShortLang(target);
+    NSString *urlStr = [NSString stringWithFormat:
+        @"https://api.mymemory.translated.net/get?q=%@&langpair=%@|%@",
+        [text stringByAddingPercentEncodingWithAllowedCharacters:
+            [NSCharacterSet URLQueryAllowedCharacterSet]],
+        src, dst];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
+    req.timeoutInterval = 12.0;
+    NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
+        if (taskErr) {
+            LCLogF(@"translate: mymemory req err %@", taskErr);
+            return;
+        }
+        NSError *__autoreleasing pe = nil;
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
+        if (pe || !json) {
+            LCLogF(@"translate: mymemory parse err %@", pe);
+            return;
+        }
+        NSDictionary *rd = json[@"responseData"];
+        NSString *content = rd[@"translatedText"];
+        if (![content isKindOfClass:[NSString class]] || content.length == 0) return;
+        // 空查询/警告时不当作结果
+        if ([content hasPrefix:@"NO QUERY SPECIFIED"] || [content hasPrefix:@"MY MEMORY WARNING"]) return;
+        NSString *result = [content stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        _cache[cacheKey] = result;
+        if (_cache.count > 300) [_cache removeAllObjects];
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
+        }
+    }];
+    [task resume];
 }
 
 // 腾讯云机器翻译 TextTranslate（TC3 签名，2018-03-21；免费每月 500 万字符）
