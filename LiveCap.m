@@ -1380,24 +1380,32 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     CMBlockBufferGetDataPointer(bb, 0, NULL, &dataLen, &dataPtr);
     if (!dataPtr || dataLen == 0 || dataLen > 2 * 1024 * 1024) return;
 
+    // 'aac '（0x61616320）是 YouTube 自定义 AAC 标识，AudioConverter 只认标准 mp4a → 归一化
+    AudioStreamBasicDescription inASBD2 = *inASBD;
+    if (inASBD2.mFormatID == 0x61616320) {
+        inASBD2.mFormatID = kAudioFormatMPEG4AAC;  // 'mp4a'
+        inASBD2.mFormatFlags = 0;
+        LCLogF(@"audio: dec normalize aac->mp4a");
+    }
+
     LCLogF(@"audio: dec in sr=%.0f fmt=0x%08x ch=%u bits=%u fpp=%u bpp=%u bytesF=%u bytesP=%u flags=0x%x len=%zu",
-           inASBD->mSampleRate, (unsigned)inASBD->mFormatID, (unsigned)inASBD->mChannelsPerFrame,
-           (unsigned)inASBD->mBitsPerChannel, (unsigned)inASBD->mFramesPerPacket,
-           (unsigned)inASBD->mBytesPerPacket, (unsigned)inASBD->mBytesPerFrame,
-           (unsigned)inASBD->mBytesPerPacket, (unsigned)inASBD->mFormatFlags, dataLen);
+           inASBD2.mSampleRate, (unsigned)inASBD2.mFormatID, (unsigned)inASBD2.mChannelsPerFrame,
+           (unsigned)inASBD2.mBitsPerChannel, (unsigned)inASBD2.mFramesPerPacket,
+           (unsigned)inASBD2.mBytesPerPacket, (unsigned)inASBD2.mBytesPerFrame,
+           (unsigned)inASBD2.mBytesPerPacket, (unsigned)inASBD2.mFormatFlags, dataLen);
 
     AudioStreamBasicDescription outASBD = {0};
-    outASBD.mSampleRate = inASBD->mSampleRate;
+    outASBD.mSampleRate = inASBD2.mSampleRate;
     outASBD.mFormatID = kAudioFormatLinearPCM;
     outASBD.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagsNativeEndian;
     outASBD.mFramesPerPacket = 1;
-    outASBD.mChannelsPerFrame = (inASBD->mChannelsPerFrame > 0) ? inASBD->mChannelsPerFrame : 2;
+    outASBD.mChannelsPerFrame = (inASBD2.mChannelsPerFrame > 0) ? inASBD2.mChannelsPerFrame : 2;
     outASBD.mBitsPerChannel = 32;
     outASBD.mBytesPerFrame = 4 * outASBD.mChannelsPerFrame;
     outASBD.mBytesPerPacket = outASBD.mBytesPerFrame;
 
     AudioConverterRef conv = NULL;
-    OSStatus st = AudioConverterNew(inASBD, &outASBD, &conv);
+    OSStatus st = AudioConverterNew(&inASBD2, &outASBD, &conv);
     if (st != noErr || !conv) {
         LCLogF(@"audio: decode conv new err %d", (int)st);
         return;
