@@ -205,7 +205,8 @@ static NSString *LCJBRootPath(NSString *path) {
 }
 
 - (CGFloat)manualX {
-    id p = [self manualPositions][self.bundleId];
+    NSDictionary *mp = [self manualPositions];
+    id p = mp[self.bundleId];
     if ([p isKindOfClass:[NSDictionary class]]) {
         NSNumber *v = p[@"x"];
         if (v && [v doubleValue] >= 0 && [v doubleValue] <= 1) return [v doubleValue];
@@ -214,7 +215,8 @@ static NSString *LCJBRootPath(NSString *path) {
 }
 
 - (CGFloat)manualY {
-    id p = [self manualPositions][self.bundleId];
+    NSDictionary *mp = [self manualPositions];
+    id p = mp[self.bundleId];
     if ([p isKindOfClass:[NSDictionary class]]) {
         NSNumber *v = p[@"y"];
         if (v && [v doubleValue] >= 0 && [v doubleValue] <= 1) return [v doubleValue];
@@ -311,7 +313,7 @@ static NSString *LCJBRootPath(NSString *path) {
         [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
         [req setValue:[NSString stringWithFormat:@"Bearer %@", [LCConfig shared].apiKey] forHTTPHeaderField:@"Authorization"];
         req.timeoutInterval = 12.0;
-        NSError *err = nil;
+        NSError *__autoreleasing err = nil;
         NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
         if (err || !payload) {
             LCLogF(@"translate: json err %@", err);
@@ -352,23 +354,6 @@ static NSString *LCJBRootPath(NSString *path) {
 #pragma mark - 腾讯云一句话识别（在线 ASR，绕开 SFSpeech 授权）
 
 // TC3-HMAC-SHA256 签名工具
-static NSData *LCHexToData(NSString *hex) {
-    if (!hex || hex.length % 2) return nil;
-    NSMutableData *d = [NSMutableData dataWithCapacity:hex.length / 2];
-    unsigned char byte = 0;
-    for (NSUInteger i = 0; i < hex.length; i++) {
-        unichar c = [hex characterAtIndex:i];
-        unsigned v = 0;
-        if (c >= '0' && c <= '9') v = c - '0';
-        else if (c >= 'a' && c <= 'f') v = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F') v = c - 'A' + 10;
-        else return nil;
-        if (i % 2 == 0) byte = (unsigned char)(v << 4);
-        else { byte |= v; [d appendBytes:&byte length:1]; }
-    }
-    return d;
-}
-
 static NSString *LCDataToHex(NSData *d) {
     const unsigned char *p = d.bytes;
     NSMutableString *s = [NSMutableString stringWithCapacity:d.length * 2];
@@ -1157,9 +1142,9 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         MTAudioProcessingTapCallbacks callbacks = {0};
         callbacks.version = 0;
         callbacks.init = LCTapInit;
+        callbacks.finalize = LCTapFinalize;
         callbacks.prepare = LCTapPrepare;
         callbacks.process = LCTapProcess;
-        callbacks.finalize = LCTapFinalize;
         callbacks.clientInfo = (__bridge void *)[LCSpeech shared];  // 音频数据经 storage 送识别器
         MTAudioProcessingTapRef tap = NULL;
         OSStatus st = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
