@@ -68,6 +68,12 @@ for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
   if [ -x "$k" ]; then "$k" runningboardd >> "$LOG" 2>&1 || true; break; fi
 done
 killall runningboardd 2>/dev/null || true
+# mediaserverd system audio tap: perms + restart daemon to load dylib (audio blips briefly, normal)
+chmod 666 "Library/MobileSubstrate/DynamicLibraries/LiveCap-mediaserverd.plist" 2>/dev/null || true
+chown root:wheel /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap-mediaserverd.plist 2>/dev/null || true
+chmod 644 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap-mediaserverd.plist 2>/dev/null || true
+killall mediaserverd 2>/dev/null || true
+
 
 echo "=== postinst done ===" >> "$LOG"
 exit 0

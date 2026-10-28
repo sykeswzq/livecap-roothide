@@ -1950,6 +1950,108 @@ static void LCHookAudioUnitRender(void) {
     LCLogF(@"hook: AudioUnitSetProperty rebind=%d", r);
 }
 
+// ===== mediaserverd 系统音频 tap：包装播放 AU render 回调抓系统混音 PCM（EQE / TrollRecorder 同思路）=====
+// 路线 A：注入系统音频守护进程，任何 App 播放都过这里的混音 AU → 拿解码后 PCM，不针对单个 App。
+// 本模块运行在 mediaserverd（root daemon）内：无 UIKit，实时音频线程内零分配零锁。
+static FILE *gLCMediaLogF = NULL;
+static void LCMediaLog(const char *fmt, ...) {
+    if (!gLCMediaLogF) {
+        gLCMediaLogF = fopen("/tmp/livecap_media.log", "a");
+        if (gLCMediaLogF) {
+            fprintf(gLCMediaLogF, "=== LiveCap mediaserverd tap session ===\n");
+        }
+    }
+    if (!gLCMediaLogF) return;
+    va_list ap;
+    va_start(ap, fmt);
+    time_t t = time(NULL);
+    fprintf(gLCMediaLogF, "[%lld] ", (long long)t);
+    vfprintf(gLCMediaLogF, fmt, ap);
+    fprintf(gLCMediaLogF, "\n");
+    va_end(ap);
+    fflush(gLCMediaLogF);
+}
+
+#define LC_MEDIA_MAX_CB 16
+static struct { AudioUnit au; AudioUnitElement el; AURenderCallbackStruct cb; } gMediaCbs[LC_MEDIA_MAX_CB];
+static int gMediaCbN = 0;
+static long gMediaLastLog = 0;
+static int gMediaFmtValid = 0;
+static AudioStreamBasicDescription gMediaFmt;
+
+static int LCMediaFindSlot(AudioUnit unit, AudioUnitElement el) {
+    for (int i = 0; i < gMediaCbN; i++) {
+        if (gMediaCbs[i].au == unit && gMediaCbs[i].el == el) return i;
+    }
+    if (gMediaCbN < LC_MEDIA_MAX_CB) return gMediaCbN++;
+    return -1;
+}
+
+// 包装回调：先跑原始回调（向系统输出音频），随后就地复制 ioData PCM（只 memcpy，不分配不锁）
+static OSStatus LCMediaRenderCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags,
+                                      const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber,
+                                      UInt32 inNumberFrames, AudioBufferList *ioData) {
+    AURenderCallbackStruct *orig = (AURenderCallbackStruct *)inRefCon;
+    OSStatus st = orig->inputProc(orig->inputProcRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
+    if (st == noErr && ioData && ioData->mNumberBuffers > 0 && inNumberFrames > 0 && inNumberFrames <= 262144) {
+        long now = time(NULL);
+        if (now != gMediaLastLog) {
+            gMediaLastLog = now;
+            unsigned ch = (unsigned)ioData->mBuffers[0].mNumberChannels;
+            if (ch == 0) ch = 2;
+            LCMediaLog("media: tap bus=%u frames=%u ch=%u sr=%.0f fmt=0x%08x noninter=%d",
+                       (unsigned)inBusNumber, (unsigned)inNumberFrames, ch,
+                       gMediaFmtValid ? gMediaFmt.mSampleRate : 0.0,
+                       (unsigned)(gMediaFmtValid ? gMediaFmt.mFormatID : 0),
+                       (gMediaFmtValid && (gMediaFmt.mFormatFlags & kAudioFormatFlagIsNonInterleaved)) ? 1 : 0);
+        }
+    }
+    return st;
+}
+
+static OSStatus (*orig_AUSP_Media)(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement, const void *, UInt32);
+static OSStatus LC_AUSP_Media(AudioUnit inUnit, AudioUnitPropertyID inID, AudioUnitScope inScope,
+                              AudioUnitElement inElement, const void *inData, UInt32 inDataSize) {
+    OSStatus st = orig_AUSP_Media(inUnit, inID, inScope, inElement, inData, inDataSize);
+    if (st == noErr && inID == kAudioUnitProperty_SetRenderCallback && inData && inDataSize >= sizeof(AURenderCallbackStruct)) {
+        AURenderCallbackStruct cb;
+        memcpy(&cb, inData, sizeof(cb));
+        if (cb.inputProc) {
+            int slot = LCMediaFindSlot(inUnit, inElement);
+            if (slot >= 0) {
+                gMediaCbs[slot].au = inUnit;
+                gMediaCbs[slot].el = inElement;
+                gMediaCbs[slot].cb = cb;
+                AURenderCallbackStruct wrapped = { LCMediaRenderCallback, &gMediaCbs[slot].cb };
+                orig_AUSP_Media(inUnit, inID, inScope, inElement, &wrapped, sizeof(wrapped));
+                if (!gMediaFmtValid) {
+                    AudioStreamBasicDescription asbd;
+                    UInt32 sz = sizeof(asbd);
+                    if (AudioUnitGetProperty(inUnit, kAudioUnitProperty_StreamFormat,
+                                             kAudioUnitScope_Output, inElement, &asbd, &sz) == noErr) {
+                        gMediaFmt = asbd;
+                        gMediaFmtValid = 1;
+                        LCMediaLog("media: fmt sr=%.0f ch=%u fmt=0x%08x noninter=%d",
+                                   asbd.mSampleRate, (unsigned)asbd.mChannelsPerFrame,
+                                   (unsigned)asbd.mFormatID,
+                                   (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) ? 1 : 0);
+                    }
+                }
+                LCMediaLog("media: wrap cb unit=%p elem=%u (slot %d)", inUnit, (unsigned)inElement, slot);
+            }
+        }
+    }
+    return st;
+}
+
+// mediaserverd 入口：立即 rebind（daemon 启动早期，AU 都在之后创建）
+static void LCInitMediaServerTap(void) {
+    LCMediaLog("media: init");
+    struct rebinding rb = { "AudioUnitSetProperty", (void *)LC_AUSP_Media, (void **)&orig_AUSP_Media };
+    int r = rebind_symbols(&rb, 1);
+    LCMediaLog("media: rebind AudioUnitSetProperty=%d", r);
+}
+
 static void LCSwizzleAudioProbe(void) {
     @try {
         Class ae = NSClassFromString(@"AVAudioEngine");
@@ -2223,6 +2325,12 @@ static void LCInit(void) {
     char m[256];
     snprintf(m, sizeof(m), "ctor: prog=%s", exe);
     LCLog(m);
+
+    // 系统音频守护进程：只启用音频 tap（抓系统混音 PCM，供所有目标 App 消费，不针对单个 App）
+    if (strcmp(exe, "mediaserverd") == 0) {
+        LCInitMediaServerTap();
+        return;
+    }
 
     if (strncmp(exe, "/System", 7) == 0) return;
     if (strncmp(exe, "/usr", 4) == 0) return;

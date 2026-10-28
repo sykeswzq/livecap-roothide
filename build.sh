@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.24
+VER=1.0.25
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -42,6 +42,8 @@ xcrun --sdk iphoneos clang \
 chmod 755 "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
 cp LiveCap.plist "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
 chmod 666 "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
+cp LiveCap-mediaserverd.plist "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap-mediaserverd.plist"
+chmod 666 "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap-mediaserverd.plist"
 
 echo "[2/4] compile preference bundle (arm64 + arm64e)"
 xcrun --sdk iphoneos clang \
