@@ -1078,7 +1078,7 @@ static void LCAuthSpeech(void) {
 static void LCLazyInit(void) {
     if (LCLazyStarted) return;
     LCLazyStarted = YES;
-    LCLogF("init: [0/4] dylib loaded in %@ v%@",
+    LCLogF(@"init: [0/4] dylib loaded in %@ v%@",
            [[NSBundle mainBundle] bundleIdentifier] ?: @"?",
            [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?");
     LCLog("init: [1/4] swizzle avplayer");
