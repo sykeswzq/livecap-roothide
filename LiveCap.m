@@ -1369,6 +1369,80 @@ static void LCSwizzleAVPlayer(void) {
     }
 }
 
+#pragma mark - 音频栈探测（YouTube 自研播放器不走 AVPlayer，定位其音频输出 API）
+// 探测候选：AVAudioEngine / AVSampleBufferAudioRenderer / AVSampleBufferRenderSynchronizer /
+// AVAudioPlayerNode / AVAudioSession（播放必触发 setActive）。命中哪个就锁定音频捕获入口。
+
+static id (*orig_avaeInit)(id, SEL);
+static id LC_avaeInit(id self, SEL _cmd) {
+    if (orig_avaeInit) self = orig_avaeInit(self, _cmd);
+    LCLogF(@"audio: AVAudioEngine init %p", self);
+    return self;
+}
+static id (*orig_asbrInit)(id, SEL);
+static id LC_asbrInit(id self, SEL _cmd) {
+    if (orig_asbrInit) self = orig_asbrInit(self, _cmd);
+    LCLogF(@"audio: AVSampleBufferAudioRenderer init %p", self);
+    return self;
+}
+static id (*orig_avsrsInit)(id, SEL);
+static id LC_avsrsInit(id self, SEL _cmd) {
+    if (orig_avsrsInit) self = orig_avsrsInit(self, _cmd);
+    LCLogF(@"audio: AVSampleBufferRenderSynchronizer init %p", self);
+    return self;
+}
+static id (*orig_avapnInit)(id, SEL);
+static id LC_avapnInit(id self, SEL _cmd) {
+    if (orig_avapnInit) self = orig_avapnInit(self, _cmd);
+    LCLogF(@"audio: AVAudioPlayerNode init %p", self);
+    return self;
+}
+static OSStatus (*orig_avsasSetActive)(id, SEL, BOOL, NSError *__autoreleasing *);
+static OSStatus LC_avsasSetActive(id self, SEL _cmd, BOOL active, NSError *__autoreleasing *err) {
+    OSStatus st = orig_avsasSetActive(self, _cmd, active, err);
+    LCLogF(@"audio: AVAudioSession setActive %d st=%d", active ? 1 : 0, (int)st);
+    return st;
+}
+static OSStatus (*orig_avsasSetCategory)(id, SEL, NSString *, NSError *__autoreleasing *);
+static OSStatus LC_avsasSetCategory(id self, SEL _cmd, NSString *cat, NSError *__autoreleasing *err) {
+    OSStatus st = orig_avsasSetCategory(self, _cmd, cat, err);
+    LCLogF(@"audio: AVAudioSession setCategory %@ st=%d", cat, (int)st);
+    return st;
+}
+static void LCSwizzleAudioProbe(void) {
+    @try {
+        Class ae = NSClassFromString(@"AVAudioEngine");
+        if (ae) {
+            Method m = class_getInstanceMethod(ae, @selector(init));
+            if (m) { orig_avaeInit = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)LC_avaeInit); LCLog("probe: AVAudioEngine.init OK"); }
+        }
+        Class asbr = NSClassFromString(@"AVSampleBufferAudioRenderer");
+        if (asbr) {
+            Method m = class_getInstanceMethod(asbr, @selector(init));
+            if (m) { orig_asbrInit = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)LC_asbrInit); LCLog("probe: AVSampleBufferAudioRenderer.init OK"); }
+        }
+        Class avsrs = NSClassFromString(@"AVSampleBufferRenderSynchronizer");
+        if (avsrs) {
+            Method m = class_getInstanceMethod(avsrs, @selector(init));
+            if (m) { orig_avsrsInit = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)LC_avsrsInit); LCLog("probe: AVSampleBufferRenderSynchronizer.init OK"); }
+        }
+        Class apn = NSClassFromString(@"AVAudioPlayerNode");
+        if (apn) {
+            Method m = class_getInstanceMethod(apn, @selector(init));
+            if (m) { orig_avapnInit = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)LC_avapnInit); LCLog("probe: AVAudioPlayerNode.init OK"); }
+        }
+        Class as = NSClassFromString(@"AVAudioSession");
+        if (as) {
+            Method m1 = class_getInstanceMethod(as, @selector(setActive:error:));
+            if (m1) { orig_avsasSetActive = (void *)method_getImplementation(m1); method_setImplementation(m1, (IMP)LC_avsasSetActive); LCLog("probe: AVAudioSession.setActive OK"); }
+            Method m2 = class_getInstanceMethod(as, @selector(setCategory:error:));
+            if (m2) { orig_avsasSetCategory = (void *)method_getImplementation(m2); method_setImplementation(m2, (IMP)LC_avsasSetCategory); LCLog("probe: AVAudioSession.setCategory OK"); }
+        }
+    } @catch (NSException *e) {
+        LCLogF(@"probe: audio error %@", e);
+    }
+}
+
 #pragma mark - 长按图标快捷开关（桌面图标长按菜单）
 
 static void LCAuthSpeech(void);  // 前向声明（定义在文件末尾入口段）
@@ -1574,6 +1648,7 @@ static void LCLazyInit(void) {
            [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?");
     LCLog("init: [1/4] swizzle avplayer");
     LCSwizzleAVPlayer();
+    LCSwizzleAudioProbe();
     LCLog("init: [2/4] swizzle shortcut");
     LCSwizzleShortcut();
     LCLog("init: [3/4] install shortcut item");
