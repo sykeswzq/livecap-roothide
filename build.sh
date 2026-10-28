@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.22
+VER=1.0.23
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -38,7 +38,7 @@ xcrun --sdk iphoneos clang \
   -mios-version-min=13.0 \
   -isysroot "$SDK" \
   -o "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib" \
-  LiveCap.m
+  LiveCap.m fishhook.c
 chmod 755 "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
 cp LiveCap.plist "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
 chmod 666 "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"

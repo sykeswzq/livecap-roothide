@@ -15,6 +15,8 @@
 #import <string.h>
 #import <unistd.h>
 #import <mach-o/dyld.h>
+#import <AudioToolbox/AudioToolbox.h>
+#import "fishhook.h"
 
 #pragma mark - 日志
 
@@ -1275,9 +1277,8 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     if (frames <= 0 || frames > 262144) return;
     @autoreleasepool {
         @try {
-            // 压缩格式（AAC 等）：AudioConverter 解码为 float32 LPCM 再复用识别链路
+            // 压缩格式（AAC 等）：不可解（YouTube 数据非标准 AAC）→ 走 AudioUnitRender 抓解码后 PCM
             if (asbd.mFormatID != kAudioFormatLinearPCM) {
-                [self decodeAndAppendCMSampleBuffer:sbuf fmt:&asbd];
                 return;
             }
             AudioBufferList abl;
@@ -1882,6 +1883,51 @@ static void LC_asbrEnqueue(id self, SEL _cmd, CMSampleBufferRef sbuf) {
         @try { [[LCSpeech shared] appendCMSampleBuffer:sbuf]; } @catch (NSException *e) {}
     }
 }
+// ===== 系统音频输出层抓解码后 PCM（TrollRecorder 思路）：YouTube 播放音频最终走 AudioUnitRender =====
+static OSStatus (*orig_AudioUnitRender)(AudioUnit inUnit, AudioUnitRenderActionFlags *ioActionFlags,
+                                        const AudioTimeStamp *inTimeStamp, UInt32 inOutputBusNumber,
+                                        UInt32 inNumberFrames, AudioBufferList *ioData);
+static OSStatus LC_AudioUnitRender(AudioUnit inUnit, AudioUnitRenderActionFlags *ioActionFlags,
+                                   const AudioTimeStamp *inTimeStamp, UInt32 inOutputBusNumber,
+                                   UInt32 inNumberFrames, AudioBufferList *ioData) {
+    OSStatus st = orig_AudioUnitRender(inUnit, ioActionFlags, inTimeStamp, inOutputBusNumber, inNumberFrames, ioData);
+    if (st == noErr && ioData && ioData->mNumberBuffers > 0 && inNumberFrames > 0 && inNumberFrames <= 262144) {
+        @autoreleasepool {
+            @try {
+                if (!gProcessingFormatValid) {
+                    AudioStreamBasicDescription asbd;
+                    UInt32 sz = sizeof(asbd);
+                    if (AudioUnitGetProperty(inUnit, kAudioUnitProperty_StreamFormat,
+                                             kAudioUnitScope_Output, inOutputBusNumber,
+                                             &asbd, &sz) == noErr) {
+                        gProcessingFormat = asbd;
+                        gProcessingFormatValid = YES;
+                        LCLogF(@"audio: AUR fmt sr=%.0f ch=%u bits=%u fmt=0x%08x noninter=%d",
+                               asbd.mSampleRate, (unsigned)asbd.mChannelsPerFrame,
+                               (unsigned)asbd.mBitsPerChannel, (unsigned)asbd.mFormatID,
+                               (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) ? 1 : 0);
+                    }
+                }
+                if ([[LCConfig shared] enabled] && gProcessingFormatValid) {
+                    if (![[LCHttpASR shared] isRunning]) {
+                        [[LCHttpASR shared] startWithFormat:gProcessingFormat];
+                    }
+                    [[LCHttpASR shared] appendBufferList:ioData frames:inNumberFrames];
+                }
+            } @catch (NSException *e) {
+                LCLogF(@"audio: AUR err %@", e);
+            }
+        }
+    }
+    return st;
+}
+
+static void LCHookAudioUnitRender(void) {
+    struct rebinding rb = { "AudioUnitRender", (void *)LC_AudioUnitRender, (void **)&orig_AudioUnitRender };
+    int r = rebind_symbols(&rb, 1);
+    LCLogF(@"hook: AudioUnitRender rebind=%d", r);
+}
+
 static void LCSwizzleAudioProbe(void) {
     @try {
         Class ae = NSClassFromString(@"AVAudioEngine");
@@ -2124,6 +2170,8 @@ static void LCLazyInit(void) {
     LCLog("init: [1/4] swizzle avplayer");
     LCSwizzleAVPlayer();
     LCSwizzleAudioProbe();
+    LCHookAudioUnitRender();
+    LCLog("init: [1b/4] hook AudioUnitRender done");
     LCLog("init: [2/4] swizzle shortcut");
     LCSwizzleShortcut();
     LCLog("init: [3/4] install shortcut item");
