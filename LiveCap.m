@@ -411,7 +411,13 @@ static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
 static AudioStreamBasicDescription gProcessingFormat;
 static BOOL gProcessingFormatValid = NO;
 
-@class LCSubtitleOverlay;  // 前向声明：LCHttpASR 在 LCSubtitleOverlay 之前引用
+@interface LCSubtitleOverlay : NSObject
++ (instancetype)shared;
+- (void)install;
+- (void)showOriginal:(NSString *)origin translation:(NSString *)translation;
+- (void)hide;
+- (void)showToast:(NSString *)text;
+@end
 
 @interface LCHttpASR : NSObject
 + (instancetype)shared;
@@ -664,13 +670,6 @@ static BOOL gProcessingFormatValid = NO;
 @end
 
 #pragma mark - 悬浮字幕
-
-@interface LCSubtitleOverlay : NSObject
-+ (instancetype)shared;
-- (void)install;
-- (void)showOriginal:(NSString *)origin translation:(NSString *)translation;
-- (void)hide;
-@end
 
 @implementation LCSubtitleOverlay {
     UIView *_container;
