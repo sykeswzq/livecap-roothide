@@ -1186,6 +1186,48 @@ static id LC_itemInitAssetKeys(id self, SEL _cmd, AVAsset *asset, NSArray *keys)
     return self;
 }
 
+// 扩展初始化入口：YouTube 等大型 App 常用 initWithAsset:（单参）/ initWithURL: / initWithAsset:error:
+// 这些便捷初始化不一定走 initWithAsset:automaticallyLoadedAssetKeys:，逐个 hook 兜底。
+static id (*orig_itemInitAsset)(id, SEL, AVAsset *);
+static id LC_itemInitAsset(id self, SEL _cmd, AVAsset *asset) {
+    if (orig_itemInitAsset) self = orig_itemInitAsset(self, _cmd, asset);
+    if (self) {
+        LCLogF(@"item: initAsset %p", self);
+        LCAttachTapToItem(self);
+    }
+    return self;
+}
+
+static id (*orig_itemInitURL)(id, SEL, NSURL *);
+static id LC_itemInitURL(id self, SEL _cmd, NSURL *url) {
+    if (orig_itemInitURL) self = orig_itemInitURL(self, _cmd, url);
+    if (self) {
+        LCLogF(@"item: initURL %p", self);
+        LCAttachTapToItem(self);
+    }
+    return self;
+}
+
+static id (*orig_itemInitURLOptions)(id, SEL, NSURL *, NSDictionary *);
+static id LC_itemInitURLOptions(id self, SEL _cmd, NSURL *url, NSDictionary *options) {
+    if (orig_itemInitURLOptions) self = orig_itemInitURLOptions(self, _cmd, url, options);
+    if (self) {
+        LCLogF(@"item: initURLOptions %p", self);
+        LCAttachTapToItem(self);
+    }
+    return self;
+}
+
+static id (*orig_itemInitAssetErr)(id, SEL, AVAsset *, NSError **);
+static id LC_itemInitAssetErr(id self, SEL _cmd, AVAsset *asset, NSError **err) {
+    if (orig_itemInitAssetErr) self = orig_itemInitAssetErr(self, _cmd, asset, err);
+    if (self) {
+        LCLogF(@"item: initAssetErr %p", self);
+        LCAttachTapToItem(self);
+    }
+    return self;
+}
+
 static BOOL gInSetAudioMix = NO;
 static void (*orig_setAudioMix)(id, SEL, id);
 // 目标 App 播放时可能自己 setAudioMix（覆盖我们的 tap）→ 每次被覆盖后重挂我们的 tap
@@ -1219,6 +1261,30 @@ static void LCSwizzleAVPlayer(void) {
             orig_itemInitAssetKeys = (void *)method_getImplementation(mi);
             method_setImplementation(mi, (IMP)LC_itemInitAssetKeys);
             LCLog("hook: item init OK");
+        }
+        Method mia = class_getInstanceMethod([AVPlayerItem class], @selector(initWithAsset:));
+        if (mia) {
+            orig_itemInitAsset = (void *)method_getImplementation(mia);
+            method_setImplementation(mia, (IMP)LC_itemInitAsset);
+            LCLog("hook: item initWithAsset OK");
+        }
+        Method miu = class_getInstanceMethod([AVPlayerItem class], @selector(initWithURL:));
+        if (miu) {
+            orig_itemInitURL = (void *)method_getImplementation(miu);
+            method_setImplementation(miu, (IMP)LC_itemInitURL);
+            LCLog("hook: item initWithURL OK");
+        }
+        Method miuo = class_getInstanceMethod([AVPlayerItem class], @selector(initWithURL:options:));
+        if (miuo) {
+            orig_itemInitURLOptions = (void *)method_getImplementation(miuo);
+            method_setImplementation(miuo, (IMP)LC_itemInitURLOptions);
+            LCLog("hook: item initWithURLOptions OK");
+        }
+        Method miae = class_getInstanceMethod([AVPlayerItem class], @selector(initWithAsset:error:));
+        if (miae) {
+            orig_itemInitAssetErr = (void *)method_getImplementation(miae);
+            method_setImplementation(miae, (IMP)LC_itemInitAssetErr);
+            LCLog("hook: item initWithAssetErr OK");
         }
         Method ma = class_getInstanceMethod([AVPlayerItem class], @selector(setAudioMix:));
         if (ma) {
