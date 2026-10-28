@@ -2348,9 +2348,23 @@ static void LCInit(void) {
     snprintf(m, sizeof(m), "ctor: prog=%s", exe);
     LCLog(m);
 
-    // 系统音频守护进程：延迟 2s 启用音频 tap（抓系统混音 PCM，供所有目标 App 消费，不针对单个 App）。
+    // 系统音频守护进程：先纯 C 写文件验证注入+可写路径，再延迟 2s 启用音频 tap。
     // 注意：绝不能在构造器内同步 rebind_symbols —— dlopen 早期 dyld image 列表未就绪会段错误（已实测 -11 崩溃）。
     if (strcmp(exe, "mediaserverd") == 0) {
+        // 探测可写路径（纯 C，不依赖 ObjC）：/var/log → /var/mobile/Documents → /tmp
+        const char *mpaths[] = { "/var/log/livecap_media.log",
+                                 "/var/mobile/Documents/livecap_media.log",
+                                 "/tmp/livecap_media.log", NULL };
+        for (int mi = 0; mpaths[mi]; mi++) {
+            FILE *mf = fopen(mpaths[mi], "a");
+            if (mf) {
+                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.28) ===\n");
+                fprintf(mf, "[%lld] ctor ran: prog=%s path=%s\n", (long long)time(NULL), exe, mpaths[mi]);
+                fflush(mf);
+                fclose(mf);
+                break;
+            }
+        }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             @try {
