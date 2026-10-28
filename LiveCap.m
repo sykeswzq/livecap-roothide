@@ -1084,6 +1084,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 - (void)startWithFormat:(AudioStreamBasicDescription)asbd;
 - (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames;
 - (void)appendCMSampleBuffer:(CMSampleBufferRef)sbuf;   // AVSampleBuffer 管线音频
+- (void)decodeAndAppendCMSampleBuffer:(CMSampleBufferRef)sbuf fmt:(const AudioStreamBasicDescription *)asbd;  // AAC 解码
 - (void)stop;
 @end
 
@@ -1227,6 +1228,28 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     }
 }
 
+// AAC 解码输入回调（AudioConverterFillComplexBuffer）
+typedef struct {
+    uint8_t *data;
+    size_t len;
+} LCConvInput;
+static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
+                            AudioBufferList *ioData, AudioStreamPacketDescription **outPacketDesc,
+                            void *inUserData) {
+    LCConvInput *in = (LCConvInput *)inUserData;
+    if (!in->data || in->len == 0) {
+        *numPackets = 0;
+        ioData->mNumberBuffers = 0;
+        return noErr;
+    }
+    ioData->mNumberBuffers = 1;
+    ioData->mBuffers[0].mData = in->data;
+    ioData->mBuffers[0].mDataByteSize = (UInt32)in->len;
+    if (outPacketDesc) *outPacketDesc = NULL;
+    in->data = NULL;  // 只提供一次
+    return noErr;
+}
+
 // AVSampleBuffer 管线音频（YouTube 自研播放器不走 AVPlayer，走 AVSampleBufferAudioRenderer）
 // enqueueSampleBuffer: 是音频样本必经入口 → 取 LPCM → float32 单声道 → 腾讯云 ASR
 - (void)appendCMSampleBuffer:(CMSampleBufferRef)sbuf {
@@ -1247,9 +1270,9 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     if (frames <= 0 || frames > 262144) return;
     @autoreleasepool {
         @try {
-            // 压缩格式（AAC 等）暂不支持，下个版本补解码；先确认 YouTube 入队格式
+            // 压缩格式（AAC 等）：AudioConverter 解码为 float32 LPCM 再复用识别链路
             if (asbd.mFormatID != kAudioFormatLinearPCM) {
-                LCLogF(@"audio: non-pcm fmt=0x%08x (decoder next version)", (unsigned)asbd.mFormatID);
+                [self decodeAndAppendCMSampleBuffer:sbuf fmt:&asbd];
                 return;
             }
             AudioBufferList abl;
@@ -1339,6 +1362,85 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             LCLogF(@"audio: appendCM err %@", e);
         }
     }
+}
+
+// 压缩音频（AAC）→ AudioConverter 解码 → float32 mono → 腾讯云 ASR
+- (void)decodeAndAppendCMSampleBuffer:(CMSampleBufferRef)sbuf
+                                  fmt:(const AudioStreamBasicDescription *)inASBD {
+    if (!sbuf || !inASBD || inASBD->mSampleRate <= 0) return;
+    CMBlockBufferRef bb = CMSampleBufferGetDataBuffer(sbuf);
+    if (!bb) return;
+    size_t dataLen = 0;
+    char *dataPtr = NULL;
+    CMBlockBufferGetDataPointer(bb, 0, NULL, &dataLen, &dataPtr);
+    if (!dataPtr || dataLen == 0 || dataLen > 2 * 1024 * 1024) return;
+
+    AudioStreamBasicDescription outASBD = {0};
+    outASBD.mSampleRate = inASBD->mSampleRate;
+    outASBD.mFormatID = kAudioFormatLinearPCM;
+    outASBD.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
+    outASBD.mFramesPerPacket = 1;
+    outASBD.mChannelsPerFrame = (inASBD->mChannelsPerFrame > 0) ? inASBD->mChannelsPerFrame : 2;
+    outASBD.mBitsPerChannel = 32;
+    outASBD.mBytesPerFrame = 4 * outASBD.mChannelsPerFrame;
+    outASBD.mBytesPerPacket = outASBD.mBytesPerFrame;
+
+    AudioConverterRef conv = NULL;
+    OSStatus st = AudioConverterNew(inASBD, &outASBD, &conv);
+    if (st != noErr || !conv) {
+        LCLogF(@"audio: decode conv new err %d", (int)st);
+        return;
+    }
+    // 尝试附加 magic cookie（部分 AAC 流需要）
+    CMFormatDescriptionRef fmtD = CMSampleBufferGetFormatDescription(sbuf);
+    if (fmtD) {
+        size_t cookieSize = 0;
+        const void *cookie = CMFormatDescriptionGetExtension(fmtD,
+            CFSTR("MagicCookie"), &cookieSize);
+        if (cookie && cookieSize > 0) {
+            AudioConverterSetProperty(conv, kAudioConverterDecompressionMagicCookie,
+                                      (UInt32)cookieSize, cookie);
+        }
+    }
+
+    UInt32 maxOut = 4096;
+    UInt32 propSz = sizeof(maxOut);
+    AudioConverterGetProperty(conv, kAudioConverterPropertyMaximumOutputPacketSize, &propSz, &maxOut);
+    CMItemCount totalSamples = CMSampleBufferGetNumSamples(sbuf);
+    if (totalSamples <= 0) totalSamples = dataLen;  // 兜底估算
+    UInt32 outCapacity = (UInt32)(totalSamples * outASBD.mBytesPerFrame + maxOut * 8);
+    if (outCapacity > 4 * 1024 * 1024) outCapacity = 4 * 1024 * 1024;
+    NSMutableData *outData = [NSMutableData dataWithLength:outCapacity];
+    AudioBufferList outList;
+    memset(&outList, 0, sizeof(outList));
+    outList.mNumberBuffers = 1;
+    outList.mBuffers[0].mNumberChannels = outASBD.mChannelsPerFrame;
+    outList.mBuffers[0].mData = outData.mutableBytes;
+    outList.mBuffers[0].mDataByteSize = (UInt32)outCapacity;
+
+    LCConvInput in = { (uint8_t *)dataPtr, dataLen };
+    UInt32 outNumPackets = (UInt32)(outCapacity / outASBD.mBytesPerFrame);
+    if (outNumPackets < 1) outNumPackets = 1;
+    if (outNumPackets > 4096) outNumPackets = 4096;
+    st = AudioConverterFillComplexBuffer(conv, LCInputProc, &in, &outNumPackets, &outList, NULL);
+    AudioConverterDispose(conv);
+    if (st != noErr) {
+        LCLogF(@"audio: decode fill err %d", (int)st);
+        return;
+    }
+    UInt32 producedFrames = outList.mBuffers[0].mDataByteSize / outASBD.mBytesPerFrame;
+    if (producedFrames == 0 || producedFrames > 262144) return;
+    unsigned ch = outASBD.mChannelsPerFrame;
+    const float *src = (const float *)outList.mBuffers[0].mData;
+    float *mono = (float *)malloc(producedFrames * sizeof(float));
+    if (!mono) return;
+    for (UInt32 i = 0; i < producedFrames; i++) {
+        float acc = 0;
+        for (unsigned c = 0; c < ch; c++) acc += src[i * ch + c];
+        mono[i] = acc / ch;
+    }
+    [[LCHttpASR shared] appendMonoFloat:mono frames:producedFrames];
+    free(mono);
 }
 
 - (void)stop {
