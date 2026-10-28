@@ -18,6 +18,15 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import "fishhook.h"
 
+// TC3 签名函数前置声明（定义在腾讯云 ASR 区，翻译区先调用）
+static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
+                                       NSString *timestamp, NSString *date,
+                                       NSData *payload, NSString *host,
+                                       NSString *service, NSString *action);
+static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
+                                     NSString *timestamp, NSString *date,
+                                     NSData *payload, NSString *host);
+
 #pragma mark - 日志
 
 static void LCLog(const char *msg) {
