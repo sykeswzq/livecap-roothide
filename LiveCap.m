@@ -1425,19 +1425,52 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         }
     }
 
-    // 从 CMSampleBuffer 提取 packet 描述（AAC 解码必需）
+    // 打印数据头部，判断 ADTS/raw 封装
+    {
+        NSMutableString *hex = [NSMutableString string];
+        size_t nHex = MIN(dataLen, 16);
+        for (size_t i = 0; i < nHex; i++) [hex appendFormat:@"%02x ", (uint8_t)dataPtr[i]];
+        LCLogF(@"audio: dec head[%zu]: %@", nHex, hex);
+    }
+
+    // packet 描述：优先 ADTS 帧解析（一个 buffer 含多帧），否则 CMSampleBuffer 描述，最后整块
     AudioStreamPacketDescription *descs = NULL;
-    CMItemCount descCount = 0;
-    OSStatus pdSt = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, 0, NULL, &descCount);
-    if (pdSt == noErr && descCount > 0 && descCount <= 64) {
-        descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)descCount);
+    UInt32 descCount = 0;
+    if (dataLen >= 7 && ((uint8_t)dataPtr[0]) == 0xFF && (((uint8_t)dataPtr[1]) & 0xF6) == 0xF0) {
+        // ADTS：逐帧解析边界
+        UInt32 cap = 64;
+        descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * cap);
         if (descs) {
-            OSStatus pdSt2 = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, descCount, descs, &descCount);
-            if (pdSt2 != noErr) { free(descs); descs = NULL; }
+            size_t off = 0;
+            while (off + 7 <= dataLen && descCount < cap) {
+                const uint8_t *p = (const uint8_t *)dataPtr + off;
+                if (p[0] != 0xFF || (p[1] & 0xF6) != 0xF0) break;
+                UInt32 frameLen = ((p[3] & 0x03) << 11) | (p[4] << 3) | (p[5] >> 5);
+                if (frameLen < 7 || off + frameLen > dataLen) break;
+                descs[descCount].mStartOffset = off;
+                descs[descCount].mDataByteSize = frameLen;
+                descs[descCount].mVariableFramesInPacket = 0;
+                descCount++;
+                off += frameLen;
+            }
+            if (descCount == 0) { free(descs); descs = NULL; }
         }
+        if (descs) LCLogF(@"audio: dec ADTS %u frames", (unsigned)descCount);
     }
     if (!descs) {
-        // fallback：整块一个 packet（ADTS 无描述）
+        CMItemCount dCnt = 0;
+        OSStatus pdSt = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, 0, NULL, &dCnt);
+        if (pdSt == noErr && dCnt > 0 && dCnt <= 64) {
+            descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)dCnt);
+            if (descs) {
+                OSStatus pdSt2 = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, dCnt, descs, &dCnt);
+                if (pdSt2 != noErr) { free(descs); descs = NULL; }
+                else descCount = (UInt32)dCnt;
+            }
+        }
+        if (descs) LCLogF(@"audio: dec CMSB %u pkts", (unsigned)descCount);
+    }
+    if (!descs) {
         descCount = 1;
         descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription));
         if (descs) {
