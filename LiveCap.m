@@ -424,6 +424,7 @@ static BOOL gProcessingFormatValid = NO;
 - (BOOL)isRunning;
 - (void)startWithFormat:(AudioStreamBasicDescription)asbd;
 - (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames;
+- (void)appendMonoFloat:(const float *)mono frames:(UInt32)frames;  // AVSampleBuffer 管线：单声道 float32
 - (void)appendPCM16:(NSData *)pcm16;   // AVSampleBuffer 管线（YouTube 自研播放器）：16k/16bit/mono PCM
 - (void)stop;
 @end
@@ -671,7 +672,25 @@ static BOOL gProcessingFormatValid = NO;
     [_pcm16 setLength:0];
 }
 
-// ===== AVSampleBuffer 管线（YouTube 自研播放器）PCM16 输入 =====
+// ===== AVSampleBuffer 管线（YouTube 自研播放器）输入 =====
+
+// 单声道 float32 输入（appendCMSampleBuffer 转换后）：与现有 float32 累积/重采样/POST 完全复用
+- (void)appendMonoFloat:(const float *)mono frames:(UInt32)frames {
+    if (!_running) return;
+    if (![[LCConfig shared] enabled]) return;
+    if (!mono || frames == 0) return;
+    @autoreleasepool {
+        [_pcm appendBytes:mono length:frames * sizeof(float)];
+        double secs = (double)_pcm.length / sizeof(float) / _inRate;
+        if (secs >= 5.0 && !_inFlight) {
+            NSData *chunk = [_pcm copy];
+            [_pcm setLength:0];
+            [self processChunk:chunk];
+        } else if (secs >= 8.0) {
+            [_pcm setLength:0];
+        }
+    }
+}
 
 - (void)appendPCM16:(NSData *)pcm16 {
     if (!_running) return;
@@ -1209,7 +1228,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 }
 
 // AVSampleBuffer 管线音频（YouTube 自研播放器不走 AVPlayer，走 AVSampleBufferAudioRenderer）
-// enqueueSampleBuffer: 是音频样本必经入口 → AVAudioConverter 转 16k/16bit/mono → 腾讯云 ASR
+// enqueueSampleBuffer: 是音频样本必经入口 → 取 LPCM → float32 单声道 → 腾讯云 ASR
 - (void)appendCMSampleBuffer:(CMSampleBufferRef)sbuf {
     if (!sbuf) return;
     if (![[LCConfig shared] enabled]) return;
@@ -1228,70 +1247,94 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     if (frames <= 0 || frames > 262144) return;
     @autoreleasepool {
         @try {
-            AudioStreamBasicDescription outASBD = {0};
-            outASBD.mSampleRate = 16000;
-            outASBD.mFormatID = kAudioFormatLinearPCM;
-            outASBD.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-            outASBD.mFramesPerPacket = 1;
-            outASBD.mChannelsPerFrame = 1;
-            outASBD.mBitsPerChannel = 16;
-            outASBD.mBytesPerFrame = 2;
-            outASBD.mBytesPerPacket = 2;
-            AVAudioFormat *inFmt = [[AVAudioFormat alloc] initWithStreamDescription:&asbd];
-            AVAudioFormat *outFmt = [[AVAudioFormat alloc] initWithStreamDescription:&outASBD];
-            if (!inFmt || !outFmt) return;
-            AVAudioConverter *conv = [[AVAudioConverter alloc] initFromFormat:inFmt toFormat:outFmt];
-            if (!conv) {
-                LCLogF(@"audio: converter nil (fmt=0x%08x)", (unsigned)asbd.mFormatID);
+            // 压缩格式（AAC 等）暂不支持，下个版本补解码；先确认 YouTube 入队格式
+            if (asbd.mFormatID != kAudioFormatLinearPCM) {
+                LCLogF(@"audio: non-pcm fmt=0x%08x (decoder next version)", (unsigned)asbd.mFormatID);
                 return;
             }
-            AVAudioPCMBuffer *outBuf = [[AVAudioPCMBuffer alloc] initWithPCMFormat:outFmt
-                                                                     frameCapacity:frames];
-            if (!outBuf) return;
-            NSError *__autoreleasing convErr = nil;
-            __block BOOL gaveInput = NO;
-            AVAudioConverterInputBlock inputBlock = ^AVAudioBuffer *(AVAudioPacketCount inNumPackets, NSError **outErr) {
-                if (gaveInput) return (AVAudioBuffer *)nil;
-                gaveInput = YES;
-                if (asbd.mFormatID != kAudioFormatLinearPCM) return (AVAudioBuffer *)nil;  // 压缩格式暂不支持（下版补解码）
-                AudioBufferList abl;
-                memset(&abl, 0, sizeof(abl));
-                CMBlockBufferRef bb = NULL;
-                OSStatus st = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-                    sbuf, NULL, &abl, sizeof(abl), NULL, NULL,
-                    kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, &bb);
-                if (st != noErr) {
-                    if (bb) CFRelease(bb);
-                    return (AVAudioBuffer *)nil;
-                }
-                AVAudioPCMBuffer *inBuf = [[AVAudioPCMBuffer alloc] initWithPCMFormat:inFmt
-                                                                         frameCapacity:frames];
-                if (!inBuf) {
-                    if (bb) CFRelease(bb);
-                    return (AVAudioBuffer *)nil;
-                }
-                inBuf.frameLength = (AVAudioFrameCount)frames;
-                for (UInt32 i = 0; i < abl.mNumberBuffers && i < inBuf.mutableAudioBufferList.mNumberBuffers; i++) {
-                    AudioBuffer src = abl.mBuffers[i];
-                    AudioBuffer *dst = &inBuf.mutableAudioBufferList.mBuffers[i];
-                    if (src.mData && dst->mData) {
-                        size_t cp = MIN(src.mDataByteSize, dst->mDataByteSize);
-                        memcpy(dst->mData, src.mData, cp);
-                    }
-                }
+            AudioBufferList abl;
+            memset(&abl, 0, sizeof(abl));
+            CMBlockBufferRef bb = NULL;
+            OSStatus st = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+                sbuf, NULL, &abl, sizeof(abl), NULL, NULL,
+                kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, &bb);
+            if (st != noErr) {
                 if (bb) CFRelease(bb);
-                return (AVAudioBuffer *)inBuf;
-            };
-            AVAudioConverterOutputStatus st2 = [conv convertToBuffer:outBuf
-                                                               error:&convErr
-                                                  withInputFromBlock:inputBlock];
-            if (st2 == AVAudioConverterOutputStatus_HaveData && outBuf.frameLength > 0) {
-                NSData *pcm16 = [NSData dataWithBytes:outBuf.int16ChannelData[0]
-                                               length:outBuf.frameLength * 2];
-                [[LCHttpASR shared] appendPCM16:pcm16];
-            } else if (st2 != AVAudioConverterOutputStatus_HaveData && st2 != AVAudioConverterOutputStatus_EndOfStream) {
-                LCLogF(@"audio: conv st=%ld err=%@", (long)st2, convErr);
+                return;
             }
+            UInt32 frames32 = (UInt32)frames;
+            float *mono = (float *)malloc(frames32 * sizeof(float));
+            if (!mono) {
+                if (bb) CFRelease(bb);
+                return;
+            }
+            BOOL interleaved = !(asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved);
+            unsigned ch = (asbd.mChannelsPerFrame > 0) ? (unsigned)asbd.mChannelsPerFrame : 2;
+            if (interleaved && abl.mNumberBuffers > 0) {
+                AudioBuffer *buf = &abl.mBuffers[0];
+                if (asbd.mBitsPerChannel == 32 && (asbd.mFormatFlags & kAudioFormatFlagIsFloat)) {
+                    const float *b = (const float *)buf->mData;
+                    for (UInt32 i = 0; i < frames32; i++) {
+                        float acc = 0;
+                        for (unsigned c = 0; c < ch; c++) acc += b[i * ch + c];
+                        mono[i] = acc / ch;
+                    }
+                } else if (asbd.mBitsPerChannel == 16) {
+                    const SInt16 *b = (const SInt16 *)buf->mData;
+                    for (UInt32 i = 0; i < frames32; i++) {
+                        float acc = 0;
+                        for (unsigned c = 0; c < ch; c++) acc += (float)b[i * ch + c] / 32768.0f;
+                        mono[i] = acc / ch;
+                    }
+                } else if (asbd.mBitsPerChannel == 24) {
+                    const uint8_t *b = (const uint8_t *)buf->mData;
+                    for (UInt32 i = 0; i < frames32; i++) {
+                        float acc = 0;
+                        for (unsigned c = 0; c < ch; c++) {
+                            size_t o = ((size_t)i * ch + c) * 3;
+                            int32_t v = (b[o] << 8) | (b[o + 1] << 16) | (b[o + 2] << 24);
+                            acc += (float)v / 8388608.0f;
+                        }
+                        mono[i] = acc / ch;
+                    }
+                } else {
+                    free(mono);
+                    if (bb) CFRelease(bb);
+                    return;
+                }
+            } else {
+                unsigned n = 0;
+                for (UInt32 c = 0; c < abl.mNumberBuffers; c++) {
+                    AudioBuffer *buf = &abl.mBuffers[c];
+                    if (!buf->mData) continue;
+                    if (asbd.mBitsPerChannel == 32 && (asbd.mFormatFlags & kAudioFormatFlagIsFloat)) {
+                        const float *b = (const float *)buf->mData;
+                        for (UInt32 i = 0; i < frames32; i++) mono[i] = (n == 0) ? b[i] : (mono[i] + b[i]);
+                    } else if (asbd.mBitsPerChannel == 16) {
+                        const SInt16 *b = (const SInt16 *)buf->mData;
+                        for (UInt32 i = 0; i < frames32; i++) {
+                            float v = (float)b[i] / 32768.0f;
+                            mono[i] = (n == 0) ? v : (mono[i] + v);
+                        }
+                    } else {
+                        free(mono);
+                        if (bb) CFRelease(bb);
+                        return;
+                    }
+                    n++;
+                }
+                if (n > 1) {
+                    for (UInt32 i = 0; i < frames32; i++) mono[i] /= n;
+                }
+                if (n == 0) {
+                    free(mono);
+                    if (bb) CFRelease(bb);
+                    return;
+                }
+            }
+            if (bb) CFRelease(bb);
+            [[LCHttpASR shared] appendMonoFloat:mono frames:frames32];
+            free(mono);
         } @catch (NSException *e) {
             LCLogF(@"audio: appendCM err %@", e);
         }
