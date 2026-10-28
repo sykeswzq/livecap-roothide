@@ -2351,10 +2351,14 @@ static void LCInit(void) {
     // 系统音频守护进程：先纯 C 写文件验证注入+可写路径，再延迟 2s 启用音频 tap。
     // 注意：绝不能在构造器内同步 rebind_symbols —— dlopen 早期 dyld image 列表未就绪会段错误（已实测 -11 崩溃）。
     if (strcmp(exe, "mediaserverd") == 0) {
-        // 探测可写路径（纯 C，不依赖 ObjC）：/var/log → /var/mobile/Documents → /tmp
+        // 探测可写路径（纯 C，不依赖 ObjC）：/var/log → /var/mobile/Documents → /tmp → /var/jb 系列
         const char *mpaths[] = { "/var/log/livecap_media.log",
                                  "/var/mobile/Documents/livecap_media.log",
-                                 "/tmp/livecap_media.log", NULL };
+                                 "/tmp/livecap_media.log",
+                                 "/var/jb/var/log/livecap_media.log",
+                                 "/var/jb/tmp/livecap_media.log",
+                                 "/var/mobile/Library/Preferences/livecap_media.log",
+                                 NULL };
         for (int mi = 0; mpaths[mi]; mi++) {
             FILE *mf = fopen(mpaths[mi], "a");
             if (mf) {
