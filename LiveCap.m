@@ -1959,9 +1959,19 @@ static void LCMediaLog(const char *fmt, ...) {
         gLCMediaLogF = fopen("/tmp/livecap_media.log", "a");
         if (gLCMediaLogF) {
             fprintf(gLCMediaLogF, "=== LiveCap mediaserverd tap session ===\n");
+        } else {
+            NSLog(@"[LiveCap] media: fopen /tmp/livecap_media.log FAILED errno=%d", errno);
         }
     }
-    if (!gLCMediaLogF) return;
+    if (!gLCMediaLogF) {
+        // /tmp 不可写时回退到系统日志，确保崩溃点/执行路径可见
+        va_list ap2;
+        va_start(ap2, fmt);
+        NSString *msg = [[NSString alloc] initWithFormat:[NSString stringWithUTF8String:fmt] arguments:ap2];
+        va_end(ap2);
+        NSLog(@"[LiveCap] media: %@", msg);
+        return;
+    }
     va_list ap;
     va_start(ap, fmt);
     time_t t = time(NULL);
@@ -2044,7 +2054,7 @@ static OSStatus LC_AUSP_Media(AudioUnit inUnit, AudioUnitPropertyID inID, AudioU
     return st;
 }
 
-// mediaserverd 入口：立即 rebind（daemon 启动早期，AU 都在之后创建）
+// mediaserverd 入口：由构造器延迟 2s 调用（dlopen 早期 rebind 段错误，等 dyld 稳定后再 hook）
 static void LCInitMediaServerTap(void) {
     LCMediaLog("media: init");
     struct rebinding rb = { "AudioUnitSetProperty", (void *)LC_AUSP_Media, (void **)&orig_AUSP_Media };
@@ -2326,9 +2336,17 @@ static void LCInit(void) {
     snprintf(m, sizeof(m), "ctor: prog=%s", exe);
     LCLog(m);
 
-    // 系统音频守护进程：只启用音频 tap（抓系统混音 PCM，供所有目标 App 消费，不针对单个 App）
+    // 系统音频守护进程：延迟 2s 启用音频 tap（抓系统混音 PCM，供所有目标 App 消费，不针对单个 App）。
+    // 注意：绝不能在构造器内同步 rebind_symbols —— dlopen 早期 dyld image 列表未就绪会段错误（已实测 -11 崩溃）。
     if (strcmp(exe, "mediaserverd") == 0) {
-        LCInitMediaServerTap();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            @try {
+                LCInitMediaServerTap();
+            } @catch (NSException *e) {
+                LCLogF(@"media: tap init error %@", e);
+            }
+        });
         return;
     }
 
