@@ -1188,6 +1188,33 @@ static AVPlayerItem *LC_currentItem(id self, SEL _cmd) {
     return item;
 }
 
+// 探测 hook：确认目标 App 是否真的使用 AVPlayer 家族（YouTube 疑为自研播放器，不走 AVPlayer）。
+static id (*orig_avpInit)(id, SEL);
+static id LC_avpInit(id self, SEL _cmd) {
+    if (orig_avpInit) self = orig_avpInit(self, _cmd);
+    LCLogF(@"avp: init %p", self);
+    return self;
+}
+static id (*orig_avpInitPlayerItem)(id, SEL, AVPlayerItem *);
+static id LC_avpInitPlayerItem(id self, SEL _cmd, AVPlayerItem *item) {
+    if (orig_avpInitPlayerItem) self = orig_avpInitPlayerItem(self, _cmd, item);
+    LCLogF(@"avp: initWithPlayerItem %p", self);
+    if (self && item) LCAttachTapToItem(item);
+    return self;
+}
+static id (*orig_avpInitURL)(id, SEL, NSURL *);
+static id LC_avpInitURL(id self, SEL _cmd, NSURL *url) {
+    if (orig_avpInitURL) self = orig_avpInitURL(self, _cmd, url);
+    LCLogF(@"avp: initWithURL %p", self);
+    return self;
+}
+static id (*orig_itemInitNoArgs)(id, SEL);
+static id LC_itemInitNoArgs(id self, SEL _cmd) {
+    if (orig_itemInitNoArgs) self = orig_itemInitNoArgs(self, _cmd);
+    LCLogF(@"item: init(noargs) %p", self);
+    return self;
+}
+
 // AVPlayerItem 创建即挂 tap：YouTube 等 App 不一定走 setCurrentItem/replaceCurrentItem，
 // 但任何播放都必须创建 AVPlayerItem，指定初始化器 initWithAsset:automaticallyLoadedAssetKeys:
 // 是所有创建路径的汇聚点。
@@ -1275,6 +1302,30 @@ static void LCSwizzleAVPlayer(void) {
             orig_currentItem = (void *)method_getImplementation(mci);
             method_setImplementation(mci, (IMP)LC_currentItem);
             LCLog("hook: currentItem OK");
+        }
+        Method avi = class_getInstanceMethod([AVPlayer class], @selector(init));
+        if (avi) {
+            orig_avpInit = (void *)method_getImplementation(avi);
+            method_setImplementation(avi, (IMP)LC_avpInit);
+            LCLog("hook: avp init OK");
+        }
+        Method avip = class_getInstanceMethod([AVPlayer class], @selector(initWithPlayerItem:));
+        if (avip) {
+            orig_avpInitPlayerItem = (void *)method_getImplementation(avip);
+            method_setImplementation(avip, (IMP)LC_avpInitPlayerItem);
+            LCLog("hook: avp initWithPlayerItem OK");
+        }
+        Method aviu = class_getInstanceMethod([AVPlayer class], @selector(initWithURL:));
+        if (aviu) {
+            orig_avpInitURL = (void *)method_getImplementation(aviu);
+            method_setImplementation(aviu, (IMP)LC_avpInitURL);
+            LCLog("hook: avp initWithURL OK");
+        }
+        Method initi = class_getInstanceMethod([AVPlayerItem class], @selector(init));
+        if (initi) {
+            orig_itemInitNoArgs = (void *)method_getImplementation(initi);
+            method_setImplementation(initi, (IMP)LC_itemInitNoArgs);
+            LCLog("hook: item init(noargs) OK");
         }
         Method mi = class_getInstanceMethod([AVPlayerItem class],
                                             @selector(initWithAsset:automaticallyLoadedAssetKeys:));
