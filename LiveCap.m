@@ -424,11 +424,13 @@ static BOOL gProcessingFormatValid = NO;
 - (BOOL)isRunning;
 - (void)startWithFormat:(AudioStreamBasicDescription)asbd;
 - (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames;
+- (void)appendPCM16:(NSData *)pcm16;   // AVSampleBuffer 管线（YouTube 自研播放器）：16k/16bit/mono PCM
 - (void)stop;
 @end
 
 @implementation LCHttpASR {
     NSMutableData *_pcm;          // float32 单声道样本累积
+    NSMutableData *_pcm16;        // 16bit 单声道 PCM 累积（AVSampleBuffer 管线）
     double _inRate;               // 输入采样率
     BOOL _running;
     BOOL _inFlight;               // 上一次请求未返回时跳过本段
@@ -441,6 +443,7 @@ static BOOL gProcessingFormatValid = NO;
     dispatch_once(&once, ^{
         s = [[LCHttpASR alloc] init];
         s->_pcm = [NSMutableData data];
+        s->_pcm16 = [NSMutableData data];
         s->_session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
     });
     return s;
@@ -665,6 +668,148 @@ static BOOL gProcessingFormatValid = NO;
     _running = NO;
     _inFlight = NO;
     [_pcm setLength:0];
+    [_pcm16 setLength:0];
+}
+
+// ===== AVSampleBuffer 管线（YouTube 自研播放器）PCM16 输入 =====
+
+- (void)appendPCM16:(NSData *)pcm16 {
+    if (!_running) return;
+    if (![[LCConfig shared] enabled]) return;
+    if (!pcm16 || pcm16.length == 0) return;
+    @autoreleasepool {
+        [_pcm16 appendData:pcm16];
+        if (_pcm16.length >= 16000 * 2 * 5 && !_inFlight) {
+            NSData *chunk = [_pcm16 copy];
+            [_pcm16 setLength:0];
+            [self processChunk16:chunk];
+        } else if (_pcm16.length >= 16000 * 2 * 8) {
+            [_pcm16 setLength:0];
+        }
+    }
+}
+
+- (void)processChunk16:(NSData *)pcm16 {
+    if (!pcm16 || pcm16.length < 1600) return;
+    _inFlight = YES;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        @autoreleasepool {
+            @try {
+                NSMutableData *wav = [NSMutableData dataWithCapacity:pcm16.length + 44];
+                const char *riff = "RIFF";
+                [wav appendBytes:riff length:4];
+                uint32_t riffSize = (uint32_t)(36 + pcm16.length);
+                [wav appendBytes:&riffSize length:4];
+                const char *wave = "WAVE";
+                [wav appendBytes:wave length:4];
+                const char *fmt = "fmt ";
+                [wav appendBytes:fmt length:4];
+                uint32_t fmtSize = 16;
+                [wav appendBytes:&fmtSize length:4];
+                uint16_t audioFmt = 1;
+                [wav appendBytes:&audioFmt length:2];
+                uint16_t chn = 1;
+                [wav appendBytes:&chn length:2];
+                uint32_t rate = 16000;
+                [wav appendBytes:&rate length:4];
+                uint32_t byteRate = 16000 * 2;
+                [wav appendBytes:&byteRate length:4];
+                uint16_t blockAlign = 2;
+                [wav appendBytes:&blockAlign length:2];
+                uint16_t bits = 16;
+                [wav appendBytes:&bits length:2];
+                const char *data = "data";
+                [wav appendBytes:data length:4];
+                uint32_t dataSize = (uint32_t)pcm16.length;
+                [wav appendBytes:&dataSize length:4];
+                [wav appendData:pcm16];
+
+                NSString *b64 = [wav base64EncodedStringWithOptions:0];
+                NSString *secretId = [[LCConfig shared] tencentSecretId];
+                NSString *secretKey = [[LCConfig shared] tencentSecretKey];
+                if (secretId.length == 0 || secretKey.length == 0) {
+                    LCLog("asr16: tencent keys missing");
+                    _inFlight = NO;
+                    return;
+                }
+                NSString *lang = [[LCConfig shared] sourceLang];
+                NSString *eng = @"16k_zh";
+                if ([lang isEqualToString:@"en-US"]) eng = @"16k_en";
+                else if ([lang isEqualToString:@"ja-JP"]) eng = @"16k_ja";
+                else if ([lang isEqualToString:@"ko-KR"]) eng = @"16k_ko";
+                else if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
+
+                NSDictionary *body = @{
+                    @"ProjectId": @0,
+                    @"SubServiceType": @2,
+                    @"EngSerViceType": eng,
+                    @"SourceType": @1,
+                    @"VoiceFormat": @"wav",
+                    @"UsrAudioKey": [NSString stringWithFormat:@"livecap-%@", [[NSUUID UUID] UUIDString]],
+                    @"Data": b64,
+                    @"DataLen": @(wav.length),
+                    @"FilterDirty": @0,
+                    @"FilterModal": @0,
+                    @"FilterPunc": @1
+                };
+                NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+                if (!payload) { _inFlight = NO; return; }
+
+                long long ts = (long long)[[NSDate date] timeIntervalSince1970];
+                NSString *tsStr = [NSString stringWithFormat:@"%lld", ts];
+                NSDateFormatter *df = [[NSDateFormatter alloc] init];
+                [df setDateFormat:@"yyyy-MM-dd"];
+                [df setTimeZone:[NSTimeZone timeZoneWithName:@"UTC"]];
+                NSString *dateStr = [df stringFromDate:[NSDate date]];
+
+                NSString *host = @"asr.tencentcloudapi.com";
+                NSString *auth = LCTencentAuthHeader(secretId, secretKey, tsStr, dateStr, payload, host);
+
+                NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
+                    [NSURL URLWithString:@"https://asr.tencentcloudapi.com"]];
+                req.HTTPMethod = @"POST";
+                [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+                [req setValue:host forHTTPHeaderField:@"Host"];
+                [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
+                [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
+                [req setValue:tsStr forHTTPHeaderField:@"X-TC-Timestamp"];
+                [req setValue:auth forHTTPHeaderField:@"Authorization"];
+                req.HTTPBody = payload;
+                req.timeoutInterval = 10.0;
+
+                LCLogF(@"asr16: sending %lu bytes (%@)", (unsigned long)wav.length, eng);
+                NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+                    completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+                    _inFlight = NO;
+                    if (err) { LCLogF(@"asr16: req err %@", err); return; }
+                    NSError *__autoreleasing pe = nil;
+                    NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
+                    if (pe || !json) { LCLogF(@"asr16: parse err %@", pe); return; }
+                    NSDictionary *respD = json[@"Response"];
+                    NSString *text = respD[@"Result"];
+                    if (![text isKindOfClass:[NSString class]] || text.length == 0) {
+                        LCLogF(@"asr16: empty result (%@)", json);
+                        return;
+                    }
+                    text = [text stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                    if (text.length == 0) return;
+                    LCLogF(@"asr16: text [%@]", text);
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
+                        [[LCTranslator shared] translate:text
+                            completion:^(NSString *tr) {
+                                if (tr.length) [[LCSubtitleOverlay shared] showOriginal:text translation:tr];
+                            }];
+                    });
+                }];
+                [task resume];
+            } @catch (NSException *e) {
+                _inFlight = NO;
+                LCLogF(@"asr16: process err %@", e);
+            }
+        }
+    });
 }
 
 @end
@@ -919,6 +1064,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 + (instancetype)shared;
 - (void)startWithFormat:(AudioStreamBasicDescription)asbd;
 - (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames;
+- (void)appendCMSampleBuffer:(CMSampleBufferRef)sbuf;   // AVSampleBuffer 管线音频
 - (void)stop;
 @end
 
@@ -1058,6 +1204,96 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             [_request appendAudioPCMBuffer:pcm];
         } @catch (NSException *e) {
             LCLogF(@"speech: append err %@", e);
+        }
+    }
+}
+
+// AVSampleBuffer 管线音频（YouTube 自研播放器不走 AVPlayer，走 AVSampleBufferAudioRenderer）
+// enqueueSampleBuffer: 是音频样本必经入口 → AVAudioConverter 转 16k/16bit/mono → 腾讯云 ASR
+- (void)appendCMSampleBuffer:(CMSampleBufferRef)sbuf {
+    if (!sbuf) return;
+    if (![[LCConfig shared] enabled]) return;
+    CMFormatDescriptionRef fmt = CMSampleBufferGetFormatDescription(sbuf);
+    if (!fmt) return;
+    const AudioStreamBasicDescription *asbdP = CMAudioFormatDescriptionGetStreamBasicDescription(fmt);
+    if (!asbdP) return;
+    AudioStreamBasicDescription asbd = *asbdP;
+    if (asbd.mSampleRate <= 0) return;
+    if (![[LCHttpASR shared] isRunning]) {
+        gProcessingFormat = asbd;
+        gProcessingFormatValid = YES;
+        [[LCHttpASR shared] startWithFormat:asbd];
+    }
+    CMItemCount frames = CMSampleBufferGetNumSamples(sbuf);
+    if (frames <= 0 || frames > 262144) return;
+    @autoreleasepool {
+        @try {
+            AudioStreamBasicDescription outASBD = {0};
+            outASBD.mSampleRate = 16000;
+            outASBD.mFormatID = kAudioFormatLinearPCM;
+            outASBD.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+            outASBD.mFramesPerPacket = 1;
+            outASBD.mChannelsPerFrame = 1;
+            outASBD.mBitsPerChannel = 16;
+            outASBD.mBytesPerFrame = 2;
+            outASBD.mBytesPerPacket = 2;
+            AVAudioFormat *inFmt = [[AVAudioFormat alloc] initWithStreamDescription:&asbd];
+            AVAudioFormat *outFmt = [[AVAudioFormat alloc] initWithStreamDescription:&outASBD];
+            if (!inFmt || !outFmt) return;
+            AVAudioConverter *conv = [[AVAudioConverter alloc] initFromFormat:inFmt toFormat:outFmt];
+            if (!conv) {
+                LCLogF(@"audio: converter nil (fmt=0x%08x)", (unsigned)asbd.mFormatID);
+                return;
+            }
+            AVAudioPCMBuffer *outBuf = [[AVAudioPCMBuffer alloc] initWithPCMFormat:outFmt
+                                                                     frameCapacity:frames];
+            if (!outBuf) return;
+            NSError *__autoreleasing convErr = nil;
+            __block BOOL gaveInput = NO;
+            AVAudioConverterInputBlock inputBlock = ^AVAudioBuffer *(AVAudioPacketCount inNumPackets, NSError **outErr) {
+                if (gaveInput) return (AVAudioBuffer *)nil;
+                gaveInput = YES;
+                if (asbd.mFormatID != kAudioFormatLinearPCM) return (AVAudioBuffer *)nil;  // 压缩格式暂不支持（下版补解码）
+                AudioBufferList abl;
+                memset(&abl, 0, sizeof(abl));
+                CMBlockBufferRef bb = NULL;
+                OSStatus st = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+                    sbuf, NULL, &abl, sizeof(abl), NULL, NULL,
+                    kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, &bb);
+                if (st != noErr) {
+                    if (bb) CFRelease(bb);
+                    return (AVAudioBuffer *)nil;
+                }
+                AVAudioPCMBuffer *inBuf = [[AVAudioPCMBuffer alloc] initWithPCMFormat:inFmt
+                                                                         frameCapacity:frames];
+                if (!inBuf) {
+                    if (bb) CFRelease(bb);
+                    return (AVAudioBuffer *)nil;
+                }
+                inBuf.frameLength = (AVAudioFrameCount)frames;
+                for (UInt32 i = 0; i < abl.mNumberBuffers && i < inBuf.mutableAudioBufferList.mNumberBuffers; i++) {
+                    AudioBuffer src = abl.mBuffers[i];
+                    AudioBuffer *dst = &inBuf.mutableAudioBufferList.mBuffers[i];
+                    if (src.mData && dst->mData) {
+                        size_t cp = MIN(src.mDataByteSize, dst->mDataByteSize);
+                        memcpy(dst->mData, src.mData, cp);
+                    }
+                }
+                if (bb) CFRelease(bb);
+                return (AVAudioBuffer *)inBuf;
+            };
+            AVAudioConverterOutputStatus st2 = [conv convertToBuffer:outBuf
+                                                               error:&convErr
+                                                  withInputFromBlock:inputBlock];
+            if (st2 == AVAudioConverterOutputStatus_HaveData && outBuf.frameLength > 0) {
+                NSData *pcm16 = [NSData dataWithBytes:outBuf.int16ChannelData[0]
+                                               length:outBuf.frameLength * 2];
+                [[LCHttpASR shared] appendPCM16:pcm16];
+            } else if (st2 != AVAudioConverterOutputStatus_HaveData && st2 != AVAudioConverterOutputStatus_EndOfStream) {
+                LCLogF(@"audio: conv st=%ld err=%@", (long)st2, convErr);
+            }
+        } @catch (NSException *e) {
+            LCLogF(@"audio: appendCM err %@", e);
         }
     }
 }
@@ -1409,6 +1645,13 @@ static OSStatus LC_avsasSetCategory(id self, SEL _cmd, NSString *cat, NSError *_
     LCLogF(@"audio: AVAudioSession setCategory %@ st=%d", cat, (int)st);
     return st;
 }
+static void (*orig_asbrEnqueue)(id, SEL, CMSampleBufferRef);
+static void LC_asbrEnqueue(id self, SEL _cmd, CMSampleBufferRef sbuf) {
+    orig_asbrEnqueue(self, _cmd, sbuf);
+    if (sbuf) {
+        @try { [[LCSpeech shared] appendCMSampleBuffer:sbuf]; } @catch (NSException *e) {}
+    }
+}
 static void LCSwizzleAudioProbe(void) {
     @try {
         Class ae = NSClassFromString(@"AVAudioEngine");
@@ -1420,6 +1663,8 @@ static void LCSwizzleAudioProbe(void) {
         if (asbr) {
             Method m = class_getInstanceMethod(asbr, @selector(init));
             if (m) { orig_asbrInit = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)LC_asbrInit); LCLog("probe: AVSampleBufferAudioRenderer.init OK"); }
+            Method me = class_getInstanceMethod(asbr, @selector(enqueueSampleBuffer:));
+            if (me) { orig_asbrEnqueue = (void *)method_getImplementation(me); method_setImplementation(me, (IMP)LC_asbrEnqueue); LCLog("hook: ASBR enqueueSampleBuffer OK"); }
         }
         Class avsrs = NSClassFromString(@"AVSampleBufferRenderSynchronizer");
         if (avsrs) {
