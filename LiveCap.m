@@ -300,6 +300,21 @@ static NSString *LCJBRootPath(NSString *path) {
             @"Output ONLY the translated text. No explanations, no quotation marks, no extra punctuation. "
             @"Keep line breaks where they make sense.", target];
 
+        // 优先腾讯云混元（用户已配 SecretId/Key，ASR+翻译同一密钥）
+        NSString *secretId = [[LCConfig shared] tencentSecretId];
+        NSString *secretKey = [[LCConfig shared] tencentSecretKey];
+        if (secretId.length && secretKey.length) {
+            [self tencentTranslate:trimmed systemPrompt:sysPrompt cacheKey:cacheKey
+                          secretId:secretId secretKey:secretKey
+                        completion:completion];
+            return;
+        }
+        // 回退 agnes（OpenAI 兼容；apiKey 为空则跳过）
+        NSString *apiKey = [[LCConfig shared] apiKey];
+        if (apiKey.length == 0) {
+            LCLog("translate: no tencent keys, no agnes key -> skipped");
+            return;
+        }
         NSDictionary *body = @{
             @"model": [LCConfig shared].model ?: @"agnes-3.0-flash",
             @"messages": @[
@@ -313,7 +328,7 @@ static NSString *LCJBRootPath(NSString *path) {
             [NSURL URLWithString:[[[LCConfig shared] apiBase] stringByAppendingString:@"/chat/completions"]]];
         req.HTTPMethod = @"POST";
         [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-        [req setValue:[NSString stringWithFormat:@"Bearer %@", [LCConfig shared].apiKey] forHTTPHeaderField:@"Authorization"];
+        [req setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
         req.timeoutInterval = 12.0;
         NSError *__autoreleasing err = nil;
         NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
@@ -351,6 +366,91 @@ static NSString *LCJBRootPath(NSString *path) {
     });
 }
 
+// 腾讯云机器翻译 TextTranslate（TC3 签名，2018-03-21；免费每月 500 万字符）
+// 语言代码映射：LCConfig 的 BCP-47 (en-US/ja-JP/…) -> ISO 639-1 (en/ja/…)
+static NSString *LCTmtLang(NSString *lcLang) {
+    if ([lcLang hasPrefix:@"zh"]) return @"zh";
+    if ([lcLang hasPrefix:@"ja"]) return @"ja";
+    if ([lcLang hasPrefix:@"ko"]) return @"ko";
+    if ([lcLang hasPrefix:@"fr"]) return @"fr";
+    if ([lcLang hasPrefix:@"de"]) return @"de";
+    if ([lcLang hasPrefix:@"es"]) return @"es";
+    if ([lcLang hasPrefix:@"ru"]) return @"ru";
+    if ([lcLang hasPrefix:@"ar"]) return @"ar";
+    return @"en";
+}
+
+- (void)tencentTranslate:(NSString *)text systemPrompt:(NSString *)sysPrompt
+               cacheKey:(NSString *)cacheKey
+               secretId:(NSString *)secretId secretKey:(NSString *)secretKey
+             completion:(void (^)(NSString *result))completion {
+    if (text.length > 1800) text = [text substringToIndex:1800];  // TextTranslate 单次上限
+    NSString *src = LCTmtLang([LCConfig shared].sourceLang);
+    NSString *dst = LCTmtLang([LCConfig shared].targetLang);
+    NSDictionary *body = @{
+        @"SourceText": text,
+        @"Source": src,
+        @"Target": dst,
+        @"ProjectId": @0
+    };
+    NSError *__autoreleasing err = nil;
+    NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
+    if (err || !payload) { LCLogF(@"translate: tencent json err %@", err); return; }
+
+    long long ts = (long long)[[NSDate date] timeIntervalSince1970];
+    NSString *tsStr = [NSString stringWithFormat:@"%lld", ts];
+    NSDateFormatter *df = [[NSDateFormatter alloc] init];
+    [df setDateFormat:@"yyyy-MM-dd"];
+    [df setTimeZone:[NSTimeZone timeZoneWithName:@"UTC"]];
+    NSString *dateStr = [df stringFromDate:[NSDate date]];
+
+    NSString *host = @"tmt.tencentcloudapi.com";
+    NSString *auth = LCTencentAuthHeaderEx(secretId, secretKey, tsStr, dateStr, payload, host,
+                                           @"tmt", @"texttranslate");
+
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
+        [NSURL URLWithString:@"https://tmt.tencentcloudapi.com"]];
+    req.HTTPMethod = @"POST";
+    [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+    [req setValue:host forHTTPHeaderField:@"Host"];
+    [req setValue:@"TextTranslate" forHTTPHeaderField:@"X-TC-Action"];
+    [req setValue:@"2018-03-21" forHTTPHeaderField:@"X-TC-Version"];
+    [req setValue:tsStr forHTTPHeaderField:@"X-TC-Timestamp"];
+    [req setValue:@"ap-guangzhou" forHTTPHeaderField:@"X-TC-Region"];
+    [req setValue:auth forHTTPHeaderField:@"Authorization"];
+    req.HTTPBody = payload;
+    req.timeoutInterval = 12.0;
+
+    NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
+        if (taskErr) {
+            LCLogF(@"translate: tencent req err %@", taskErr);
+            return;
+        }
+        NSError *__autoreleasing parseErr = nil;
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseErr];
+        if (parseErr || !json) { LCLogF(@"translate: tencent parse err %@", parseErr); return; }
+        NSDictionary *respD = json[@"Response"];
+        if (respD[@"Error"]) {
+            LCLogF(@"translate: tencent api err %@", respD[@"Error"]);
+            return;
+        }
+        NSString *content = respD[@"TargetText"];
+        if (![content isKindOfClass:[NSString class]] || content.length == 0) {
+            LCLogF(@"translate: tencent empty target (%@)", json);
+            return;
+        }
+        NSString *result = [content stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        _cache[cacheKey] = result;
+        if (_cache.count > 300) [_cache removeAllObjects];
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
+        }
+    }];
+    [task resume];
+}
+
 @end
 
 #pragma mark - 腾讯云一句话识别（在线 ASR，绕开 SFSpeech 授权）
@@ -377,19 +477,20 @@ static NSData *LCSHA256(NSData *d) {
 
 static NSData *LCBytes(NSString *s) { return [s dataUsingEncoding:NSUTF8StringEncoding]; }
 
-static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
-                                     NSString *timestamp, NSString *date,
-                                     NSData *payload, NSString *host) {
-    // CanonicalRequest
+static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
+                                       NSString *timestamp, NSString *date,
+                                       NSData *payload, NSString *host,
+                                       NSString *service, NSString *action) {
+    // CanonicalRequest（action 转小写进签名，与实际 header 大小写无关）
     NSString *hashedPayload = LCDataToHex(LCSHA256(payload));
     NSString *canonicalHeaders = [NSString stringWithFormat:
-        @"content-type:application/json; charset=utf-8\nhost:%@\nx-tc-action:sentencerecognition\n", host];
+        @"content-type:application/json; charset=utf-8\nhost:%@\nx-tc-action:%@\n", host, action];
     NSString *signedHeaders = @"content-type;host;x-tc-action";
     NSString *canonicalRequest = [NSString stringWithFormat:
         @"POST\n/\n\n%@\n%@\n%@",
         canonicalHeaders, signedHeaders, hashedPayload];
 
-    NSString *credentialScope = [NSString stringWithFormat:@"%@/asr/tc3_request", date];
+    NSString *credentialScope = [NSString stringWithFormat:@"%@/%@/tc3_request", date, service];
     NSString *stringToSign = [NSString stringWithFormat:
         @"TC3-HMAC-SHA256\n%@\n%@\n%@",
         timestamp, credentialScope, LCDataToHex(LCSHA256(LCBytes(canonicalRequest)))];
@@ -400,13 +501,20 @@ static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
     [tc3Key appendData:LCBytes(secretKey)];
 
     NSData *secretDate = LCHMACSHA256(tc3Key, LCBytes(date));
-    NSData *secretService = LCHMACSHA256(secretDate, LCBytes(@"asr"));
+    NSData *secretService = LCHMACSHA256(secretDate, LCBytes(service));
     NSData *secretSigning = LCHMACSHA256(secretService, LCBytes(@"tc3_request"));
     NSData *signature = LCHMACSHA256(secretSigning, LCBytes(stringToSign));
 
     return [NSString stringWithFormat:
         @"TC3-HMAC-SHA256 Credential=%@/%@, SignedHeaders=%@, Signature=%@",
         secretId, credentialScope, signedHeaders, LCDataToHex(signature)];
+}
+
+static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
+                                     NSString *timestamp, NSString *date,
+                                     NSData *payload, NSString *host) {
+    return LCTencentAuthHeaderEx(secretId, secretKey, timestamp, date, payload, host,
+                                 @"asr", @"sentencerecognition");
 }
 
 // tap 输入格式（LCTapPrepare 记录，供 PCM 转换 / SFSpeech 缓冲）
