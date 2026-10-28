@@ -1394,12 +1394,14 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     // 尝试附加 magic cookie（部分 AAC 流需要）
     CMFormatDescriptionRef fmtD = CMSampleBufferGetFormatDescription(sbuf);
     if (fmtD) {
-        size_t cookieSize = 0;
-        const void *cookie = CMFormatDescriptionGetExtension(fmtD,
-            CFSTR("MagicCookie"), &cookieSize);
-        if (cookie && cookieSize > 0) {
-            AudioConverterSetProperty(conv, kAudioConverterDecompressionMagicCookie,
-                                      (UInt32)cookieSize, cookie);
+        CFTypeRef cookieRef = CMFormatDescriptionGetExtension(fmtD, CFSTR("MagicCookie"));
+        if (cookieRef && CFGetTypeID(cookieRef) == CFDataGetTypeID()) {
+            CFDataRef cookieData = (CFDataRef)cookieRef;
+            if (CFDataGetLength(cookieData) > 0) {
+                AudioConverterSetProperty(conv, kAudioConverterDecompressionMagicCookie,
+                                          (UInt32)CFDataGetLength(cookieData),
+                                          CFDataGetBytePtr(cookieData));
+            }
         }
     }
 
