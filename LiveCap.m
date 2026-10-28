@@ -1883,31 +1883,19 @@ static void LC_asbrEnqueue(id self, SEL _cmd, CMSampleBufferRef sbuf) {
         @try { [[LCSpeech shared] appendCMSampleBuffer:sbuf]; } @catch (NSException *e) {}
     }
 }
-// ===== 系统音频输出层抓解码后 PCM（TrollRecorder 思路）：YouTube 播放音频最终走 AudioUnitRender =====
-static OSStatus (*orig_AudioUnitRender)(AudioUnit inUnit, AudioUnitRenderActionFlags *ioActionFlags,
-                                        const AudioTimeStamp *inTimeStamp, UInt32 inOutputBusNumber,
-                                        UInt32 inNumberFrames, AudioBufferList *ioData);
-static OSStatus LC_AudioUnitRender(AudioUnit inUnit, AudioUnitRenderActionFlags *ioActionFlags,
-                                   const AudioTimeStamp *inTimeStamp, UInt32 inOutputBusNumber,
-                                   UInt32 inNumberFrames, AudioBufferList *ioData) {
-    OSStatus st = orig_AudioUnitRender(inUnit, ioActionFlags, inTimeStamp, inOutputBusNumber, inNumberFrames, ioData);
+// ===== 系统音频输出层抓解码后 PCM：包装 YouTube 播放 AU 的 render 回调（TrollRecorder 思路） =====
+#define LC_MAX_CB 8
+static struct { AudioUnit au; AudioUnitElement el; AURenderCallbackStruct cb; } gLCCbs[LC_MAX_CB];
+static int gLCCbN = 0;
+
+static OSStatus LC_RenderCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags,
+                                  const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber,
+                                  UInt32 inNumberFrames, AudioBufferList *ioData) {
+    AURenderCallbackStruct *orig = (AURenderCallbackStruct *)inRefCon;
+    OSStatus st = orig->inputProc(orig->inputProcRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
     if (st == noErr && ioData && ioData->mNumberBuffers > 0 && inNumberFrames > 0 && inNumberFrames <= 262144) {
         @autoreleasepool {
             @try {
-                if (!gProcessingFormatValid) {
-                    AudioStreamBasicDescription asbd;
-                    UInt32 sz = sizeof(asbd);
-                    if (AudioUnitGetProperty(inUnit, kAudioUnitProperty_StreamFormat,
-                                             kAudioUnitScope_Output, inOutputBusNumber,
-                                             &asbd, &sz) == noErr) {
-                        gProcessingFormat = asbd;
-                        gProcessingFormatValid = YES;
-                        LCLogF(@"audio: AUR fmt sr=%.0f ch=%u bits=%u fmt=0x%08x noninter=%d",
-                               asbd.mSampleRate, (unsigned)asbd.mChannelsPerFrame,
-                               (unsigned)asbd.mBitsPerChannel, (unsigned)asbd.mFormatID,
-                               (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) ? 1 : 0);
-                    }
-                }
                 if ([[LCConfig shared] enabled] && gProcessingFormatValid) {
                     if (![[LCHttpASR shared] isRunning]) {
                         [[LCHttpASR shared] startWithFormat:gProcessingFormat];
@@ -1915,17 +1903,51 @@ static OSStatus LC_AudioUnitRender(AudioUnit inUnit, AudioUnitRenderActionFlags 
                     [[LCHttpASR shared] appendBufferList:ioData frames:inNumberFrames];
                 }
             } @catch (NSException *e) {
-                LCLogF(@"audio: AUR err %@", e);
+                LCLogF(@"audio: CB err %@", e);
             }
         }
     }
     return st;
 }
 
+static OSStatus (*orig_AudioUnitSetProperty)(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement, const void *, UInt32);
+static OSStatus LC_AudioUnitSetProperty(AudioUnit inUnit, AudioUnitPropertyID inID, AudioUnitScope inScope,
+                                        AudioUnitElement inElement, const void *inData, UInt32 inDataSize) {
+    OSStatus st = orig_AudioUnitSetProperty(inUnit, inID, inScope, inElement, inData, inDataSize);
+    if (st == noErr && inID == kAudioUnitProperty_SetRenderCallback && inData && inDataSize >= sizeof(AURenderCallbackStruct)) {
+        AURenderCallbackStruct cb;
+        memcpy(&cb, inData, sizeof(cb));
+        if (cb.inputProc && gLCCbN < LC_MAX_CB) {
+            int slot = gLCCbN++;
+            gLCCbs[slot].au = inUnit;
+            gLCCbs[slot].el = inElement;
+            gLCCbs[slot].cb = cb;
+            AURenderCallbackStruct wrapped = { LC_RenderCallback, &gLCCbs[slot].cb };
+            orig_AudioUnitSetProperty(inUnit, inID, inScope, inElement, &wrapped, sizeof(wrapped));
+            if (!gProcessingFormatValid) {
+                AudioStreamBasicDescription asbd;
+                UInt32 sz = sizeof(asbd);
+                if (AudioUnitGetProperty(inUnit, kAudioUnitProperty_StreamFormat,
+                                         kAudioUnitScope_Output, inElement,
+                                         &asbd, &sz) == noErr) {
+                    gProcessingFormat = asbd;
+                    gProcessingFormatValid = YES;
+                    LCLogF(@"audio: AUSP fmt sr=%.0f ch=%u bits=%u fmt=0x%08x noninter=%d",
+                           asbd.mSampleRate, (unsigned)asbd.mChannelsPerFrame,
+                           (unsigned)asbd.mBitsPerChannel, (unsigned)asbd.mFormatID,
+                           (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) ? 1 : 0);
+                }
+            }
+            LCLogF(@"audio: AUSP wrap cb unit=%p elem=%u (slot %d)", inUnit, (unsigned)inElement, slot);
+        }
+    }
+    return st;
+}
+
 static void LCHookAudioUnitRender(void) {
-    struct rebinding rb = { "AudioUnitRender", (void *)LC_AudioUnitRender, (void **)&orig_AudioUnitRender };
+    struct rebinding rb = { "AudioUnitSetProperty", (void *)LC_AudioUnitSetProperty, (void **)&orig_AudioUnitSetProperty };
     int r = rebind_symbols(&rb, 1);
-    LCLogF(@"hook: AudioUnitRender rebind=%d", r);
+    LCLogF(@"hook: AudioUnitSetProperty rebind=%d", r);
 }
 
 static void LCSwizzleAudioProbe(void) {
@@ -2171,7 +2193,7 @@ static void LCLazyInit(void) {
     LCSwizzleAVPlayer();
     LCSwizzleAudioProbe();
     LCHookAudioUnitRender();
-    LCLog("init: [1b/4] hook AudioUnitRender done");
+    LCLog("init: [1b/4] hook AudioUnitSetProperty done");
     LCLog("init: [2/4] swizzle shortcut");
     LCSwizzleShortcut();
     LCLog("init: [3/4] install shortcut item");
