@@ -1,14 +1,15 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e)
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.12
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
-//      → 喂 SFSpeechRecognizer 实时转写
-//      → 原文经 OpenAI 兼容接口翻译
+//      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
+//      → 原文经 OpenAI 兼容接口翻译（agnes）
 //      → 悬浮双语字幕显示在 keyWindow.rootViewController.view（不新建 UIWindow）
-// 依赖：AVFoundation / Speech / MediaToolbox / AudioToolbox
+// 依赖：AVFoundation / Speech / MediaToolbox / AudioToolbox / CommonCrypto
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <Speech/Speech.h>
 #import <MediaToolbox/MTAudioProcessingTap.h>
+#import <CommonCrypto/CommonCrypto.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <string.h>
@@ -75,6 +76,8 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) NSString *apiBase;
 @property (readonly) NSString *apiKey;
 @property (readonly) NSString *model;
+@property (readonly) NSString *tencentSecretId;
+@property (readonly) NSString *tencentSecretKey;
 @property (readonly) CGFloat fontSize;
 @property (readonly) BOOL boldText;
 @property (readonly) UIColor *textColor;
@@ -143,6 +146,16 @@ static NSString *LCJBRootPath(NSString *path) {
 - (NSString *)model {
     NSString *s = _d[@"model"];
     return (s && s.length) ? s : @"agnes-3.0-flash";
+}
+
+- (NSString *)tencentSecretId {
+    NSString *s = _d[@"tencentSecretId"];
+    return (s && s.length) ? s : @"";
+}
+
+- (NSString *)tencentSecretKey {
+    NSString *s = _d[@"tencentSecretKey"];
+    return (s && s.length) ? s : @"";
 }
 
 - (CGFloat)fontSize {
@@ -332,6 +345,335 @@ static NSString *LCJBRootPath(NSString *path) {
         }];
         [task resume];
     });
+}
+
+@end
+
+#pragma mark - 腾讯云一句话识别（在线 ASR，绕开 SFSpeech 授权）
+
+// TC3-HMAC-SHA256 签名工具
+static NSData *LCHexToData(NSString *hex) {
+    if (!hex || hex.length % 2) return nil;
+    NSMutableData *d = [NSMutableData dataWithCapacity:hex.length / 2];
+    unsigned char byte = 0;
+    for (NSUInteger i = 0; i < hex.length; i++) {
+        unichar c = [hex characterAtIndex:i];
+        unsigned v = 0;
+        if (c >= '0' && c <= '9') v = c - '0';
+        else if (c >= 'a' && c <= 'f') v = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') v = c - 'A' + 10;
+        else return nil;
+        if (i % 2 == 0) byte = (unsigned char)(v << 4);
+        else { byte |= v; [d appendBytes:&byte length:1]; }
+    }
+    return d;
+}
+
+static NSString *LCDataToHex(NSData *d) {
+    const unsigned char *p = d.bytes;
+    NSMutableString *s = [NSMutableString stringWithCapacity:d.length * 2];
+    for (NSUInteger i = 0; i < d.length; i++) [s appendFormat:@"%02x", p[i]];
+    return s;
+}
+
+static NSData *LCHMACSHA256(NSData *key, NSData *data) {
+    NSMutableData *out = [NSMutableData dataWithLength:CC_SHA256_DIGEST_LENGTH];
+    CCHmac(kCCHmacAlgSHA256, key.bytes, key.length, data.bytes, data.length, out.mutableBytes);
+    return out;
+}
+
+static NSData *LCSHA256(NSData *d) {
+    NSMutableData *out = [NSMutableData dataWithLength:CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(d.bytes, (CC_LONG)d.length, out.mutableBytes);
+    return out;
+}
+
+static NSData *LCBytes(NSString *s) { return [s dataUsingEncoding:NSUTF8StringEncoding]; }
+
+static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
+                                     NSString *timestamp, NSString *date,
+                                     NSData *payload, NSString *host) {
+    // CanonicalRequest
+    NSString *hashedPayload = LCDataToHex(LCSHA256(payload));
+    NSString *canonicalHeaders = [NSString stringWithFormat:
+        @"content-type:application/json; charset=utf-8\nhost:%@\nx-tc-action:sentencerecognition\n", host];
+    NSString *signedHeaders = @"content-type;host;x-tc-action";
+    NSString *canonicalRequest = [NSString stringWithFormat:
+        @"POST\n/\n\n%@\n%@\n%@",
+        canonicalHeaders, signedHeaders, hashedPayload];
+
+    NSString *credentialScope = [NSString stringWithFormat:@"%@/asr/tc3_request", date];
+    NSString *stringToSign = [NSString stringWithFormat:
+        @"TC3-HMAC-SHA256\n%@\n%@\n%@",
+        timestamp, credentialScope, LCDataToHex(LCSHA256(LCBytes(canonicalRequest)))];
+
+    // 密钥派生（TC3+SecretKey 是二进制 HMAC 键）
+    NSMutableData *tc3Key = [NSMutableData data];
+    [tc3Key appendBytes:"TC3" length:3];
+    [tc3Key appendData:LCBytes(secretKey)];
+
+    NSData *secretDate = LCHMACSHA256(tc3Key, LCBytes(date));
+    NSData *secretService = LCHMACSHA256(secretDate, LCBytes(@"asr"));
+    NSData *secretSigning = LCHMACSHA256(secretService, LCBytes(@"tc3_request"));
+    NSData *signature = LCHMACSHA256(secretSigning, LCBytes(stringToSign));
+
+    return [NSString stringWithFormat:
+        @"TC3-HMAC-SHA256 Credential=%@/%@, SignedHeaders=%@, Signature=%@",
+        secretId, credentialScope, signedHeaders, LCDataToHex(signature)];
+}
+
+// tap 输入格式（LCTapPrepare 记录，供 PCM 转换 / SFSpeech 缓冲）
+static AudioStreamBasicDescription gProcessingFormat;
+static BOOL gProcessingFormatValid = NO;
+
+@class LCSubtitleOverlay;  // 前向声明：LCHttpASR 在 LCSubtitleOverlay 之前引用
+
+@interface LCHttpASR : NSObject
++ (instancetype)shared;
+- (BOOL)isRunning;
+- (void)startWithFormat:(AudioStreamBasicDescription)asbd;
+- (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames;
+- (void)stop;
+@end
+
+@implementation LCHttpASR {
+    NSMutableData *_pcm;          // float32 单声道样本累积
+    double _inRate;               // 输入采样率
+    BOOL _running;
+    BOOL _inFlight;               // 上一次请求未返回时跳过本段
+    NSURLSession *_session;
+}
+
++ (instancetype)shared {
+    static LCHttpASR *s;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        s = [[LCHttpASR alloc] init];
+        s->_pcm = [NSMutableData data];
+        s->_session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    });
+    return s;
+}
+
+- (BOOL)isRunning { return _running; }
+
+- (void)startWithFormat:(AudioStreamBasicDescription)asbd {
+    if (_running) return;
+    if (asbd.mSampleRate <= 0) {
+        LCLog("asr: waiting for audio format (tap prepare will call again)");
+        return;
+    }
+    _inRate = asbd.mSampleRate;
+    [_pcm setLength:0];
+    _inFlight = NO;
+    _running = YES;
+    LCLogF(@"asr: tencent online ASR started (sr=%g ch=%u)", _inRate,
+           (unsigned)asbd.mChannelsPerFrame);
+}
+
+- (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames {
+    if (!_running) return;
+    if (![[LCConfig shared] enabled]) return;
+    if (_inRate <= 0) return;
+    if (!list || frames == 0) return;
+    @autoreleasepool {
+        @try {
+            // 转单声道 float32：interleaved 按帧平均，non-interleaved 多 buffer 平均
+            unsigned ch = (gProcessingFormatValid && gProcessingFormat.mChannelsPerFrame > 0)
+                ? (unsigned)gProcessingFormat.mChannelsPerFrame : 2;
+            BOOL interleaved = !(gProcessingFormat.mFormatFlags & kAudioFormatFlagIsNonInterleaved);
+            float *tmp = (float *)malloc(frames * sizeof(float));
+            if (!tmp) return;
+            for (UInt32 i = 0; i < frames; i++) {
+                float acc = 0;
+                if (interleaved && list->mNumberBuffers > 0) {
+                    const float *b = (const float *)list->mBuffers[0].mData;
+                    for (unsigned c = 0; c < ch; c++) acc += b[i * ch + c];
+                    acc /= ch;
+                } else {
+                    unsigned n = 0;
+                    for (unsigned c = 0; c < list->mNumberBuffers; c++) {
+                        if (list->mBuffers[c].mData) {
+                            acc += ((const float *)list->mBuffers[c].mData)[i];
+                            n++;
+                        }
+                    }
+                    if (n) acc /= n;
+                }
+                tmp[i] = acc;
+            }
+            [_pcm appendBytes:tmp length:frames * sizeof(float)];
+            free(tmp);
+
+            // 每 ~5 秒切一段识别
+            double secs = (double)_pcm.length / sizeof(float) / _inRate;
+            if (secs >= 5.0 && !_inFlight) {
+                NSData *chunk = [_pcm copy];
+                [_pcm setLength:0];
+                [self processChunk:chunk];
+            } else if (secs >= 8.0) {
+                // 上次请求未完成：丢弃过量累积防止内存膨胀
+                [_pcm setLength:0];
+            }
+        } @catch (NSException *e) {
+            LCLogF(@"asr: append err %@", e);
+        }
+    }
+}
+
+- (void)processChunk:(NSData *)floatMono {
+    if (!floatMono || floatMono.length < sizeof(float) * 1600) return;  // <0.1s 丢弃
+    _inFlight = YES;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        @autoreleasepool {
+            @try {
+                // 1) 重采样到 16k（最近邻） + 量化 SInt16
+                NSUInteger inCount = floatMono.length / sizeof(float);
+                const float *in = (const float *)floatMono.bytes;
+                double ratio = _inRate / 16000.0;
+                NSUInteger outCount = (NSUInteger)(inCount / ratio);
+                if (outCount < 160) { _inFlight = NO; return; }  // 太短
+                NSMutableData *pcm16 = [NSMutableData dataWithCapacity:outCount * 2];
+                SInt16 *out = (SInt16 *)malloc(outCount * 2);
+                if (!out) { _inFlight = NO; return; }
+                for (NSUInteger n = 0; n < outCount; n++) {
+                    NSUInteger idx = (NSUInteger)(n * ratio);
+                    if (idx >= inCount) idx = inCount - 1;
+                    float f = in[idx];
+                    if (f > 1.0f) f = 1.0f;
+                    if (f < -1.0f) f = -1.0f;
+                    out[n] = (SInt16)(f * 32767.0f);
+                }
+                [pcm16 appendBytes:out length:outCount * 2];
+                free(out);
+
+                // 2) WAV 头（16bit mono 16k）
+                NSMutableData *wav = [NSMutableData dataWithCapacity:pcm16.length + 44];
+                const char *riff = "RIFF";
+                [wav appendBytes:riff length:4];
+                uint32_t riffSize = (uint32_t)(36 + pcm16.length);
+                [wav appendBytes:&riffSize length:4];
+                const char *wave = "WAVE";
+                [wav appendBytes:wave length:4];
+                const char *fmt = "fmt ";
+                [wav appendBytes:fmt length:4];
+                uint32_t fmtSize = 16;
+                [wav appendBytes:&fmtSize length:4];
+                uint16_t audioFmt = 1;
+                [wav appendBytes:&audioFmt length:2];
+                uint16_t chn = 1;
+                [wav appendBytes:&chn length:2];
+                uint32_t rate = 16000;
+                [wav appendBytes:&rate length:4];
+                uint32_t byteRate = 16000 * 2;
+                [wav appendBytes:&byteRate length:4];
+                uint16_t blockAlign = 2;
+                [wav appendBytes:&blockAlign length:2];
+                uint16_t bits = 16;
+                [wav appendBytes:&bits length:2];
+                const char *data = "data";
+                [wav appendBytes:data length:4];
+                uint32_t dataSize = (uint32_t)pcm16.length;
+                [wav appendBytes:&dataSize length:4];
+                [wav appendData:pcm16];
+
+                // 3) base64 + 请求
+                NSString *b64 = [wav base64EncodedStringWithOptions:0];
+                NSString *secretId = [[LCConfig shared] tencentSecretId];
+                NSString *secretKey = [[LCConfig shared] tencentSecretKey];
+                if (secretId.length == 0 || secretKey.length == 0) {
+                    LCLog("asr: tencent keys missing");
+                    _inFlight = NO;
+                    return;
+                }
+                // 识别语言映射
+                NSString *lang = [[LCConfig shared] sourceLang];
+                NSString *eng = @"16k_zh";
+                if ([lang isEqualToString:@"en-US"]) eng = @"16k_en";
+                else if ([lang isEqualToString:@"ja-JP"]) eng = @"16k_ja";
+                else if ([lang isEqualToString:@"ko-KR"]) eng = @"16k_ko";
+                else if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
+
+                NSDictionary *body = @{
+                    @"ProjectId": @0,
+                    @"SubServiceType": @2,
+                    @"EngSerViceType": eng,
+                    @"SourceType": @1,
+                    @"VoiceFormat": @"wav",
+                    @"UsrAudioKey": [NSString stringWithFormat:@"livecap-%@", [[NSUUID UUID] UUIDString]],
+                    @"Data": b64,
+                    @"DataLen": @(wav.length),
+                    @"FilterDirty": @0,
+                    @"FilterModal": @0,
+                    @"FilterPunc": @1
+                };
+                NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+                if (!payload) { _inFlight = NO; return; }
+
+                long long ts = (long long)[[NSDate date] timeIntervalSince1970];
+                NSString *tsStr = [NSString stringWithFormat:@"%lld", ts];
+                NSDateFormatter *df = [[NSDateFormatter alloc] init];
+                [df setDateFormat:@"yyyy-MM-dd"];
+                [df setTimeZone:[NSTimeZone timeZoneWithName:@"UTC"]];
+                NSString *dateStr = [df stringFromDate:[NSDate date]];
+
+                NSString *host = @"asr.tencentcloudapi.com";
+                NSString *auth = LCTencentAuthHeader(secretId, secretKey, tsStr, dateStr, payload, host);
+
+                NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
+                    [NSURL URLWithString:@"https://asr.tencentcloudapi.com"]];
+                req.HTTPMethod = @"POST";
+                [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+                [req setValue:host forHTTPHeaderField:@"Host"];
+                [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
+                [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
+                [req setValue:tsStr forHTTPHeaderField:@"X-TC-Timestamp"];
+                [req setValue:auth forHTTPHeaderField:@"Authorization"];
+                req.HTTPBody = payload;
+                req.timeoutInterval = 10.0;
+
+                LCLogF(@"asr: sending %lu bytes (%@)", (unsigned long)wav.length, eng);
+                NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+                    completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+                    _inFlight = NO;
+                    if (err) {
+                        LCLogF(@"asr: req err %@", err);
+                        return;
+                    }
+                    NSError *__autoreleasing pe = nil;
+                    NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
+                    if (pe || !json) { LCLogF(@"asr: parse err %@", pe); return; }
+                    NSDictionary *respD = json[@"Response"];
+                    NSString *text = respD[@"Result"];
+                    if (![text isKindOfClass:[NSString class]] || text.length == 0) {
+                        LCLogF(@"asr: empty result (%@)", json);
+                        return;
+                    }
+                    text = [text stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                    if (text.length == 0) return;
+                    LCLogF(@"asr: text [%@]", text);
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
+                        [[LCTranslator shared] translate:text
+                            completion:^(NSString *tr) {
+                                if (tr.length) [[LCSubtitleOverlay shared] showOriginal:text translation:tr];
+                            }];
+                    });
+                }];
+                [task resume];
+            } @catch (NSException *e) {
+                _inFlight = NO;
+                LCLogF(@"asr: process err %@", e);
+            }
+        }
+    });
+}
+
+- (void)stop {
+    _running = NO;
+    _inFlight = NO;
+    [_pcm setLength:0];
 }
 
 @end
@@ -585,10 +927,9 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 
 @end
 
-#pragma mark - 语音识别（SFSpeech）
+#pragma mark - 语音识别（SFSpeech + 腾讯云在线 fallback）
 
-// tap 回调（C 函数）与 LCSpeech 共用的音频格式描述
-static AudioStreamBasicDescription gProcessingFormat;
+// 语音识别（SFSpeech + 腾讯云在线 fallback）
 
 @interface LCSpeech : NSObject
 + (instancetype)shared;
@@ -620,11 +961,21 @@ static AudioStreamBasicDescription gProcessingFormat;
     // 授权检查：目标 App 往往没有语音识别 usage description，主动 requestAuthorization
     // 在无描述时可能触发系统级终止（注入进程被杀）。改为只查状态、不主动请求；
     // 授权是系统全局的（设置→隐私→语音识别），用户在其他有语音功能的 App 里授权一次即可。
+    // 1.0.12：无授权时自动切换腾讯云在线识别（不需要任何 iOS 授权）。
     SFSpeechRecognizerAuthorizationStatus st = [SFSpeechRecognizer authorizationStatus];
     if (st != SFSpeechRecognizerAuthorizationStatusAuthorized) {
-        LCLogF(@"speech: auth status=%ld (not authorized, skip; 去 设置→隐私→语音识别 授权)", (long)st);
+        LCLogF(@"speech: auth status=%ld -> fallback 腾讯云在线识别", (long)st);
         _recording = NO;
+        if (asbd.mSampleRate > 0) {
+            gProcessingFormat = asbd;
+            gProcessingFormatValid = YES;
+        }
+        [[LCHttpASR shared] startWithFormat:gProcessingFormat];
         return;
+    }
+    if (asbd.mSampleRate > 0) {
+        gProcessingFormat = asbd;
+        gProcessingFormatValid = YES;
     }
     NSLocale *locale = [NSLocale localeWithLocaleIdentifier:[LCConfig shared].sourceLang];
     SFSpeechRecognizer *rec = [[SFSpeechRecognizer alloc] initWithLocale:locale];
@@ -632,7 +983,8 @@ static AudioStreamBasicDescription gProcessingFormat;
         // 该 locale 不可用则退回 en-US
         rec = [[SFSpeechRecognizer alloc] initWithLocale:[NSLocale localeWithLocaleIdentifier:@"en-US"]];
         if (!rec || !rec.isAvailable) {
-            LCLog("speech: recognizer unavailable");
+            LCLog("speech: recognizer unavailable -> fallback 腾讯云在线识别");
+            [[LCHttpASR shared] startWithFormat:gProcessingFormat];
             return;
         }
     }
@@ -653,8 +1005,9 @@ static AudioStreamBasicDescription gProcessingFormat;
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
         if (error) {
-            LCLogF(@"speech: task error %@", error);
+            LCLogF(@"speech: task error %@ -> fallback 腾讯云在线识别", error);
             self->_recording = NO;
+            [[LCHttpASR shared] startWithFormat:gProcessingFormat];
             return;
         }
         if (!result) return;
@@ -689,8 +1042,13 @@ static AudioStreamBasicDescription gProcessingFormat;
 }
 
 - (void)appendBufferList:(AudioBufferList *)list frames:(UInt32)frames {
-    if (!_recording || !_request || frames == 0) return;
     if (![[LCConfig shared] enabled]) return;  // 合并开关关闭时忽略音频
+    // 在线识别模式：转发给腾讯云 ASR
+    if ([[LCHttpASR shared] isRunning]) {
+        [[LCHttpASR shared] appendBufferList:list frames:frames];
+        return;
+    }
+    if (!_recording || !_request || frames == 0) return;
     // 音频渲染线程：节流到 ~80ms 一次，降低高频对象分配压力
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
     if (now - _lastAppendAt < 0.08) return;
@@ -727,6 +1085,7 @@ static AudioStreamBasicDescription gProcessingFormat;
         _request = nil;
     }
     _recognizer = nil;
+    [[LCHttpASR shared] stop];
 }
 
 @end
@@ -747,6 +1106,7 @@ static void LCTapPrepare(MTAudioProcessingTapRef tap, CMItemCount maxFrames,
         if (!client) return;
         if (processingFormat) {
             memcpy(&gProcessingFormat, processingFormat, sizeof(AudioStreamBasicDescription));
+            gProcessingFormatValid = YES;
             LCLogF(@"tap: prepare sr=%g ch=%u bits=%u",
                    gProcessingFormat.mSampleRate,
                    (unsigned)gProcessingFormat.mChannelsPerFrame,
@@ -800,7 +1160,7 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         callbacks.prepare = LCTapPrepare;
         callbacks.process = LCTapProcess;
         callbacks.finalize = LCTapFinalize;
-        callbacks.clientInfo = NULL;
+        callbacks.clientInfo = (__bridge void *)[LCSpeech shared];  // 音频数据经 storage 送识别器
         MTAudioProcessingTapRef tap = NULL;
         OSStatus st = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
                                                  kMTAudioProcessingTapCreationFlag_PostEffects, &tap);
@@ -887,9 +1247,7 @@ static void LCSwizzleAVPlayer(void) {
     }
 }
 
-#pragma mark - 长按屏幕快速开关（在目标 App 内长按 0.8s 切换实时字幕翻译）
-
-#pragma mark - 长按图标快捷开关（在目标 App 内通过主屏图标菜单切换）
+#pragma mark - 长按图标快捷开关（桌面图标长按菜单）
 
 static void LCAuthSpeech(void);  // 前向声明（定义在文件末尾入口段）
 
@@ -905,7 +1263,7 @@ static void LCToggleEnabled(void) {
     if (now) {
         [[LCSubtitleOverlay shared] install];
         [[LCSubtitleOverlay shared] showToast:@"实时字幕翻译：已开启"];
-        LCAuthSpeech();  // 授权检查 + 补启动识别
+        LCAuthSpeech();  // 授权检查 + 补启动识别（无授权自动切在线）
     } else {
         [[LCSpeech shared] stop];
         [[LCSubtitleOverlay shared] showToast:@"实时字幕翻译：已关闭"];
@@ -923,7 +1281,7 @@ static void LCInstallShortcutItem(void) {
         UIApplication *app = [UIApplication sharedApplication];
         // 接管菜单（不保留 App 原有快捷项），并限制总数 ≤4：
         // iOS 主屏长按菜单最多显示 4 项，5 项会被截断（之前语言项就是这么消失的）。
-        // 4 项 = 开关 + 英语/日语/中文；韩语在设置面板切换。
+        // 4 项 = 开关 + 识别英语/日语/韩语；中文是默认翻译目标不进快捷。
         NSMutableArray *items = [NSMutableArray array];
 
         // 总开关项
@@ -1042,7 +1400,8 @@ static void LCSwizzleShortcut(void) {
 static BOOL LCLazyStarted = NO;
 
 // 语音识别授权：全局状态，需某个 App 触发。目标 App 声明了 NSSpeechRecognitionUsageDescription
-// （如 YouTube）时，注入进程里请求是安全的，授权成功即全局生效，随后补启动识别。
+// （如 YouTube）时，注入进程里请求是安全的，授权成功即全局生效。
+// 1.0.12：无论授权状态如何，无授权时一律切换腾讯云在线识别（不依赖 iOS 授权）。
 static void LCAuthSpeech(void) {
     SFSpeechRecognizerAuthorizationStatus st = [SFSpeechRecognizer authorizationStatus];
     LCLogF(@"speech: auth status=%ld", (long)st);
@@ -1054,14 +1413,19 @@ static void LCAuthSpeech(void) {
     }
     if (st == SFSpeechRecognizerAuthorizationStatusDenied ||
         st == SFSpeechRecognizerAuthorizationStatusRestricted) {
-        LCLog("speech: denied/restricted, 去 设置→隐私与安全→语音识别 开启");
+        LCLog("speech: denied/restricted -> 切换腾讯云在线识别");
+        if ([[LCConfig shared] enabled]) {
+            [[LCHttpASR shared] startWithFormat:gProcessingFormat];
+        }
         return;
     }
     // notDetermined：只有目标 App 声明了 usage description 才请求（无声明时请求可能被系统终止）
     NSString *desc = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"NSSpeechRecognitionUsageDescription"];
     if (desc.length == 0) {
-        LCLog("speech: target app has NO speech usage description -> 无法在本 App 弹授权框");
-        LCLog("speech: 请先在微信/QQ/讯飞等有语音输入的 App 里语音转文字一次，允许其使用语音识别（全局授权），再重开本 App");
+        LCLog("speech: target app has NO speech usage description -> 使用腾讯云在线识别");
+        if ([[LCConfig shared] enabled]) {
+            [[LCHttpASR shared] startWithFormat:gProcessingFormat];
+        }
         return;
     }
     LCLog("speech: requesting authorization (usage description present)");
@@ -1070,6 +1434,11 @@ static void LCAuthSpeech(void) {
         if (st2 == SFSpeechRecognizerAuthorizationStatusAuthorized) {
             if ([[LCConfig shared] enabled]) {
                 [[LCSpeech shared] startWithFormat:gProcessingFormat];
+            }
+        } else {
+            LCLog("speech: not authorized -> 使用腾讯云在线识别");
+            if ([[LCConfig shared] enabled]) {
+                [[LCHttpASR shared] startWithFormat:gProcessingFormat];
             }
         }
     }];

@@ -129,6 +129,16 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
     return (k.length == 0) ? @"未设置" : @"已设置";
 }
 
+- (NSString *)lc_tencentSecretTitle {
+    NSString *k = LCStr(@"tencentSecretId", @"");
+    return (k.length == 0) ? @"未设置" : @"已设置";
+}
+
+- (NSString *)lc_tencentSecretKeyTitle {
+    NSString *k = LCStr(@"tencentSecretKey", @"");
+    return (k.length == 0) ? @"未设置" : @"已设置";
+}
+
 #pragma mark - 表格
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -137,7 +147,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     if (section == 0) return @"基本";
-    if (section == 1) return @"翻译 API（OpenAI 兼容）";
+    if (section == 1) return @"腾讯云语音识别（在线）";
     if (section == 2) return @"字幕显示";
     return nil;
 }
@@ -145,6 +155,8 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0)
         return @"识别语言会按 App 记忆（例如 A 软件英语、B 软件日语），也可长按桌面 App 图标快捷切换。";
+    if (section == 1)
+        return @"在线语音识别无需 iOS 授权，任何 App 通用。腾讯云一句话识别每月免费 5000 次，密钥在控制台→访问管理→API 密钥管理获取。翻译使用内置 AI 服务。";
     if (section == 2)
         return @"字幕可长按拖动，位置按 App 记忆（重开 App 回到上次位置）。背景样式：无背景描边 / 半透明黑 / 实黑 / 半透明白 / 毛玻璃。";
     if (section == 3)
@@ -154,7 +166,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) return 4;
-    if (section == 1) return 3;
+    if (section == 1) return 2;  // 腾讯云 SecretId / SecretKey
     if (section == 2) return 4;
     return 0;
 }
@@ -193,16 +205,12 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
     }
     else if (indexPath.section == 1) {
         if (indexPath.row == 0) {
-            cell.textLabel.text = @"API 地址";
-            cell.detailTextLabel.text = LCStr(@"apiBase", @"未设置");
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        } else if (indexPath.row == 1) {
-            cell.textLabel.text = @"API Key";
-            cell.detailTextLabel.text = [self lc_apiKeyTitle];
+            cell.textLabel.text = @"SecretId";
+            cell.detailTextLabel.text = [self lc_tencentSecretTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else {
-            cell.textLabel.text = @"模型";
-            cell.detailTextLabel.text = LCStr(@"model", @"未设置");
+            cell.textLabel.text = @"SecretKey";
+            cell.detailTextLabel.text = [self lc_tencentSecretKeyTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         }
     }
@@ -280,9 +288,8 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
     else if (indexPath.section == 1) {
         NSString *key = nil, *title = nil, *cur = nil, *ph = nil;
         BOOL secure = NO;
-        if (indexPath.row == 0) { key = @"apiBase"; title = @"API 地址"; cur = LCStr(key, @""); ph = @"https://apihub.agnes-ai.cn/v1"; }
-        else if (indexPath.row == 1) { key = @"apiKey"; title = @"API Key"; cur = LCStr(key, @""); ph = @"sk-..."; secure = YES; }
-        else { key = @"model"; title = @"模型"; cur = LCStr(key, @""); ph = @"agnes-3.0-flash"; }
+        if (indexPath.row == 0) { key = @"tencentSecretId"; title = @"SecretId"; cur = LCStr(key, @""); ph = @"AKID..."; }
+        else { key = @"tencentSecretKey"; title = @"SecretKey"; cur = LCStr(key, @""); ph = @"腾讯云 API 密钥管理"; secure = YES; }
 
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
                                                                        message:nil

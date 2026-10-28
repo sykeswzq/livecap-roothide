@@ -35,11 +35,21 @@ if [ ! -f "$CFG" ]; then
 	<string>frost</string>
 	<key>manualPositions</key>
 	<dict/>
+	<key>tencentSecretId</key>
+	<string></string>
+	<key>tencentSecretKey</key>
+	<string></string>
 </dict>
 </plist>
 CFGEOF
   chmod 666 "$CFG"
   echo "config written" >> "$LOG"
+fi
+
+# 腾讯云密钥由用户在设置面板填写（或 ssh 直写 plist），不硬编码进公开仓库
+if [ -f "$CFG" ]; then
+  chmod 666 "$CFG"
+  echo "config ensured" >> "$LOG"
 fi
 
 # 面板写入后 cfprefsd 缓存问题：强制重读，保证面板/tweak 读到的都是最新
