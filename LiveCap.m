@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.46
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.48
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
@@ -307,9 +307,20 @@ static NSString *LCJBRootPath(NSString *path) {
     dispatch_async(_queue, ^{
         NSString *target = [[LCConfig shared] targetLang];
         NSString *sysPrompt = [NSString stringWithFormat:
-            @"You are a subtitle translation engine. Translate the user's subtitle text into %@ (简体中文 if unspecified). "
-            @"Output ONLY the translated text. No explanations, no quotation marks, no extra punctuation. "
-            @"Keep line breaks where they make sense.", target];
+            @"You are a professional subtitle translator. Your task is to translate video subtitles accurately and naturally.\n\n"
+            @"Translation Rules:\n"
+            @"1. Translate into %@ (简体中文 if unspecified). Maintain the original tone and style.\n"
+            @"2. For dialogue: use colloquial, natural language appropriate for the context.\n"
+            @"3. For narration: use formal, clear language.\n"
+            @"4. Keep abbreviations and proper nouns intact.\n"
+            @"5. Output ONLY the translated text. No explanations, no quotation marks, no prefixes like '翻译：' or '译文：'.\n"
+            @"6. Preserve line breaks exactly as in the original.\n"
+            @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n\n"
+            @"Examples:\n"
+            @"Input: Hello, how are you?\n"
+            @"Output: 你好，最近怎么样？\n\n"
+            @"Input: I'm doing great, thanks!\n"
+            @"Output: 我很好，谢谢！", target];
 
         // 0) OpenAI 兼容接口（agnes AI）：用户已配 apiKey + apiBase，优先级最高
         NSString *openaiKey = [[LCConfig shared] apiKey];
@@ -487,14 +498,20 @@ static NSString *LCTmtLang(NSString *lcLang) {
              completion:(void (^)(NSString *result))completion {
     if (text.length > 1800) text = [text substringToIndex:1800];
     NSString *trimmedModel = model.length ? model : @"agnes-2.5-flash";
+    // 动态 max_tokens：每行最多 96 token，最少 256，最多 2048
+    NSUInteger lineCount = [text componentsSeparatedByString:@"\n"].count;
+    NSInteger maxTokens = (NSInteger)(lineCount * 96);
+    if (maxTokens < 256) maxTokens = 256;
+    if (maxTokens > 2048) maxTokens = 2048;
     NSDictionary *body = @{
         @"model": trimmedModel,
         @"messages": @[
             @{@"role": @"system", @"content": sysPrompt},
             @{@"role": @"user",   @"content": text}
         ],
-        @"temperature": @0.1,
-        @"max_tokens": @200
+        @"temperature": @0.3,
+        @"top_p": @0.6,
+        @"max_tokens": @(maxTokens)
     };
     NSError *__autoreleasing err = nil;
     NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
