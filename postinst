@@ -57,6 +57,8 @@ killall -9 cfprefsd 2>/dev/null || true
 
 # roothide 注入要求 dylib 归属 mobile:staff；dpkg 默认安装为 root:wheel，此处修正
 DYLIB_PATH="/var/jb/Library/MobileSubstrate/DynamicLibraries"
+AUTOPATCHES_PATH="/usr/lib/DynamicPatches"
+
 if [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
   chown mobile:staff "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chown dylib OK" >> "$LOG"
   chmod 755 "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chmod dylib OK" >> "$LOG"
@@ -69,6 +71,34 @@ if [ -f "$DYLIB_PATH/LiveCap.plist" ]; then
   chmod 666 "$DYLIB_PATH/LiveCap.plist" 2>/dev/null && echo "chmod plist OK" >> "$LOG"
 else
   echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
+fi
+
+# roothidepatch: 确保 AutoPatches.dylib 存在并设置正确权限
+if [ -L "$DYLIB_PATH/LiveCap.dylib.roothidepatch" ] && [ -f "/usr/lib/DynamicPatches/AutoPatches.dylib" ]; then
+  chown mobile:staff "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null || true
+  chmod 777 "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null || true
+  echo "roothidepatch OK (symlink exists)" >> "$LOG"
+elif [ ! -f "/usr/lib/DynamicPatches/AutoPatches.dylib" ]; then
+  # 尝试从 deb 包中提取
+  STAGE_PATH="/tmp/livecap_stage"
+  mkdir -p "$STAGE_PATH" 2>/dev/null
+  if [ -f "/var/lib/dpkg/info/com.sykes.livecap.postinst" ]; then
+    # 从 dpkg 提取
+    dpkg-deb -x "/var/cache/apt/archives/com.sykes.livecap*.deb" "$STAGE_PATH" 2>/dev/null
+    if [ -f "$STAGE_PATH/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib.roothidepatch" ]; then
+      cp "$STAGE_PATH/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib.roothidepatch" "$DYLIB_PATH/" 2>/dev/null
+      chown mobile:staff "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null
+      chmod 777 "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null
+      echo "roothidepatch installed from deb" >> "$LOG"
+    fi
+  fi
+  # 检查 AutoPatches.dylib 是否存在
+  if [ ! -f "$AUTOPATCHES_PATH/AutoPatches.dylib" ]; then
+    echo "WARNING: /usr/lib/DynamicPatches/AutoPatches.dylib not found - roothide patch may not work" >> "$LOG"
+    echo "Try: dpkg -i /path/to/autopatches.deb" >> "$LOG"
+  else
+    echo "AutoPatches.dylib exists at $AUTOPATCHES_PATH" >> "$LOG"
+  fi
 fi
 
 # 检查权限（诊断用）
