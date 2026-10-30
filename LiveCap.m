@@ -311,6 +311,8 @@ static NSString *LCJBRootPath(NSString *path) {
             @"Output ONLY the translated text. No explanations, no quotation marks, no extra punctuation. "
             @"Keep line breaks where they make sense.", target];
 
+        LCLogF(@"translate: start text=[%@] target=%@ hasSecret=%d", trimmed, target, (int)(secretId.length && secretKey.length));
+
         // 1) 腾讯云机器翻译（用户已配 SecretId/Key，免费 500 万字符/月；未开通时返回错误则跳过）
         NSString *secretId = [[LCConfig shared] tencentSecretId];
         NSString *secretKey = [[LCConfig shared] tencentSecretKey];
@@ -321,6 +323,7 @@ static NSString *LCJBRootPath(NSString *path) {
             return;
         }
         // 2) MyMemory 免费翻译兜底（无需开通/密钥，立即可用）
+        LCLogF(@"translate: using MyMemory fallback src=%@ dst=%@", [LCConfig shared].sourceLang, target);
         [self mymemoryTranslate:trimmed targetLang:target cacheKey:cacheKey completion:completion];
     });
 }
@@ -350,20 +353,22 @@ static NSString *LCShortLang(NSString *lc) {
         src, dst];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
     req.timeoutInterval = 12.0;
+    LCLogF(@"translate: mymemory request url=%@", urlStr);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
         if (taskErr) {
-            LCLogF(@"translate: mymemory req err %@", taskErr);
+            LCLogF(@"translate: mymemory req err %@ url=%@", taskErr, urlStr);
             return;
         }
         NSError *__autoreleasing pe = nil;
         NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
         if (pe || !json) {
-            LCLogF(@"translate: mymemory parse err %@", pe);
+            LCLogF(@"translate: mymemory parse err %@ data len=%lu", pe, (unsigned long)data.length);
             return;
         }
         NSDictionary *rd = json[@"responseData"];
         NSString *content = rd[@"translatedText"];
+        LCLogF(@"translate: mymemory response status=%@ content=[%@]", json[@"responseStatus"], content);
         if (![content isKindOfClass:[NSString class]] || content.length == 0) return;
         // 空查询/警告时不当作结果
         if ([content hasPrefix:@"NO QUERY SPECIFIED"] || [content hasPrefix:@"MY MEMORY WARNING"]) return;
@@ -1291,11 +1296,12 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             if ([self->_accum length] > 0) {
                 self->_pendingFinal = [self->_accum copy];
                 [self->_accum setString:@""];
-                LCLogF(@"speech: final [%@]", self->_pendingFinal);
+                LCLogF(@"speech: final [%@] -> sending for translation", self->_pendingFinal);
                 [[LCSubtitleOverlay shared] showOriginal:self->_pendingFinal translation:nil];
                 // 合并开关：翻译跟随总开关
                 [[LCTranslator shared] translate:self->_pendingFinal
                     completion:^(NSString *tr) {
+                        LCLogF(@"speech: translation result len=%lu text=[%@]", (unsigned long)tr.length, tr);
                         if (tr.length) [[LCSubtitleOverlay shared] showOriginal:self->_pendingFinal translation:tr];
                     }];
             }
