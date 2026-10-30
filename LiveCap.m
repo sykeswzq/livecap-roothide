@@ -1817,10 +1817,6 @@ static void LC_setMuted(id self, SEL _cmd, BOOL muted) {
     id item = p.currentItem;
     @try { LCApplyTapMuteState(item, muted, p.volume); } @catch (NSException *e) {}
 }
-static float (*orig_getVolume)(id, SEL);
-static float LC_getVolume(id self, SEL) {
-    return orig_getVolume(self, SEL);
-}
 static void (*orig_setVolume)(id, SEL, float);
 static void LC_setVolume(id self, SEL _cmd, float vol) {
     orig_setVolume(self, _cmd, vol);
