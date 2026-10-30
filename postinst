@@ -59,6 +59,12 @@ killall -9 cfprefsd 2>/dev/null || true
 chmod 666 "$(dirname "$0")/../../Library/MobileSubstrate/DynamicLibraries/LiveCap.plist" 2>/dev/null || true
 chmod 666 "Library/MobileSubstrate/DynamicLibraries/LiveCap.plist" 2>/dev/null || true
 
+# roothide 注入要求 dylib 归属 mobile:staff；dpkg 默认安装为 root:wheel，此处修正
+chown mobile:staff /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib 2>/dev/null || true
+chown mobile:staff /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist 2>/dev/null || true
+chmod 755 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib 2>/dev/null || true
+chmod 666 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist 2>/dev/null || true
+
 # 刷新图标缓存 + 让注入生效（重启 runningboardd 清理残留注入状态）
 for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
   if [ -x "$k" ]; then "$k" runningboardd >> "$LOG" 2>&1 || true; break; fi

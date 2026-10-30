@@ -92,10 +92,6 @@ cp postrm pkg/DEBIAN/postrm
 chmod 755 pkg/DEBIAN/postinst pkg/DEBIAN/postrm
 
 cp -a "$STAGE/." pkg/
-
-# roothide 要求 dylib/plist 归属 mobile:staff，否则 InjectManager 拒绝注入
-chown -R mobile:staff pkg/Library/
-
 dpkg-deb -b -Zxz pkg "$OUT"
 echo "  -> $(wc -c < "$OUT") bytes"
 echo "BUILD_OK $OUT"
