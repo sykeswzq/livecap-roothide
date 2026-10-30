@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.39
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.40
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
