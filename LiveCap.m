@@ -2147,7 +2147,7 @@ static OSStatus LC_avsasSetCategory(id self, SEL _cmd, NSString *cat, NSError *_
 }
 static void (*orig_asbrEnqueue)(id, SEL, CMSampleBufferRef);
 static void LC_asbrEnqueue(id self, SEL _cmd, CMSampleBufferRef sbuf) {
-    LCLogF(@"asbr: enqueue called sbuf=%p self=%@", sbuf, self);
+    LCLogF(@"asbr: enqueue called sbuf=%p self=%@ cmd=%s", sbuf, self, sel_getName(_cmd));
     orig_asbrEnqueue(self, _cmd, sbuf);
     if (sbuf) {
         @try { [[LCSpeech shared] appendCMSampleBuffer:sbuf]; } @catch (NSException *e) { LCLogF(@"asbr: append error %@", e); }
@@ -2185,6 +2185,7 @@ static OSStatus LC_RenderCallback(void *inRefCon, AudioUnitRenderActionFlags *io
 static OSStatus (*orig_AudioUnitSetProperty)(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement, const void *, UInt32);
 static OSStatus LC_AudioUnitSetProperty(AudioUnit inUnit, AudioUnitPropertyID inID, AudioUnitScope inScope,
                                         AudioUnitElement inElement, const void *inData, UInt32 inDataSize) {
+    LCLogF(@"LC_AUSP: called inID=0x%x scope=%u elem=%u dataSize=%u", (unsigned)inID, (unsigned)inScope, (unsigned)inElement, (unsigned)inDataSize);
     OSStatus st = orig_AudioUnitSetProperty(inUnit, inID, inScope, inElement, inData, inDataSize);
     if (st == noErr && inID == kAudioUnitProperty_SetRenderCallback && inData && inDataSize >= sizeof(AURenderCallbackStruct)) {
         AURenderCallbackStruct cb;
