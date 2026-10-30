@@ -55,15 +55,25 @@ fi
 # 面板写入后 cfprefsd 缓存问题：强制重读，保证面板/tweak 读到的都是最新
 killall -9 cfprefsd 2>/dev/null || true
 
-# 让设置面板能改写 filter（roothide Bundles 精确匹配，需按勾选写包名）
-chmod 666 "$(dirname "$0")/../../Library/MobileSubstrate/DynamicLibraries/LiveCap.plist" 2>/dev/null || true
-chmod 666 "Library/MobileSubstrate/DynamicLibraries/LiveCap.plist" 2>/dev/null || true
-
 # roothide 注入要求 dylib 归属 mobile:staff；dpkg 默认安装为 root:wheel，此处修正
-chown mobile:staff /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib 2>/dev/null || true
-chown mobile:staff /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist 2>/dev/null || true
-chmod 755 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib 2>/dev/null || true
-chmod 666 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist 2>/dev/null || true
+DYLIB_PATH="/var/jb/Library/MobileSubstrate/DynamicLibraries"
+if [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
+  chown mobile:staff "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chown dylib OK" >> "$LOG"
+  chmod 755 "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chmod dylib OK" >> "$LOG"
+else
+  echo "ERROR: LiveCap.dylib not found at $DYLIB_PATH" >> "$LOG"
+fi
+
+if [ -f "$DYLIB_PATH/LiveCap.plist" ]; then
+  chown mobile:staff "$DYLIB_PATH/LiveCap.plist" 2>/dev/null && echo "chown plist OK" >> "$LOG"
+  chmod 666 "$DYLIB_PATH/LiveCap.plist" 2>/dev/null && echo "chmod plist OK" >> "$LOG"
+else
+  echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
+fi
+
+# 检查权限（诊断用）
+echo "--- file permissions ---" >> "$LOG"
+ls -la "$DYLIB_PATH/" >> "$LOG" 2>&1
 
 # 刷新图标缓存 + 让注入生效（重启 runningboardd 清理残留注入状态）
 for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
@@ -73,6 +83,8 @@ killall runningboardd 2>/dev/null || true
 # mediaserverd system audio tap: restart daemon to load dylib (audio blips briefly, normal)
 killall mediaserverd 2>/dev/null || true
 
+# 等待进程重启
+sleep 2
 
 echo "=== postinst done ===" >> "$LOG"
 exit 0
