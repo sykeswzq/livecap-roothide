@@ -7,7 +7,9 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
+#import <AVKit/AVKit.h>
 #import <Speech/Speech.h>
+#import <CoreMedia/CoreMedia.h>
 #import <MediaToolbox/MTAudioProcessingTap.h>
 #import <CommonCrypto/CommonCrypto.h>
 #import <objc/runtime.h>
@@ -539,7 +541,7 @@ static BOOL gProcessingFormatValid = NO;
 - (void)showToast:(NSString *)text;
 @end
 
-@interface LCHttpASR : NSObject
+#pragma mark - LCHttpASR
 + (instancetype)shared;
 - (BOOL)isRunning;
 - (void)startWithFormat:(AudioStreamBasicDescription)asbd;
@@ -1714,6 +1716,28 @@ static void LCTapProcess(MTAudioProcessingTapRef tap, CMItemCount numberFrames,
 
 #pragma mark - AVPlayer hook
 
+// 关联对象键：存该 player/item 关联的 AVMutableAudioMixInputParameters（我们的 tap 参数），
+// 供 LCApplyPlayerMuteState 设置 volume 用。
+static void *LCTapParamsKey = &LCTapParamsKey;
+
+// 根据 App 自身的 muted/volume 意图，决定 tap 取音频的增益（始终在音量斜坡之前，PreEffects）。
+// - App 想正常出声（muted==NO 且 volume>0）→ tap 恢复全幅（volume=1），字幕正常。
+// - App 自己静音（muted==YES 或 volume==0）→ tap 也置 0（系统输出静音），但 PreEffects 下
+//   ASR 仍拿得到全幅音频（音量斜坡在 tap 之后才生效）→ 字幕不消失。
+// default 有声状态 → volume=1.0；mute 状态 → volume=0.0。
+static void LCApplyTapMuteState(AVPlayerItem *item, BOOL muted, float volume) {
+    if (!item) return;
+    id paramsObj = objc_getAssociatedObject(item, LCTapParamsKey);
+    if (!paramsObj) return;
+    AVMutableAudioMixInputParameters *params = (AVMutableAudioMixInputParameters *)paramsObj;
+    // PreEffects：tap 在音量斜坡之前。muted=NO → 全幅让字幕正常；muted=YES → 静音视频无声
+    // （但 ASR 仍可工作，因为 tap 本身拿到的是全幅）。
+    // 这里 muted=YES → volume=0 是为了让系统输出静音一致，实际 tap 拿到的音频不受影响。
+    // muted=NO + volume>0 → volume=1（全幅，字幕正常）。
+    float target = (muted || volume <= 0.0f) ? 0.0f : 1.0f;
+    @try { [params setVolume:target]; } @catch (NSException *e) { LCLogF(@"tap: apply volume err %@", e); }
+}
+
 static void LCAttachTapToItem(AVPlayerItem *item) {
     if (!item) return;
     // 关联对象去重：同一 item 只挂一次（currentItem getter 会被高频调用，不能每次重建 tap）
@@ -1725,8 +1749,9 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         // （音效/均衡），旧代码因此跳过挂载 tap → 音频抓不到。直接强制挂我们的 tap。
         AVMutableAudioMix *mix = [AVMutableAudioMix audioMix];
         AVMutableAudioMixInputParameters *params = [AVMutableAudioMixInputParameters audioMixInputParameters];
-        // 栈上构造 callbacks（16 字节自然对齐，规避 arm64e 链接器对全局字面量指针重定位的检查；
-        // MTAudioProcessingTapCreate 会拷贝该结构）
+        // PreEffects：在 AVAudioMix 音量斜坡之前取音频（Apple QA1783：唯一 effect = 线性音量斜坡，
+        // 且 AVPlayer.muted/输出音量=0 的混合发生在下游）。因此 setVolume(0) 让系统输出静音，
+        // 但 tap 拿到全幅音频 → ASR 不受影响。这就是"输出静音也能出字幕"的核心。
         MTAudioProcessingTapCallbacks callbacks = {0};
         callbacks.version = 0;
         callbacks.init = LCTapInit;
@@ -1736,15 +1761,24 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         callbacks.clientInfo = (__bridge void *)[LCSpeech shared];  // 音频数据经 storage 送识别器
         MTAudioProcessingTapRef tap = NULL;
         OSStatus st = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
-                                                 kMTAudioProcessingTapCreationFlag_PostEffects, &tap);
+                                                 kMTAudioProcessingTapCreationFlag_PreEffects, &tap);
         if (st != noErr || !tap) {
             LCLogF(@"tap: create failed st=%d", (int)st);
             return;
         }
         params.audioTapProcessor = tap;
+        // 关键：让系统输出静音，tap 仍拿全幅。App 自身设的 volume/muted 会被我们 hook 同步过来。
+        [params setVolume:0.0f];
         mix.inputParameters = @[params];
         item.audioMix = mix;
-        LCLogF(@"tap: attached to item %p (forced)", item);
+        // 记住 params，供 LCApplyPlayerMuteState 动态调音量（跟随 App 自身音量意图）
+        objc_setAssociatedObject(item, LCTapParamsKey, params, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        LCLogF(@"tap: attached to item %p (PreEffects, vol=0)", item);
+// 跟随 App 自身音量：若 App 已设 muted/volume=0（App 想静音），我们也静音；
+// 若 App 有声（volume>0 且 muted=NO），我们恢复全幅。hook setMuted:/setVolume: 会维护此状态。
+// 注意：此处不调 LCApplyPlayerMuteState（因为 item 可能尚未挂到 player），
+// 而是由 AVPlayer 的 muted/volume hook + KVO 在合适时机统一维护。
+// item 上存储关联对象后，外部 hook 通过 item 拿 params 即可。
     } @catch (NSException *e) {
         LCLogF(@"tap: attach error %@", e);
     }
@@ -1771,6 +1805,28 @@ static AVPlayerItem *LC_currentItem(id self, SEL _cmd) {
         @try { LCAttachTapToItem(item); } @catch (NSException *e) {}
     }
     return item;
+}
+
+// AVPlayer.muted 和 AVPlayer.volume 直接调——目标 App（YouTube/B站等）经常通过这两个 API 调音量，
+// 必须 hook 才能同步到 tap 参数，保证"App 静音时 tap 也静音，App 有声时 tap 全幅"。
+static void (*orig_setMuted)(id, SEL, BOOL);
+static void LC_setMuted(id self, SEL _cmd, BOOL muted) {
+    orig_setMuted(self, _cmd, muted);
+    AVPlayer *p = (AVPlayer *)self;
+    // 同步到所有已 attach 的 item 的 tap 参数（PreEffects 下 ASR 不受影响）
+    id item = p.currentItem;
+    @try { LCApplyTapMuteState(item, muted, p.volume); } @catch (NSException *e) {}
+}
+static float (*orig_getVolume)(id, SEL);
+static float LC_getVolume(id self, SEL) {
+    return orig_getVolume(self, SEL);
+}
+static void (*orig_setVolume)(id, SEL, float);
+static void LC_setVolume(id self, SEL _cmd, float vol) {
+    orig_setVolume(self, _cmd, vol);
+    AVPlayer *p = (AVPlayer *)self;
+    BOOL muted = [p isMuted];
+    @try { LCApplyTapMuteState(p.currentItem, muted, vol); } @catch (NSException *e) {}
 }
 
 // 探测 hook：确认目标 App 是否真的使用 AVPlayer 家族（YouTube 疑为自研播放器，不走 AVPlayer）。
@@ -1948,6 +2004,19 @@ static void LCSwizzleAVPlayer(void) {
             orig_setAudioMix = (void *)method_getImplementation(ma);
             method_setImplementation(ma, (IMP)LC_setAudioMix);
             LCLog("hook: setAudioMix OK");
+        }
+        // AVPlayer.muted/volume hook：App 通过这两个 API 调音量时同步到 tap 参数
+        Method ms = class_getInstanceMethod([AVPlayer class], @selector(setMuted:));
+        if (ms) {
+            orig_setMuted = (void *)method_getImplementation(ms);
+            method_setImplementation(ms, (IMP)LC_setMuted);
+            LCLog("hook: setMuted OK");
+        }
+        Method ms2 = class_getInstanceMethod([AVPlayer class], @selector(setVolume:));
+        if (ms2) {
+            orig_setVolume = (void *)method_getImplementation(ms2);
+            method_setImplementation(ms2, (IMP)LC_setVolume);
+            LCLog("hook: setVolume OK");
         }
     } @catch (NSException *e) {
         LCLogF(@"hook: error %@", e);
