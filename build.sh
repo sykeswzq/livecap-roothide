@@ -6,12 +6,12 @@
 #   3) ldid -M -S 签名
 #   4) PreferenceBundle 双 slice(arm64+arm64e) + PreferenceLoader 入口
 #   5) dpkg-deb -b -Zxz
-set -euo pipefail
+set -eu
 cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.41
+VER=1.0.42
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
