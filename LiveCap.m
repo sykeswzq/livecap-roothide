@@ -311,9 +311,13 @@ static NSString *LCJBRootPath(NSString *path) {
             @"Output ONLY the translated text. No explanations, no quotation marks, no extra punctuation. "
             @"Keep line breaks where they make sense.", target];
 
+        LCLogF(@"translate: dispatch async text=[%@] len=%lu", trimmed, (unsigned long)trimmed.length);
+
         // 0) OpenAI 兼容接口（agnes AI）：用户已配 apiKey + apiBase，优先级最高
         NSString *openaiKey = [[LCConfig shared] apiKey];
         NSString *openaiBase = [[LCConfig shared] apiBase];
+        LCLogF(@"translate: openai keyLen=%lu base=%@ hasContent=%d",
+               (unsigned long)openaiKey.length, openaiBase, openaiBase.length > 0);
         if (openaiKey.length && openaiBase.length) {
             LCLogF(@"translate: using OpenAI-compatible (agnes) keyLen=%lu base=%@ model=%@",
                    (unsigned long)openaiKey.length, openaiBase, [LCConfig shared].model);
