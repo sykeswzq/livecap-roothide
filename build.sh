@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.45
+VER=1.0.46
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -92,6 +92,10 @@ cp postrm pkg/DEBIAN/postrm
 chmod 755 pkg/DEBIAN/postinst pkg/DEBIAN/postrm
 
 cp -a "$STAGE/." pkg/
+
+# roothide 要求 dylib/plist 归属 mobile:staff，否则 InjectManager 拒绝注入
+chown -R mobile:staff pkg/Library/
+
 dpkg-deb -b -Zxz pkg "$OUT"
 echo "  -> $(wc -c < "$OUT") bytes"
 echo "BUILD_OK $OUT"
