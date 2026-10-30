@@ -6,7 +6,7 @@
 #   3) ldid -M -S 签名
 #   4) PreferenceBundle 双 slice(arm64+arm64e) + PreferenceLoader 入口
 #   5) dpkg-deb -b -Zxz
-set -euo pipefail
+set -eu
 cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
