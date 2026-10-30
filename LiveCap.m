@@ -2347,8 +2347,59 @@ static void LCInitMediaServerTap(void) {
     LCMediaLog("media: rebind AudioUnitSetProperty=%d", r);
 }
 
+// ===== 音频路径发现：枚举所有相关类的方法，找到YouTube实际使用的 =====
+static void LCDiscoverAudioPath(void) {
+    @try {
+        // 枚举 AVSampleBufferAudioRenderer 的所有实例方法
+        Class asbr = NSClassFromString(@"AVSampleBufferAudioRenderer");
+        if (asbr) {
+            UInt32 methodCount = 0;
+            Method *methods = class_copyMethodList(asbr, &methodCount);
+            LCLogF(@"discover: AVSampleBufferAudioRenderer has %u methods", (unsigned)methodCount);
+            for (UInt32 i = 0; i < methodCount; i++) {
+                SEL sel = method_getName(methods[i]);
+                const char *name = sel_getName(sel);
+                if (name && (strstr(name, "sample") || strstr(name, "buffer") || strstr(name, "render") || strstr(name, "enqueue"))) {
+                    LCLogF(@"discover:   - %s", name);
+                }
+            }
+            free(methods);
+        }
+        
+        // 枚举 AVSampleBufferRenderSynchronizer
+        Class avsrs = NSClassFromString(@"AVSampleBufferRenderSynchronizer");
+        if (avsrs) {
+            UInt32 methodCount = 0;
+            Method *methods = class_copyMethodList(avsrs, &methodCount);
+            LCLogF(@"discover: AVSampleBufferRenderSynchronizer has %u methods", (unsigned)methodCount);
+            for (UInt32 i = 0; i < methodCount; i++) {
+                SEL sel = method_getName(methods[i]);
+                const char *name = sel_getName(sel);
+                if (name && (strstr(name, "sync") || strstr(name, "sample") || strstr(name, "buffer"))) {
+                    LCLogF(@"discover:   - %s", name);
+                }
+            }
+            free(methods);
+        }
+        
+        // 枚举 AVAudioEngine 的节点
+        Class ae = NSClassFromString(@"AVAudioEngine");
+        if (ae) {
+            LCLog(@"discover: AVAudioEngine found");
+            // 检查 inputNode/outputNode 相关属性
+            Class apn = NSClassFromString(@"AVAudioPlayerNode");
+            if (apn) LCLog(@"discover: AVAudioPlayerNode available");
+        }
+    } @catch (NSException *e) {
+        LCLogF(@"discover: error %@", e);
+    }
+}
+
 static void LCSwizzleAudioProbe(void) {
     @try {
+        // 先发现音频路径
+        LCDiscoverAudioPath();
+        
         Class ae = NSClassFromString(@"AVAudioEngine");
         if (ae) {
             Method m = class_getInstanceMethod(ae, @selector(init));
@@ -2360,6 +2411,11 @@ static void LCSwizzleAudioProbe(void) {
             if (m) { orig_asbrInit = (void *)method_getImplementation(m); method_setImplementation(m, (IMP)LC_asbrInit); LCLog("probe: AVSampleBufferAudioRenderer.init OK"); }
             Method me = class_getInstanceMethod(asbr, @selector(enqueueSampleBuffer:));
             if (me) { orig_asbrEnqueue = (void *)method_getImplementation(me); method_setImplementation(me, (IMP)LC_asbrEnqueue); LCLog("hook: ASBR enqueueSampleBuffer OK"); }
+            // 尝试 hook 其他可能的方法名
+            Method me2 = class_getInstanceMethod(asbr, @selector(dequeueSampleBuffer:));
+            if (me2) { LCLog(@"hook: found dequeueSampleBuffer:"); }
+            Method me3 = class_getInstanceMethod(asbr, @selector(processSampleBuffer:));
+            if (me3) { LCLog(@"hook: found processSampleBuffer:"); }
         }
         Class avsrs = NSClassFromString(@"AVSampleBufferRenderSynchronizer");
         if (avsrs) {
