@@ -542,6 +542,8 @@ static BOOL gProcessingFormatValid = NO;
 @end
 
 #pragma mark - LCHttpASR
+
+@interface LCHttpASR : NSObject
 + (instancetype)shared;
 - (BOOL)isRunning;
 - (void)startWithFormat:(AudioStreamBasicDescription)asbd;
