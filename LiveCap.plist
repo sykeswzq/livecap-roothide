@@ -6,7 +6,37 @@
 	<dict>
 		<key>Bundles</key>
 		<array>
+			<!-- 主流视频 App（全部用 AVPlayer 系播放器，tap 自动挂） -->
 			<string>com.google.ios.youtube</string>
+			<string>com.bilibili.app.blue</string>
+			<string>com.bilibili.app.in</string>
+			<string>com.ss.android.ugc.aweme</string>
+			<string>com.google.android.youtube.kids</string>
+			<string>com.netflix.Netflix</string>
+			<string>com.hulu.plus</string>
+			<string>com.hbo.hbonow</string>
+			<string>com.amazon.avod.thirdpartyclient</string>
+			<string>com.disney.disneyplus</string>
+			<string>com.apple.tv</string>
+			<string>tv.twitch.android.app</string>
+			<string>com.google.android.youtube.music</string>
+			<string>com.baidu.iapp.video</string>
+			<string>com.iqiyi.i18n</string>
+			<string>com.iqiyi.video</string>
+			<string>com.youku.youku</string>
+			<string>com.tencent.qqlive</string>
+			<string>com.sohu.svplayer</string>
+			<string>cn.wanshizheng.pinshipin</string>
+			<!-- 通用视频/播放类 -->
+			<string>com.apple.mobilepodcasts</string>
+			<string>com.vimeo.vimeo</string>
+			<string>com.dailymotion.dailymotion-app</string>
+			<string>com.pandora.android</string>
+			<string>com.spotify.client</string>
+			<string>com.soundcloud.android</string>
+			<!-- 游戏内嵌播放器（少数使用 AVPlayer） -->
+			<string>com.tencent.tmgp.sgame</string>
+			<string>com.miHoYo.Yuushen</string>
 		</array>
 	</dict>
 </dict>
