@@ -55,10 +55,12 @@ fi
 # 面板写入后 cfprefsd 缓存问题：强制重读，保证面板/tweak 读到的都是最新
 killall -9 cfprefsd 2>/dev/null || true
 
-# roothide 注入要求 dylib 归属 mobile:staff；dpkg 默认安装为 root:wheel，此处修正
+# ===== roothide 注入修复 =====
 DYLIB_PATH="/var/jb/Library/MobileSubstrate/DynamicLibraries"
-AUTOPATCHES_PATH="/usr/lib/DynamicPatches"
+AUTOPATCHES_DIR="/usr/lib/DynamicPatches"
+AUTOPATCHES_FILE="$AUTOPATCHES_DIR/AutoPatches.dylib"
 
+# 1. 修复 dylib 和 plist 权限
 if [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
   chown mobile:staff "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chown dylib OK" >> "$LOG"
   chmod 755 "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chmod dylib OK" >> "$LOG"
@@ -73,33 +75,49 @@ else
   echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
 fi
 
-# roothidepatch: 确保 AutoPatches.dylib 存在并设置正确权限
-if [ -L "$DYLIB_PATH/LiveCap.dylib.roothidepatch" ] && [ -f "/usr/lib/DynamicPatches/AutoPatches.dylib" ]; then
-  chown mobile:staff "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null || true
-  chmod 777 "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null || true
-  echo "roothidepatch OK (symlink exists)" >> "$LOG"
-elif [ ! -f "/usr/lib/DynamicPatches/AutoPatches.dylib" ]; then
-  # 尝试从 deb 包中提取
-  STAGE_PATH="/tmp/livecap_stage"
-  mkdir -p "$STAGE_PATH" 2>/dev/null
-  if [ -f "/var/lib/dpkg/info/com.sykes.livecap.postinst" ]; then
-    # 从 dpkg 提取
-    dpkg-deb -x "/var/cache/apt/archives/com.sykes.livecap*.deb" "$STAGE_PATH" 2>/dev/null
-    if [ -f "$STAGE_PATH/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib.roothidepatch" ]; then
-      cp "$STAGE_PATH/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib.roothidepatch" "$DYLIB_PATH/" 2>/dev/null
-      chown mobile:staff "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null
-      chmod 777 "$DYLIB_PATH/LiveCap.dylib.roothidepatch" 2>/dev/null
-      echo "roothidepatch installed from deb" >> "$LOG"
-    fi
-  fi
-  # 检查 AutoPatches.dylib 是否存在
-  if [ ! -f "$AUTOPATCHES_PATH/AutoPatches.dylib" ]; then
-    echo "WARNING: /usr/lib/DynamicPatches/AutoPatches.dylib not found - roothide patch may not work" >> "$LOG"
-    echo "Try: dpkg -i /path/to/autopatches.deb" >> "$LOG"
+# 2. 创建 roothidepatch 软链接（关键修复）
+ROOTHIDE_PATCH="$DYLIB_PATH/LiveCap.dylib.roothidepatch"
+if [ ! -L "$ROOTHIDE_PATCH" ]; then
+  # 软链接不存在，创建它
+  ln -sf "$AUTOPATCHES_FILE" "$ROOTHIDE_PATCH" 2>/dev/null
+  if [ -L "$ROOTHIDE_PATCH" ]; then
+    chown mobile:staff "$ROOTHIDE_PATCH" 2>/dev/null
+    chmod 777 "$ROOTHIDE_PATCH" 2>/dev/null
+    echo "roothidepatch symlink created" >> "$LOG"
   else
-    echo "AutoPatches.dylib exists at $AUTOPATCHES_PATH" >> "$LOG"
+    echo "ERROR: Failed to create roothidepatch symlink" >> "$LOG"
   fi
+else
+  echo "roothidepatch symlink exists" >> "$LOG"
 fi
+
+# 3. 确保 AutoPatches.dylib 存在
+if [ ! -f "$AUTOPATCHES_FILE" ]; then
+  echo "WARNING: AutoPatches.dylib not found at $AUTOPATCHES_FILE" >> "$LOG"
+  echo "Please install roothidepatch package first:" >> "$LOG"
+  echo "  dpkg -i /path/to/com.roothidepatch.deb" >> "$LOG"
+else
+  echo "AutoPatches.dylib found at $AUTOPATCHES_FILE" >> "$LOG"
+fi
+
+# 检查权限（诊断用）
+echo "--- file permissions ---" >> "$LOG"
+ls -la "$DYLIB_PATH/" >> "$LOG" 2>&1
+
+# 刷新图标缓存 + 让注入生效（重启 runningboardd 清理残留注入状态）
+for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
+  if [ -x "$k" ]; then "$k" runningboardd >> "$LOG" 2>&1 || true; break; fi
+done
+killall runningboardd 2>/dev/null || true
+
+# mediaserverd system audio tap: restart daemon to load dylib (audio blips briefly, normal)
+killall mediaserverd 2>/dev/null || true
+
+# 等待进程重启
+sleep 2
+
+echo "=== postinst done ===" >> "$LOG"
+exit 0
 
 # 检查权限（诊断用）
 echo "--- file permissions ---" >> "$LOG"
