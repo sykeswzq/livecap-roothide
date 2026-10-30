@@ -321,9 +321,18 @@ static NSString *LCJBRootPath(NSString *path) {
         if (openaiKey.length && openaiBase.length) {
             LCLogF(@"translate: using OpenAI-compatible (agnes) keyLen=%lu base=%@ model=%@",
                    (unsigned long)openaiKey.length, openaiBase, [LCConfig shared].model);
+            // 先尝试 Agnes AI，失败后 fallback 到 MyMemory
+            __block BOOL agnesTried = NO;
             [self openaiTranslate:trimmed sysPrompt:sysPrompt cacheKey:cacheKey
                            apiKey:openaiKey apiBase:openaiBase
-                             model:[LCConfig shared].model completion:completion];
+                             model:[LCConfig shared].model completion:^(NSString *result) {
+                if (!result || result.length == 0) {
+                    LCLogF(@"translate: agnes failed/empty, fallback to MyMemory");
+                    [self mymemoryTranslate:trimmed targetLang:target cacheKey:cacheKey completion:completion];
+                } else {
+                    if (completion) completion(result);
+                }
+            }];
             return;
         }
         // 1) 腾讯云机器翻译（用户已配 SecretId/Key，免费 500 万字符/月；未开通时返回错误则跳过）
