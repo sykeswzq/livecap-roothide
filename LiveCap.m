@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.38
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.39
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
@@ -1476,6 +1476,13 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     const AudioStreamBasicDescription *asbdP = CMAudioFormatDescriptionGetStreamBasicDescription(fmt);
     if (!asbdP) return;
     AudioStreamBasicDescription asbd = *asbdP;
+    LCLogF(@"asbr: got buffer sr=%u ch=%u fmt=0x%x (%s) frames=%lld",
+           (unsigned)asbd.mSampleRate, (unsigned)asbd.mChannelsPerFrame,
+           (unsigned)asbd.mFormatID,
+           asbd.mFormatID == kAudioFormatLinearPCM ? "LPCM" :
+           asbd.mFormatID == 'aac ' ? "AAC" :
+           asbd.mFormatID == 'mp4a' ? "MP4A" : "other",
+           (long long)CMSampleBufferGetNumSamples(sbuf));
     if (asbd.mSampleRate <= 0) return;
     if (![[LCHttpASR shared] isRunning]) {
         gProcessingFormat = asbd;
@@ -2140,9 +2147,12 @@ static OSStatus LC_avsasSetCategory(id self, SEL _cmd, NSString *cat, NSError *_
 }
 static void (*orig_asbrEnqueue)(id, SEL, CMSampleBufferRef);
 static void LC_asbrEnqueue(id self, SEL _cmd, CMSampleBufferRef sbuf) {
+    LCLogF(@"asbr: enqueue called sbuf=%p self=%@", sbuf, self);
     orig_asbrEnqueue(self, _cmd, sbuf);
     if (sbuf) {
-        @try { [[LCSpeech shared] appendCMSampleBuffer:sbuf]; } @catch (NSException *e) {}
+        @try { [[LCSpeech shared] appendCMSampleBuffer:sbuf]; } @catch (NSException *e) { LCLogF(@"asbr: append error %@", e); }
+    } else {
+        LCLogF(@"asbr: sbuf is NULL — skipping");
     }
 }
 // ===== 系统音频输出层抓解码后 PCM：包装 YouTube 播放 AU 的 render 回调（TrollRecorder 思路） =====
