@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.41
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.46
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
@@ -2700,6 +2700,15 @@ static void LCLazyInit(void) {
 
 __attribute__((constructor))
 static void LCInit(void) {
+    // 纯 C 诊断：构造函数第一行就写文件，不依赖 ObjC
+    const char *diag_path = "/var/mobile/Documents/livecap_ctor.log";
+    FILE *df = fopen(diag_path, "a");
+    if (df) {
+        fprintf(df, "=== LCInit ctor called at %ld ===\n", (long)time(NULL));
+        fflush(df);
+        fclose(df);
+    }
+
     const char *exe = getprogname();
     if (!exe) return;
     char m[256];
