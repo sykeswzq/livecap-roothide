@@ -118,21 +118,3 @@ sleep 2
 
 echo "=== postinst done ===" >> "$LOG"
 exit 0
-
-# 检查权限（诊断用）
-echo "--- file permissions ---" >> "$LOG"
-ls -la "$DYLIB_PATH/" >> "$LOG" 2>&1
-
-# 刷新图标缓存 + 让注入生效（重启 runningboardd 清理残留注入状态）
-for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
-  if [ -x "$k" ]; then "$k" runningboardd >> "$LOG" 2>&1 || true; break; fi
-done
-killall runningboardd 2>/dev/null || true
-# mediaserverd system audio tap: restart daemon to load dylib (audio blips briefly, normal)
-killall mediaserverd 2>/dev/null || true
-
-# 等待进程重启
-sleep 2
-
-echo "=== postinst done ===" >> "$LOG"
-exit 0
