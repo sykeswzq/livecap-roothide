@@ -311,11 +311,11 @@ static NSString *LCJBRootPath(NSString *path) {
             @"Output ONLY the translated text. No explanations, no quotation marks, no extra punctuation. "
             @"Keep line breaks where they make sense.", target];
 
-        LCLogF(@"translate: start text=[%@] target=%@ hasSecret=%d", trimmed, target, (int)(secretId.length && secretKey.length));
-
         // 1) 腾讯云机器翻译（用户已配 SecretId/Key，免费 500 万字符/月；未开通时返回错误则跳过）
         NSString *secretId = [[LCConfig shared] tencentSecretId];
         NSString *secretKey = [[LCConfig shared] tencentSecretKey];
+        LCLogF(@"translate: start text=[%@] target=%@ hasSecret=%d", trimmed, target, (int)(secretId.length && secretKey.length));
+
         if (secretId.length && secretKey.length) {
             [self tencentTranslate:trimmed systemPrompt:sysPrompt cacheKey:cacheKey
                           secretId:secretId secretKey:secretKey
