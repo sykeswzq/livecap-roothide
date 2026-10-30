@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.12
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.38
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
@@ -311,6 +311,17 @@ static NSString *LCJBRootPath(NSString *path) {
             @"Output ONLY the translated text. No explanations, no quotation marks, no extra punctuation. "
             @"Keep line breaks where they make sense.", target];
 
+        // 0) OpenAI 兼容接口（agnes AI）：用户已配 apiKey + apiBase，优先级最高
+        NSString *openaiKey = [[LCConfig shared] apiKey];
+        NSString *openaiBase = [[LCConfig shared] apiBase];
+        if (openaiKey.length && openaiBase.length) {
+            LCLogF(@"translate: using OpenAI-compatible (agnes) keyLen=%lu base=%@ model=%@",
+                   (unsigned long)openaiKey.length, openaiBase, [LCConfig shared].model);
+            [self openaiTranslate:trimmed sysPrompt:sysPrompt cacheKey:cacheKey
+                           apiKey:openaiKey apiBase:openaiBase
+                             model:[LCConfig shared].model completion:completion];
+            return;
+        }
         // 1) 腾讯云机器翻译（用户已配 SecretId/Key，免费 500 万字符/月；未开通时返回错误则跳过）
         NSString *secretId = [[LCConfig shared] tencentSecretId];
         NSString *secretKey = [[LCConfig shared] tencentSecretKey];
@@ -459,6 +470,76 @@ static NSString *LCTmtLang(NSString *lcLang) {
         }
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        _cache[cacheKey] = result;
+        if (_cache.count > 300) [_cache removeAllObjects];
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
+        }
+    }];
+    [task resume];
+}
+
+// OpenAI 兼容翻译（agnes AI / 任何兼容的 chat/completions 接口）
+- (void)openaiTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
+               cacheKey:(NSString *)cacheKey
+               apiKey:(NSString *)apiKey apiBase:(NSString *)apiBase
+                  model:(NSString *)model
+             completion:(void (^)(NSString *result))completion {
+    if (text.length > 1800) text = [text substringToIndex:1800];
+    NSString *trimmedModel = model.length ? model : @"agnes-2.5-flash";
+    NSDictionary *body = @{
+        @"model": trimmedModel,
+        @"messages": @[
+            @{@"role": @"system", @"content": sysPrompt},
+            @{@"role": @"user",   @"content": text}
+        ],
+        @"temperature": @0.1,
+        @"max_tokens": @200
+    };
+    NSError *__autoreleasing err = nil;
+    NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
+    if (err || !payload) { LCLogF(@"translate: openai json err %@", err); return; }
+
+    // 拼接 API URL（可能以 / 结尾）
+    NSString *chatUrl = [apiBase hasSuffix:@"/"] ? [apiBase stringByAppendingString:@"chat/completions"]
+                                                 : [apiBase stringByAppendingString:@"/chat/completions"];
+
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:chatUrl]];
+    req.HTTPMethod = @"POST";
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [req setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
+    req.HTTPBody = payload;
+    req.timeoutInterval = 15.0;
+
+    LCLogF(@"translate: openai request url=%@ model=%@", chatUrl, trimmedModel);
+    NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
+        if (taskErr) {
+            LCLogF(@"translate: openai req err %@ url=%@", taskErr, chatUrl);
+            return;
+        }
+        NSError *__autoreleasing pe = nil;
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
+        if (pe || !json) {
+            LCLogF(@"translate: openai parse err %@ data len=%lu", pe, (unsigned long)data.length);
+            return;
+        }
+        // 解析响应
+        NSArray *choices = json[@"choices"];
+        if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {
+            LCLogF(@"translate: openai no choices (%@)", json);
+            return;
+        }
+        NSDictionary *firstChoice = choices[0];
+        NSDictionary *msg = firstChoice[@"message"];
+        NSString *content = msg[@"content"];
+        if (![content isKindOfClass:[NSString class]] || content.length == 0) {
+            LCLogF(@"translate: openai empty content (%@)", json);
+            return;
+        }
+        NSString *result = [content stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        LCLogF(@"translate: openai response len=%lu text=[%@]", (unsigned long)result.length, result);
         _cache[cacheKey] = result;
         if (_cache.count > 300) [_cache removeAllObjects];
         if (completion) {
