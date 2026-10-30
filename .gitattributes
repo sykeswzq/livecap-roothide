@@ -1,0 +1,4 @@
+# Force LF line endings for shell scripts (CI on macOS)
+*.sh eol=lf
+postinst eol=lf
+postrm eol=lf
