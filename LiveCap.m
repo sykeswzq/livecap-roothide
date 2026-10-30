@@ -1728,16 +1728,8 @@ static void *LCTapParamsKey = &LCTapParamsKey;
 //   ASR 仍拿得到全幅音频（音量斜坡在 tap 之后才生效）→ 字幕不消失。
 // default 有声状态 → volume=1.0；mute 状态 → volume=0.0。
 static void LCApplyTapMuteState(AVPlayerItem *item, BOOL muted, float volume) {
-    if (!item) return;
-    id paramsObj = objc_getAssociatedObject(item, LCTapParamsKey);
-    if (!paramsObj) return;
-    AVMutableAudioMixInputParameters *params = (AVMutableAudioMixInputParameters *)paramsObj;
-    // PreEffects：tap 在音量斜坡之前。muted=NO → 全幅让字幕正常；muted=YES → 静音视频无声
-    // （但 ASR 仍可工作，因为 tap 本身拿到的是全幅）。
-    // 这里 muted=YES → volume=0 是为了让系统输出静音一致，实际 tap 拿到的音频不受影响。
-    // muted=NO + volume>0 → volume=1（全幅，字幕正常）。
-    float target = (muted || volume <= 0.0f) ? 0.0f : 1.0f;
-    @try { params.volume = target; } @catch (NSException *e) { LCLogF(@"tap: apply volume err %@", e); }
+    // PreEffects tap 已在音量斜坡之前捕获全幅音频，无需动态调整 volume
+    // muted=NO → tap 拿到全幅；muted=YES → tap 仍拿到全幅（系统输出静音但 ASR 正常）
 }
 
 static void LCAttachTapToItem(AVPlayerItem *item) {
@@ -1769,13 +1761,11 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
             return;
         }
         params.audioTapProcessor = tap;
-        // 关键：让系统输出静音，tap 仍拿全幅。App 自身设的 volume/muted 会被我们 hook 同步过来。
-        params.volume = 0.0f;
         mix.inputParameters = @[params];
         item.audioMix = mix;
         // 记住 params，供 LCApplyPlayerMuteState 动态调音量（跟随 App 自身音量意图）
         objc_setAssociatedObject(item, LCTapParamsKey, params, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        LCLogF(@"tap: attached to item %p (PreEffects, vol=0)", item);
+        LCLogF(@"tap: attached to item %p (PreEffects)", item);
 // 跟随 App 自身音量：若 App 已设 muted/volume=0（App 想静音），我们也静音；
 // 若 App 有声（volume>0 且 muted=NO），我们恢复全幅。hook setMuted:/setVolume: 会维护此状态。
 // 注意：此处不调 LCApplyPlayerMuteState（因为 item 可能尚未挂到 player），
