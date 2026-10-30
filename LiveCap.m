@@ -1737,7 +1737,7 @@ static void LCApplyTapMuteState(AVPlayerItem *item, BOOL muted, float volume) {
     // 这里 muted=YES → volume=0 是为了让系统输出静音一致，实际 tap 拿到的音频不受影响。
     // muted=NO + volume>0 → volume=1（全幅，字幕正常）。
     float target = (muted || volume <= 0.0f) ? 0.0f : 1.0f;
-    @try { [params setVolume:target]; } @catch (NSException *e) { LCLogF(@"tap: apply volume err %@", e); }
+    @try { params.volume = target; } @catch (NSException *e) { LCLogF(@"tap: apply volume err %@", e); }
 }
 
 static void LCAttachTapToItem(AVPlayerItem *item) {
@@ -1770,7 +1770,7 @@ static void LCAttachTapToItem(AVPlayerItem *item) {
         }
         params.audioTapProcessor = tap;
         // 关键：让系统输出静音，tap 仍拿全幅。App 自身设的 volume/muted 会被我们 hook 同步过来。
-        [params setVolume:0.0f];
+        params.volume = 0.0f;
         mix.inputParameters = @[params];
         item.audioMix = mix;
         // 记住 params，供 LCApplyPlayerMuteState 动态调音量（跟随 App 自身音量意图）
