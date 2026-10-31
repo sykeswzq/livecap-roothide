@@ -1085,21 +1085,39 @@ static BOOL gProcessingFormatValid = NO;
         UIApplication *app = [UIApplication sharedApplication];
         UIWindow *keyWindow = nil;
 
-        // iOS 16+ 可能没有 isKeyWindow，找任意有 rootVC 的窗口
-        for (UIWindow *w in app.windows) {
-            if (w.isKeyWindow) { keyWindow = w; break; }
-        }
-        if (!keyWindow) {
+        // iOS 13+ 必须用 connectedScenes 获取窗口（YouTube 多场景 App keyWindow 可能为 nil）
+        for (UIScene *scene in app.connectedScenes) {
+            if (scene.activationState != UISceneActivationStateForegroundActive) continue;
+            UIWindowScene *windowScene = (UIWindowScene *)scene;
+            if (!windowScene) continue;
+            // 优先找 keyWindow
+            for (UIWindow *w in windowScene.windows) {
+                if (w.isKeyWindow) { keyWindow = w; break; }
+            }
+            if (keyWindow) break;
             // Fallback: 找第一个有 rootViewController.view 的窗口
+            for (UIWindow *w in windowScene.windows) {
+                if (w.rootViewController && w.rootViewController.view) {
+                    keyWindow = w;
+                    LCLog("overlay: using foreground scene window");
+                    break;
+                }
+            }
+            if (keyWindow) break;
+        }
+
+        // 最后兜底：遍历 app.windows
+        if (!keyWindow) {
             for (UIWindow *w in app.windows) {
                 if (w.rootViewController && w.rootViewController.view) {
                     keyWindow = w;
-                    LCLog("overlay: using fallback window (no keyWindow)");
+                    LCLog("overlay: using fallback all-windows");
                     break;
                 }
             }
         }
-        if (!keyWindow) { LCLog("overlay: no keyWindow"); return; }
+
+        if (!keyWindow) { LCLog("overlay: no keyWindow found"); return; }
         UIView *parent = keyWindow.rootViewController.view;
         if (!parent) { LCLog("overlay: no rootVC view"); return; }
 
