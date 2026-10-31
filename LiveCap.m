@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.48
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.53
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
@@ -1082,9 +1082,22 @@ static BOOL gProcessingFormatValid = NO;
 - (void)install {
     if (_installed) return;
     @try {
+        UIApplication *app = [UIApplication sharedApplication];
         UIWindow *keyWindow = nil;
-        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+
+        // iOS 16+ 可能没有 isKeyWindow，找任意有 rootVC 的窗口
+        for (UIWindow *w in app.windows) {
             if (w.isKeyWindow) { keyWindow = w; break; }
+        }
+        if (!keyWindow) {
+            // Fallback: 找第一个有 rootViewController.view 的窗口
+            for (UIWindow *w in app.windows) {
+                if (w.rootViewController && w.rootViewController.view) {
+                    keyWindow = w;
+                    LCLog("overlay: using fallback window (no keyWindow)");
+                    break;
+                }
+            }
         }
         if (!keyWindow) { LCLog("overlay: no keyWindow"); return; }
         UIView *parent = keyWindow.rootViewController.view;
