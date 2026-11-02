@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.54
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.56
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
@@ -322,32 +322,59 @@ static NSString *LCJBRootPath(NSString *path) {
             @"Input: I'm doing great, thanks!\n"
             @"Output: 我很好，谢谢！", target];
 
-        // 0) OpenAI 兼容接口（agnes AI）：用户已配 apiKey + apiBase，优先级最高
-        NSString *openaiKey = [[LCConfig shared] apiKey];
-        NSString *openaiBase = [[LCConfig shared] apiBase];
-        if (openaiKey.length && openaiBase.length) {
-            LCLogF(@"translate: using OpenAI-compatible (agnes) keyLen=%lu base=%@ model=%@",
-                   (unsigned long)openaiKey.length, openaiBase, [LCConfig shared].model);
-            [self openaiTranslate:trimmed sysPrompt:sysPrompt cacheKey:cacheKey
-                           apiKey:openaiKey apiBase:openaiBase
-                             model:[LCConfig shared].model completion:completion];
-            return;
-        }
-        // 1) 腾讯云机器翻译（用户已配 SecretId/Key，免费 500 万字符/月；未开通时返回错误则跳过）
+        // 厂商优先级：腾讯云(用户主选) → Agnes(OpenAI兼容) → MyMemory(免费兜底)
+        // 任一失败自动顺延下一个，尽量保证翻得出来
+        NSMutableArray *order = [NSMutableArray array];
         NSString *secretId = [[LCConfig shared] tencentSecretId];
         NSString *secretKey = [[LCConfig shared] tencentSecretKey];
-        LCLogF(@"translate: start text=[%@] target=%@ hasSecret=%d", trimmed, target, (int)(secretId.length && secretKey.length));
+        if (secretId.length && secretKey.length) [order addObject:@"tencent"];
+        NSString *openaiKey = [[LCConfig shared] apiKey];
+        NSString *openaiBase = [[LCConfig shared] apiBase];
+        if (openaiKey.length && openaiBase.length) [order addObject:@"agnes"];
+        [order addObject:@"mymemory"]; // 永远保留兜底
 
-        if (secretId.length && secretKey.length) {
-            [self tencentTranslate:trimmed systemPrompt:sysPrompt cacheKey:cacheKey
-                          secretId:secretId secretKey:secretKey
-                        completion:completion];
-            return;
-        }
-        // 2) MyMemory 免费翻译兜底（无需开通/密钥，立即可用）
-        LCLogF(@"translate: using MyMemory fallback src=%@ dst=%@", [LCConfig shared].sourceLang, target);
-        [self mymemoryTranslate:trimmed targetLang:target cacheKey:cacheKey completion:completion];
+        [self translateStep:trimmed sysPrompt:sysPrompt cacheKey:cacheKey target:target
+                       order:order idx:0 completion:completion];
     });
+}
+
+// 按 order 顺序逐个厂商尝试，失败(done=NO)自动顺延下一个；全部失败则结束
+- (void)translateStep:(NSString *)text sysPrompt:(NSString *)sysPrompt cacheKey:(NSString *)cacheKey
+               target:(NSString *)target order:(NSArray *)order idx:(NSInteger)idx
+           completion:(void (^)(NSString *result))completion {
+    if (idx >= order.count) {
+        LCLogF(@"translate: all providers failed text=[%@]", text);
+        if (completion) completion(nil);
+        return;
+    }
+    NSString *provider = order[idx];
+    void (^proceed)(NSString *res) = ^(NSString *res){
+        if (res.length) {
+            _cache[cacheKey] = res;
+            if (_cache.count > 300) [_cache removeAllObjects];
+            if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(res); });
+        } else {
+            [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
+                         order:order idx:idx+1 completion:completion];
+        }
+    };
+    if ([provider isEqualToString:@"tencent"]) {
+        NSString *secretId = [[LCConfig shared] tencentSecretId];
+        NSString *secretKey = [[LCConfig shared] tencentSecretKey];
+        LCLogF(@"translate: step %ld -> tencent", (long)idx);
+        [self tencentTranslate:text systemPrompt:sysPrompt cacheKey:cacheKey
+                      secretId:secretId secretKey:secretKey completion:proceed];
+    } else if ([provider isEqualToString:@"agnes"]) {
+        NSString *openaiKey = [[LCConfig shared] apiKey];
+        NSString *openaiBase = [[LCConfig shared] apiBase];
+        LCLogF(@"translate: step %ld -> agnes", (long)idx);
+        [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
+                       apiKey:openaiKey apiBase:openaiBase
+                         model:[LCConfig shared].model completion:proceed];
+    } else {
+        LCLogF(@"translate: step %ld -> mymemory", (long)idx);
+        [self mymemoryTranslate:text targetLang:target cacheKey:cacheKey completion:proceed];
+    }
 }
 
 // 语言代码：BCP-47 -> MyMemory 格式（zh 用 zh-CN，其余取前缀）
@@ -380,20 +407,22 @@ static NSString *LCShortLang(NSString *lc) {
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
         if (taskErr) {
             LCLogF(@"translate: mymemory req err %@ url=%@", taskErr, urlStr);
+            if (completion) completion(nil);
             return;
         }
         NSError *__autoreleasing pe = nil;
         NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
         if (pe || !json) {
             LCLogF(@"translate: mymemory parse err %@ data len=%lu", pe, (unsigned long)data.length);
+            if (completion) completion(nil);
             return;
         }
         NSDictionary *rd = json[@"responseData"];
         NSString *content = rd[@"translatedText"];
         LCLogF(@"translate: mymemory response status=%@ content=[%@]", json[@"responseStatus"], content);
-        if (![content isKindOfClass:[NSString class]] || content.length == 0) return;
+        if (![content isKindOfClass:[NSString class]] || content.length == 0) { if (completion) completion(nil); return; }
         // 空查询/警告时不当作结果
-        if ([content hasPrefix:@"NO QUERY SPECIFIED"] || [content hasPrefix:@"MY MEMORY WARNING"]) return;
+        if ([content hasPrefix:@"NO QUERY SPECIFIED"] || [content hasPrefix:@"MY MEMORY WARNING"]) { if (completion) completion(nil); return; }
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
         _cache[cacheKey] = result;
@@ -434,7 +463,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
     };
     NSError *__autoreleasing err = nil;
     NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
-    if (err || !payload) { LCLogF(@"translate: tencent json err %@", err); return; }
+    if (err || !payload) { LCLogF(@"translate: tencent json err %@", err); if (completion) completion(nil); return; }
 
     long long ts = (long long)[[NSDate date] timeIntervalSince1970];
     NSString *tsStr = [NSString stringWithFormat:@"%lld", ts];
@@ -445,7 +474,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
 
     NSString *host = @"tmt.tencentcloudapi.com";
     NSString *auth = LCTencentAuthHeaderEx(secretId, secretKey, tsStr, dateStr, payload, host,
-                                           @"tmt", @"texttranslate");
+                                           @"tmt", @"texttranslate", @"ap-guangzhou");
 
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
         [NSURL URLWithString:@"https://tmt.tencentcloudapi.com"]];
@@ -464,19 +493,22 @@ static NSString *LCTmtLang(NSString *lcLang) {
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
         if (taskErr) {
             LCLogF(@"translate: tencent req err %@", taskErr);
+            if (completion) completion(nil);
             return;
         }
         NSError *__autoreleasing parseErr = nil;
         NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseErr];
-        if (parseErr || !json) { LCLogF(@"translate: tencent parse err %@", parseErr); return; }
+        if (parseErr || !json) { LCLogF(@"translate: tencent parse err %@", parseErr); if (completion) completion(nil); return; }
         NSDictionary *respD = json[@"Response"];
         if (respD[@"Error"]) {
             LCLogF(@"translate: tencent api err %@", respD[@"Error"]);
+            if (completion) completion(nil);
             return;
         }
         NSString *content = respD[@"TargetText"];
         if (![content isKindOfClass:[NSString class]] || content.length == 0) {
             LCLogF(@"translate: tencent empty target (%@)", json);
+            if (completion) completion(nil);
             return;
         }
         NSString *result = [content stringByTrimmingCharactersInSet:
@@ -515,7 +547,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
     };
     NSError *__autoreleasing err = nil;
     NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
-    if (err || !payload) { LCLogF(@"translate: openai json err %@", err); return; }
+    if (err || !payload) { LCLogF(@"translate: openai json err %@", err); if (completion) completion(nil); return; }
 
     // 拼接 API URL（可能以 / 结尾）
     NSString *chatUrl = [apiBase hasSuffix:@"/"] ? [apiBase stringByAppendingString:@"chat/completions"]
@@ -533,18 +565,21 @@ static NSString *LCTmtLang(NSString *lcLang) {
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
         if (taskErr) {
             LCLogF(@"translate: openai req err %@ url=%@", taskErr, chatUrl);
+            if (completion) completion(nil);
             return;
         }
         NSError *__autoreleasing pe = nil;
         NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
         if (pe || !json) {
             LCLogF(@"translate: openai parse err %@ data len=%lu", pe, (unsigned long)data.length);
+            if (completion) completion(nil);
             return;
         }
         // 解析响应
         NSArray *choices = json[@"choices"];
         if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {
             LCLogF(@"translate: openai no choices (%@)", json);
+            if (completion) completion(nil);
             return;
         }
         NSDictionary *firstChoice = choices[0];
@@ -552,6 +587,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
         NSString *content = msg[@"content"];
         if (![content isKindOfClass:[NSString class]] || content.length == 0) {
             LCLogF(@"translate: openai empty content (%@)", json);
+            if (completion) completion(nil);
             return;
         }
         NSString *result = [content stringByTrimmingCharactersInSet:
@@ -595,7 +631,8 @@ static NSData *LCBytes(NSString *s) { return [s dataUsingEncoding:NSUTF8StringEn
 static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
                                        NSString *timestamp, NSString *date,
                                        NSData *payload, NSString *host,
-                                       NSString *service, NSString *action) {
+                                       NSString *service, NSString *action,
+                                       NSString *region) {
     // CanonicalRequest（action 转小写进签名，与实际 header 大小写无关）
     NSString *hashedPayload = LCDataToHex(LCSHA256(payload));
     NSString *canonicalHeaders = [NSString stringWithFormat:
@@ -605,7 +642,8 @@ static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
         @"POST\n/\n\n%@\n%@\n%@",
         canonicalHeaders, signedHeaders, hashedPayload];
 
-    NSString *credentialScope = [NSString stringWithFormat:@"%@/%@/tc3_request", date, service];
+    // TC3 credential scope 必须是 日期/服务/地域/tc3_request 四段，漏地域会被腾讯云判为非法签名
+    NSString *credentialScope = [NSString stringWithFormat:@"%@/%@/%@/tc3_request", date, service, region];
     NSString *stringToSign = [NSString stringWithFormat:
         @"TC3-HMAC-SHA256\n%@\n%@\n%@",
         timestamp, credentialScope, LCDataToHex(LCSHA256(LCBytes(canonicalRequest)))];
@@ -629,7 +667,7 @@ static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
                                      NSString *timestamp, NSString *date,
                                      NSData *payload, NSString *host) {
     return LCTencentAuthHeaderEx(secretId, secretKey, timestamp, date, payload, host,
-                                 @"asr", @"sentencerecognition");
+                                 @"asr", @"sentencerecognition", @"ap-guangzhou");
 }
 
 // tap 输入格式（LCTapPrepare 记录，供 PCM 转换 / SFSpeech 缓冲）
@@ -850,6 +888,7 @@ static BOOL gProcessingFormatValid = NO;
                 [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
                 [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
                 [req setValue:tsStr forHTTPHeaderField:@"X-TC-Timestamp"];
+                [req setValue:@"ap-guangzhou" forHTTPHeaderField:@"X-TC-Region"];
                 [req setValue:auth forHTTPHeaderField:@"Authorization"];
                 req.HTTPBody = payload;
                 req.timeoutInterval = 10.0;
@@ -1019,6 +1058,7 @@ static BOOL gProcessingFormatValid = NO;
                 [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
                 [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
                 [req setValue:tsStr forHTTPHeaderField:@"X-TC-Timestamp"];
+                [req setValue:@"ap-guangzhou" forHTTPHeaderField:@"X-TC-Region"];
                 [req setValue:auth forHTTPHeaderField:@"Authorization"];
                 req.HTTPBody = payload;
                 req.timeoutInterval = 10.0;
