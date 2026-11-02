@@ -24,7 +24,8 @@
 static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
                                        NSString *timestamp, NSString *date,
                                        NSData *payload, NSString *host,
-                                       NSString *service, NSString *action);
+                                       NSString *service, NSString *action,
+                                       NSString *region);
 static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
                                      NSString *timestamp, NSString *date,
                                      NSData *payload, NSString *host);
