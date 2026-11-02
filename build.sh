@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.54
+VER=1.0.55
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -67,8 +67,37 @@ echo "$IDS" | grep -q "@loader_path/.jbroot" \
   || { echo "ERROR: LC_ID_DYLIB bad: $IDS"; exit 1; }
 
 ldid -M -S "$DL"
-# ldid 再次清除 install_name，重新设置
-install_name_tool -id "$NEWID" "$DL" 2>/dev/null || true
+# ldid 清除 install_name，用 Python 直接修改 Mach-O 二进制
+PY=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
+[ -n "$PY" ] || { echo "ERROR: python not found"; exit 1; }
+$PY -c "
+import struct, sys
+with open(sys.argv[1], 'rb') as f:
+    data = bytearray(f.read())
+assert data[:4] == b'\xcf\xfa\xed\xfe', 'Not 64-bit Mach-O'
+ncmds, _ = struct.unpack_from('<II', data, 16)
+off = 32
+for _ in range(ncmds):
+    if off + 8 > len(data): break
+    cmd, cmdsize = struct.unpack_from('<II', data, off)
+    if cmd == 0x1D:  # LC_ID_DYLIB
+        name_off = struct.unpack_from('<I', data, off + 8)[0]
+        end = data.find(b'\x00', name_off)
+        old_len = end - name_off
+        new_id = sys.argv[2].encode('utf-8') + b'\x00'
+        if len(new_id) <= old_len:
+            data[name_off:end] = new_id + b'\x00' * (old_len - len(new_id))
+            with open(sys.argv[1], 'wb') as f:
+                f.write(data)
+            print(f'OK: patched install_name at offset {name_off}')
+        else:
+            print(f'ERROR: new name too long ({len(new_id)} > {old_len})')
+            sys.exit(1)
+        break
+else:
+    print('ERROR: LC_ID_DYLIB not found')
+    sys.exit(1)
+" "$DL" "$NEWID"
 IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
 echo "  install name after ldid: $IDS"
 echo "$IDS" | grep -q "@loader_path/.jbroot" \
