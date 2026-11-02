@@ -59,12 +59,20 @@ cp PrefLoader.plist "$STAGE/Library/PreferenceLoader/Preferences/LiveCap.plist"
 
 echo "[3/4] verify install name + ldid + Mach-O header"
 DL="$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
+# ldid 签名后会清除 install_name，需要重新设置
+install_name_tool -id "$NEWID" "$DL" 2>/dev/null || true
 IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
 echo "  install name: $IDS"
 echo "$IDS" | grep -q "@loader_path/.jbroot" \
   || { echo "ERROR: LC_ID_DYLIB bad: $IDS"; exit 1; }
 
 ldid -M -S "$DL"
+# ldid 再次清除 install_name，重新设置
+install_name_tool -id "$NEWID" "$DL" 2>/dev/null || true
+IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
+echo "  install name after ldid: $IDS"
+echo "$IDS" | grep -q "@loader_path/.jbroot" \
+  || { echo "ERROR: LC_ID_DYLIB bad after ldid: $IDS"; exit 1; }
 ldid -M -S "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"
 PY=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
 [ -n "$PY" ] || { echo "ERROR: python not found"; exit 1; }
