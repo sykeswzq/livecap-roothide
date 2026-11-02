@@ -1,4 +1,4 @@
-// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.56
+// LiveCap.m — roothide 实时视频字幕翻译 tweak (iOS 15-16, arm64e) v1.0.57
 // 原理：swizzle AVPlayer 拿到 AVPlayerItem，挂 MTAudioProcessingTap 抓 PCM
 //      → SFSpeech 实时转写（有授权时）；无授权自动切腾讯云一句话识别（在线 ASR）
 //      → 原文经 OpenAI 兼容接口翻译（agnes）
@@ -1547,8 +1547,14 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     UInt32 n = *numPackets;
     if (in->descCount - in->idx < n) n = in->descCount - in->idx;
     ioData->mNumberBuffers = 1;
-    ioData->mBuffers[0].mData = in->data + in->descs[in->idx].mStartOffset;
-    ioData->mBuffers[0].mDataByteSize = in->descs[in->idx].mDataByteSize;
+    // 解压(AAC->PCM)转换器按 packet 描述读取压缩包：mData 指向首个包起点，
+    // mDataByteSize 必须覆盖本回调提供的全部 n 个包的总字节跨度（含各包偏移），
+    // outPacketDesc 指向 n 个连续的 AudioStreamPacketDescription 数组。
+    SInt64 startOff = in->descs[in->idx].mStartOffset;
+    SInt64 endOff = in->descs[in->idx + n - 1].mStartOffset
+                  + in->descs[in->idx + n - 1].mDataByteSize;
+    ioData->mBuffers[0].mData = in->data + startOff;
+    ioData->mBuffers[0].mDataByteSize = (UInt32)(endOff - startOff);
     if (outPacketDesc) *outPacketDesc = &in->descs[in->idx];
     *numPackets = n;
     in->idx += n;
@@ -1732,10 +1738,11 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         return;
     }
 
-    // 尝试获取 magic cookie
+        // 修复：尝试获取 magic cookie；缺失时按 AAC-LC 依据 ASBD 合成 AudioSpecificConfig
     CMFormatDescriptionRef fmtD = CMSampleBufferGetFormatDescription(sbuf);
     if (fmtD) {
         CFTypeRef cookieRef = CMFormatDescriptionGetExtension(fmtD, CFSTR("MagicCookie"));
+        BOOL setCookie = NO;
         if (cookieRef && CFGetTypeID(cookieRef) == CFDataGetTypeID()) {
             CFDataRef cookieData = (CFDataRef)cookieRef;
             if (CFDataGetLength(cookieData) > 0) {
@@ -1743,12 +1750,36 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
                                           (UInt32)CFDataGetLength(cookieData),
                                           CFDataGetBytePtr(cookieData));
                 LCLogF(@"audio: dec cookie %ldB", (long)CFDataGetLength(cookieData));
+                setCookie = YES;
             }
+        }
+        // YouTube 的 AAC format description 常不带 MagicCookie；AAC-LC 可由 ASBD 推断并合成
+        if (!setCookie && inASBD2.mFormatID == kAudioFormatMPEG4AAC) {
+            UInt32 sr = (UInt32)inASBD2.mSampleRate;
+            int srIdx = 4;
+            if      (sr == 96000) srIdx = 0;
+            else if (sr == 88200) srIdx = 1;
+            else if (sr == 64000) srIdx = 2;
+            else if (sr == 48000) srIdx = 3;
+            else if (sr == 44100) srIdx = 4;
+            else if (sr == 32000) srIdx = 5;
+            else if (sr == 24000) srIdx = 6;
+            else if (sr == 22050) srIdx = 7;
+            else if (sr == 16000) srIdx = 8;
+            else if (sr == 12000) srIdx = 9;
+            else if (sr == 11025) srIdx = 10;
+            else if (sr == 8000)  srIdx = 11;
+            UInt8 chn = (inASBD2.mChannelsPerFrame > 0) ? (UInt8)inASBD2.mChannelsPerFrame : 2;
+            if (chn < 1 || chn > 7) chn = 2;
+            UInt8 ac[2];
+            ac[0] = (UInt8)((2 /*AAC-LC*/ << 3) | (srIdx >> 1));
+            ac[1] = (UInt8)(((srIdx & 1) << 7) | (chn << 3));
+            AudioConverterSetProperty(conv, kAudioConverterDecompressionMagicCookie, 2, ac);
+            LCLogF(@"audio: dec cookie synthesized sr=%u srIdx=%d ch=%u", (unsigned)sr, srIdx, chn);
         }
     }
 
-    // 构建 packet 描述：YouTube 数据通常是一个大 packet
-    // 尝试从 CMSampleBuffer 获取 packet 描述
+    // 构建 packet 描述：官方接口 -> 用 sample sizes 重建 -> ADTS 检测 -> 兜底整段
     AudioStreamPacketDescription *descs = NULL;
     UInt32 descCount = 0;
     CMItemCount dCnt = 0;
@@ -1762,7 +1793,39 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         }
     }
 
-    // 如果没有 packet 描述，尝试检测 ADTS 帧
+    // 关键修复：YouTube 的 AVSampleBufferAudioRenderer 给的 AAC sbuf 常不带 packet descriptions，
+    // 但每个 AAC 帧(=sample)的字节长度记录在 sample sizes 中。据此重建 packet 描述，
+    // 否则 AudioConverter 把整段 AAC 当一个 packet 解码 -> -50 失败。
+    if (!descs) {
+        CMItemCount numSamples = CMSampleBufferGetNumSamples(sbuf);
+        if (numSamples > 0 && numSamples <= 8192) {
+            size_t *sizes = (size_t *)malloc(sizeof(size_t) * (size_t)numSamples);
+            if (sizes) {
+                CMItemCount numSizes = 0;
+                CMSampleBufferGetSampleSizeArray(sbuf, numSamples, sizes, &numSizes);
+                if (numSizes > 0) {
+                    // CoreMedia 对统一大小的样本常只返回 1 个 size；按需展开到 numSamples 个 packet
+                    CMItemCount effN = (numSizes == 1 && numSamples > 1) ? numSamples : numSizes;
+                    descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)effN);
+                    if (descs) {
+                        size_t off = 0;
+                        for (CMItemCount i = 0; i < effN; i++) {
+                            size_t sz = (numSizes == 1) ? sizes[0] : sizes[i];
+                            descs[i].mStartOffset = (UInt32)off;
+                            descs[i].mDataByteSize = (UInt32)sz;
+                            descs[i].mVariableFramesInPacket = 0;
+                            off += sz;
+                            descCount++;
+                        }
+                        LCLogF(@"audio: dec built %u pkt descs from %lld sample sizes (eff=%lld)", (unsigned)descCount, (long long)numSizes, (long long)effN);
+                    }
+                }
+                free(sizes);
+            }
+        }
+    }
+
+// 如果没有 packet 描述，尝试检测 ADTS 帧
     if (!descs && dataLen >= 7 && ((uint8_t)dataPtr[0]) == 0xFF && (((uint8_t)dataPtr[1]) & 0xF6) == 0xF0) {
         UInt32 cap = 64;
         descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * cap);
