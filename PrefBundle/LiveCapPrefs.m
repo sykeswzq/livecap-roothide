@@ -189,9 +189,9 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else if (indexPath.row == 1) {
             cell.textLabel.text = @"注入目标 App";
-            id apps = LCGet(@"injectApps");
-            long n = [apps isKindOfClass:[NSArray class]] ? (long)((NSArray *)apps).count : 0;
-            cell.detailTextLabel.text = (n > 0) ? [NSString stringWithFormat:@"已选 %ld 个", n] : nil;
+            // 与「选择注入 App」页口径一致：真实注入 = 白名单 ∩ Inject Manager 允许 ∩ 已安装
+            NSUInteger n = [LCReallyInjectedIDs() count];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"已注入 %lu 个", (unsigned long)n];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 2) {
             cell.textLabel.text = @"识别语言（按 App 记忆）";
