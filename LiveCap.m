@@ -246,9 +246,25 @@ static NSString *LCJBRootPath(NSString *path) {
         [d[@"manualPositions"] isKindOfClass:[NSDictionary class]] ? d[@"manualPositions"] : @{}];
     pos[self.bundleId] = @{@"x": @(x), @"y": @(y)};
     d[@"manualPositions"] = pos;
-    [d writeToFile:path atomically:YES];
+    BOOL ok = [d writeToFile:path atomically:YES];
+    if (!ok) {
+        // App 沙盒可能无法写全局 Preferences（roothide 路径映射 + 沙盒权限），
+        // 退而求其次写自己的沙盒 Documents（至少本次会话内位置能保留）
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        if (paths.count) {
+            NSString *fallback = [paths[0] stringByAppendingPathComponent:@"livecap_positions.plist"];
+            NSMutableDictionary *fd = [NSMutableDictionary dictionaryWithContentsOfFile:fallback];
+            if (!fd) fd = [NSMutableDictionary dictionary];
+            NSMutableDictionary *fpos = [NSMutableDictionary dictionaryWithDictionary:
+                [fd[@"manualPositions"] isKindOfClass:[NSDictionary class]] ? fd[@"manualPositions"] : @{}];
+            fpos[self.bundleId] = @{@"x": @(x), @"y": @(y)};
+            fd[@"manualPositions"] = fpos;
+            [fd writeToFile:fallback atomically:YES];
+            LCLogF(@"pos: global write failed, saved to sandbox %@", fallback);
+        }
+    }
     _d = d;  // 内存同步，下一次 show 直接生效
-    LCLogF(@"pos: saved for %@ x=%.2f y=%.2f", self.bundleId, x, y);
+    LCLogF(@"pos: saved for %@ x=%.2f y=%.2f ok=%d", self.bundleId, x, y, ok);
 }
 
 @end
@@ -1122,6 +1138,8 @@ static BOOL gProcessingFormatValid = NO;
     CGPoint _dragStartCenter;
     NSString *_lastTranslation;   // 保留最近一次翻译，避免被下一轮 ASR 的 nil 覆盖
     NSString *_lastOrigin;
+    BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
+    CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
 }
 
 + (instancetype)shared {
@@ -1170,7 +1188,10 @@ static BOOL gProcessingFormatValid = NO;
         }
 
         if (!keyWindow) { LCLog("overlay: no keyWindow found"); return; }
-        UIView *parent = keyWindow.rootViewController.view;
+        // 挂到 keyWindow 本身（而不是 rootViewController.view）：
+        // 1) 层级最高，不会被 App 内部的全屏播放层/手势层盖住导致拖不动
+        // 2) 不受 App 视图树变化影响
+        UIView *parent = keyWindow;
         if (!parent) { LCLog("overlay: no rootVC view"); return; }
 
         CGFloat fs = [LCConfig shared].fontSize;
@@ -1200,6 +1221,10 @@ static BOOL gProcessingFormatValid = NO;
         container.userInteractionEnabled = YES;
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
             initWithTarget:self action:@selector(handlePan:)];
+        // 不取消 touches：避免与 YouTube 自身的播放/进度条手势互相吞掉
+        pan.cancelsTouchesInView = NO;
+        pan.delaysTouchesBegan = NO;
+        pan.delaysTouchesEnded = NO;
         [container addGestureRecognizer:pan];
 
         [parent addSubview:container];
@@ -1218,6 +1243,7 @@ static BOOL gProcessingFormatValid = NO;
     if (g.state == UIGestureRecognizerStateBegan) {
         _dragging = YES;
         _dragStartCenter = _container.center;
+        LCLogF(@"drag: begin center=(%.1f,%.1f)", _dragStartCenter.x, _dragStartCenter.y);
     } else if (g.state == UIGestureRecognizerStateChanged) {
         if (!_dragging) return;
         CGPoint t = [g translationInView:_container.superview];
@@ -1225,6 +1251,10 @@ static BOOL gProcessingFormatValid = NO;
     } else if (g.state == UIGestureRecognizerStateEnded ||
                g.state == UIGestureRecognizerStateCancelled) {
         _dragging = NO;
+        // 用户拖过之后就沿用当前位置，不再被 showOriginal 重置
+        _userMoved = YES;
+        _userCenter = _container.center;
+        LCLogF(@"drag: end center=(%.1f,%.1f)", _userCenter.x, _userCenter.y);
         // 归一化当前位置并按 App 记录（0-1 百分比），下次打开/切回该 App 自动恢复
         CGRect r = _container.frame;
         CGRect p = _container.superview.bounds;
@@ -1264,17 +1294,15 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 
         // 竞态修复：ASR 每轮先调 showOriginal(text, nil) 显示英文原文，
         // 翻译要几秒后才回填。若这期间又来新一轮 ASR，翻译会被 nil 覆盖，
-        // 导致字幕框永远只显示英文。这里保留最近一次翻译，
-        // 只有当原文变化时才考虑清空（同一句的连续分段仍复用翻译）。
+        // 导致字幕框永远只显示英文。
+        // 关键：origin 变化【不能】清空 _lastTranslation —— 必须保留上一句的中文，
+        // 直到新翻译回填为止，否则英文会一直霸屏。
         if (translation.length) {
             _lastTranslation = translation;
             _lastOrigin = origin;
         } else if (origin.length) {
-            if (![_lastOrigin isEqualToString:origin]) {
-                _lastTranslation = nil;
-            }
+            translation = _lastTranslation;   // 复用上一句的中文，等新翻译回来再替换
             _lastOrigin = origin;
-            translation = _lastTranslation;   // 复用上一句的翻译
         }
 
         LCLogF(@"overlay: show origin=[%@] trans=[%@] transLen=%lu", origin, translation, (unsigned long)translation.length);
@@ -1284,7 +1312,12 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 
         CGFloat fs = [LCConfig shared].fontSize;
         CGFloat margin = 16;
-        CGFloat maxW = [UIScreen mainScreen].bounds.size.width - margin * 2;
+        // 尺寸基于 superview（现在是 keyWindow），
+        // 横屏时 window.bounds 的宽高与屏幕相反，不能用 mainScreen
+        CGRect hostBounds = _container.superview ? _container.superview.bounds : [UIScreen mainScreen].bounds;
+        CGFloat hostW = hostBounds.size.width;
+        CGFloat hostH = hostBounds.size.height;
+        CGFloat maxW = hostW - margin * 2;
 
         // 完整测量两段文本高度（不截断，文本多长框多高）
         CGFloat oh = 0, th = 0;
@@ -1304,20 +1337,27 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat h = pad * 2 + oh + th + (origin.length && translation.length ? 4 : 0);
         if (h < fs + pad * 2) h = fs + pad * 2;
 
-        CGFloat sw = [UIScreen mainScreen].bounds.size.width;
-        CGFloat sh = [UIScreen mainScreen].bounds.size.height;
+        CGFloat sw = hostW;
+        CGFloat sh = hostH;
         // 安全上限：极端长文本时最多占 45% 屏高，防止霸屏
         h = MIN(h, sh * 0.45);
         [self applyBackgroundStyle:CGSizeMake(w, h)];
 
         // 按当前 App 记忆的位置（0-1 百分比）定位
+        // 注意：用户手动拖动过之后，必须沿用用户位置，
+        // 否则 showOriginal 每 5 秒（每轮 ASR）都会把位置重算回配置值，
+        // 表现为「怎么拖都弹回原处」。
         CGFloat mx = [[LCConfig shared] manualX];
         CGFloat my = [[LCConfig shared] manualY];
         CGFloat spanX = MAX(sw - w, 1);
         CGFloat spanY = MAX(sh - h, 1);
-        CGFloat x = mx * spanX;
-        CGFloat y = my * spanY;
-        _container.frame = CGRectMake(x, y, w, h);
+        if (_userMoved) {
+            _container.center = _userCenter;
+        } else {
+            CGFloat x = mx * spanX;
+            CGFloat y = my * spanY;
+            _container.frame = CGRectMake(x, y, w, h);
+        }
         CGFloat ly = pad;
         if (origin.length) {
             _originLabel.frame = CGRectMake(pad, ly, maxW, oh);
@@ -1377,7 +1417,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         _transLabel.attributedText = nil;
         CGFloat fs = [LCConfig shared].fontSize;
         CGFloat margin = 24;
-        CGFloat maxW = [UIScreen mainScreen].bounds.size.width - margin * 2;
+        CGRect toastBounds = _container.superview ? _container.superview.bounds : [UIScreen mainScreen].bounds;
+        CGFloat maxW = toastBounds.size.width - margin * 2;
         CGFloat oh = [text boundingRectWithSize:CGSizeMake(maxW, CGFLOAT_MAX)
             options:NSStringDrawingUsesLineFragmentOrigin
             attributes:@{NSFontAttributeName:_originLabel.font} context:nil].size.height;
@@ -1385,8 +1426,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat w = maxW + pad * 2;
         CGFloat h = pad * 2 + oh;
         [self applyBackgroundStyle:CGSizeMake(w, h)];
-        CGFloat sw = [UIScreen mainScreen].bounds.size.width;
-        CGFloat sh = [UIScreen mainScreen].bounds.size.height;
+        CGFloat sw = toastBounds.size.width;
+        CGFloat sh = toastBounds.size.height;
         UIEdgeInsets insets = UIEdgeInsetsZero;
         if (@available(iOS 11.0, *)) {
             insets = [UIApplication sharedApplication].keyWindow.safeAreaInsets;
