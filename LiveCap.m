@@ -1133,6 +1133,7 @@ static BOOL gProcessingFormatValid = NO;
     UIVisualEffectView *_blurView;
     UILabel *_originLabel;
     UILabel *_transLabel;
+    UIView *_dragHandle;          // 拖动把手（只有按住它才能拖动字幕框）
     BOOL _installed;
     BOOL _dragging;
     CGPoint _dragStartCenter;
@@ -1218,14 +1219,31 @@ static BOOL gProcessingFormatValid = NO;
         _transLabel = tl;
 
         // 字幕位置默认手动：容器始终可拖动，每个 App 分别记忆最后位置
+        // 拖动方式：在字幕框左上角放一个专用的「拖动把手」，
+        // 只有按住把手才能拖动字幕框。
+        // 不用 pan/长按：YouTube 全屏播放时 video view 上有自己的
+        // 滑动(进度条)/长按(2倍速)/双击(暂停)手势，
+        // 我们的手势挂在同一个 window 上会被它们 cancel 掉（表现为怎么拖都拖不动），
+        // 用独立把手则完全避开竞争。
         container.userInteractionEnabled = YES;
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
-            initWithTarget:self action:@selector(handlePan:)];
-        // 不取消 touches：避免与 YouTube 自身的播放/进度条手势互相吞掉
-        pan.cancelsTouchesInView = NO;
-        pan.delaysTouchesBegan = NO;
-        pan.delaysTouchesEnded = NO;
-        [container addGestureRecognizer:pan];
+
+        // 拖动把手：半透明白色圆点 + 深色双向箭头，直观且不遮挡字幕
+        UIView *handle = [[UIView alloc] initWithFrame:CGRectZero];
+        handle.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.85];
+        handle.layer.cornerRadius = 11.0;
+        handle.layer.borderWidth = 1.0;
+        handle.layer.borderColor = [UIColor colorWithWhite:0 alpha:0.35].CGColor;
+        handle.userInteractionEnabled = YES;
+        handle.accessibilityIdentifier = @"LiveCapDragHandle";
+        [container addSubview:handle];
+        _dragHandle = handle;
+
+        // 把手用 UIPanGestureRecognizer：它是独立的小 view，
+        // YouTube 的手势不会覆盖它（YouTube 手势在 video view 上）
+        UIPanGestureRecognizer *hp = [[UIPanGestureRecognizer alloc]
+            initWithTarget:self action:@selector(handleHandlePan:)];
+        hp.cancelsTouchesInView = NO;
+        [handle addGestureRecognizer:hp];
 
         [parent addSubview:container];
         _container = container;
@@ -1238,7 +1256,7 @@ static BOOL gProcessingFormatValid = NO;
     }
 }
 
-- (void)handlePan:(UIPanGestureRecognizer *)g {
+- (void)handleHandlePan:(UIPanGestureRecognizer *)g {
     if (!_container) return;
     if (g.state == UIGestureRecognizerStateBegan) {
         _dragging = YES;
@@ -1248,8 +1266,10 @@ static BOOL gProcessingFormatValid = NO;
         if (!_dragging) return;
         CGPoint t = [g translationInView:_container.superview];
         _container.center = CGPointMake(_dragStartCenter.x + t.x, _dragStartCenter.y + t.y);
+        _userCenter = _container.center;
     } else if (g.state == UIGestureRecognizerStateEnded ||
                g.state == UIGestureRecognizerStateCancelled) {
+        if (!_dragging) return;
         _dragging = NO;
         // 用户拖过之后就沿用当前位置，不再被 showOriginal 重置
         _userMoved = YES;
@@ -1320,14 +1340,17 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat maxW = hostW - margin * 2;
 
         // 完整测量两段文本高度（不截断，文本多长框多高）
+        // 测量宽度与实际 label 宽度一致（要避开右上角的拖动把手）
+        CGFloat handleSpace = _dragHandle ? 26.0 : 0.0;
+        CGFloat measureW = maxW - handleSpace;
         CGFloat oh = 0, th = 0;
         if (origin.length) {
-            oh = [origin boundingRectWithSize:CGSizeMake(maxW, CGFLOAT_MAX)
+            oh = [origin boundingRectWithSize:CGSizeMake(measureW, CGFLOAT_MAX)
                 options:NSStringDrawingUsesLineFragmentOrigin
                 attributes:@{NSFontAttributeName:_originLabel.font} context:nil].size.height;
         }
         if (translation.length) {
-            th = [translation boundingRectWithSize:CGSizeMake(maxW, CGFLOAT_MAX)
+            th = [translation boundingRectWithSize:CGSizeMake(measureW, CGFLOAT_MAX)
                 options:NSStringDrawingUsesLineFragmentOrigin
                 attributes:@{NSFontAttributeName:_transLabel.font} context:nil].size.height;
         }
@@ -1359,14 +1382,29 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             _container.frame = CGRectMake(x, y, w, h);
         }
         CGFloat ly = pad;
+        // 文字区域避开右上角的拖动把手
+        CGFloat textW = maxW - handleSpace;
         if (origin.length) {
-            _originLabel.frame = CGRectMake(pad, ly, maxW, oh);
+            _originLabel.frame = CGRectMake(pad, ly, textW, oh);
             ly += oh + 4;
         }
         if (translation.length) {
-            _transLabel.frame = CGRectMake(pad, ly, maxW, th);
+            _transLabel.frame = CGRectMake(pad, ly, textW, th);
+        }
+        // 拖动把手：字幕框右上角内侧
+        if (_dragHandle) {
+            CGFloat hs = 22.0;
+            _dragHandle.frame = CGRectMake(w - hs - 2, 2, hs, hs);
+            _dragHandle.hidden = NO;
         }
         _container.hidden = NO;
+        LCLogF(@"overlay: layout c=(%.0f,%.0f,%.0f,%.0f) oLbl=(%.0f,%.0f,h=%.0f) tLbl=(%.0f,%.0f,h=%.0f) oh=%.1f th=%.1f super=%@",
+              _container.frame.origin.x, _container.frame.origin.y, _container.frame.size.width, _container.frame.size.height,
+              _originLabel.frame.origin.x, _originLabel.frame.origin.y, _originLabel.frame.size.height,
+              _transLabel.frame.origin.x, _transLabel.frame.origin.y, _transLabel.frame.size.height,
+              oh, th, NSStringFromCGRect(_container.superview.bounds));
+        LCLogF(@"overlay: tLbl text=[%@] hidden=%d alpha=%.2f superHidden=%d",
+              _transLabel.text, _transLabel.hidden, _transLabel.alpha, _transLabel.superview.hidden);
     } @catch (NSException *e) {
         LCLog("overlay: show error");
     }
@@ -1402,6 +1440,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         _blurView.hidden = NO;
         _blurView.frame = (CGRect){CGPointZero, size};
         _container.backgroundColor = [UIColor clearColor];
+        // 毛玻璃必须留在最底层，否则会盖住字幕文字和拖动把手
+        [_container sendSubviewToBack:_blurView];
     }
 }
 
