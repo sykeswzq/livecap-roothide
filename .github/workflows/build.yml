@@ -89,6 +89,18 @@ jobs:
           if /usr/libexec/PlistBuddy -c "Print" "$TPLIST" | grep -qE '\*'; then
             echo "ERROR: Filter 含通配符"; exit 1
           fi
+          # plist 里绝不能有 XML 注释：ElleKit 用 CFPropertyList 解析，
+          # 遇到 <!-- --> 会导致整个 Filter 解析失败 → tweak 静默不注入、无任何日志
+          if grep -q '<!--' "$TPLIST"; then
+            echo "ERROR: LiveCap.plist 含 XML 注释，ElleKit 无法解析 Filter"; exit 1
+          fi
+          # 必须有 Mode=Any，否则 ElleKit 只按 Bundles 匹配，Executables 完全不生效
+          MODE="$(/usr/libexec/PlistBuddy -c "Print :Filter:Mode" "$TPLIST" 2>/dev/null || true)"
+          [ "$MODE" = "Any" ] || { echo "ERROR: Filter 缺 Mode=Any（Executables 会失效）"; exit 1; }
+          # mediaserverd 是系统进程，必须在 Executables 里才能注入（音频抓取靠它）
+          /usr/libexec/PlistBuddy -c "Print :Filter:Executables" "$TPLIST" 2>/dev/null | grep -q "mediaserverd" \
+            || { echo "ERROR: Filter 缺 Executables=mediaserverd（抓音频依赖它）"; exit 1; }
+          echo "  (2.1) OK plist 无注释 + Mode=Any + 含 mediaserverd"
           echo "  (2) OK dylib 头正常 + install name 规范 + Filter 正确"
 
           rm -rf /tmp/lcctl && mkdir -p /tmp/lcctl
@@ -97,6 +109,41 @@ jobs:
           [ -x /tmp/lcctl/postinst ] || { echo "ERROR: postinst not executable"; exit 1; }
           echo "  (3) OK postinst 存在且可执行"
           echo "全部校验通过"
+
+      - name: Verify TC3 signature logic
+        env:
+          # 可选：仓库 Secrets 里配置 TC3_SECRET_ID / TC3_SECRET_KEY 即可与腾讯云真实服务对拍
+          # 未配置时脚本只做格式自检（校验 scope 三段 / SignedHeaders / Content-Type 无 charset）
+          TC3_SECRET_ID: ${{ secrets.TC3_SECRET_ID }}
+          TC3_SECRET_KEY: ${{ secrets.TC3_SECRET_KEY }}
+        run: |
+          set -e
+          # 腾讯云 TC3 签名自检
+          # 曾踩坑：credential scope 写成四段（含 region）→ "Credential scope size not valid"
+          python3 verify_tc3_signature.py
+          echo "  (4) OK TC3 签名逻辑符合腾讯云规范"
+
+      - name: Verify ASR params
+        env:
+          TC3_SECRET_ID: ${{ secrets.TC3_SECRET_ID }}
+          TC3_SECRET_KEY: ${{ secrets.TC3_SECRET_KEY }}
+        run: |
+          set -e
+          # 腾讯云一句话识别参数自检
+          # 曾踩坑: body 里带了 AppId/SecretId/VoiceId → UnknownParameter
+          #         用了 16k_zh_en 引擎 → InvalidParameter(一句话识别不支持大模型)
+          python3 verify_asr_params.py
+          echo "  (5) OK ASR 请求参数符合腾讯云接口规范"
+
+      - name: Verify source safety
+        run: |
+          set -e
+          # 源码静态安全检查
+          # 曾踩坑(v1.0.69): 在 UIView.hitTest 里同步写日志文件 ->
+          #   hitTest 被 UIKit 高频调用, 主线程文件 I/O 触发 watchdog 杀进程 -> YouTube 闪退
+          # 曾踩坑: AAC 包描述越界(官方描述是码流级的, 指向 buffer 外) -> AudioConverter 越界读
+          python3 verify_source_safety.py
+          echo "  (6) OK 源码无已知闪退风险"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

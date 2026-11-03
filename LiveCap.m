@@ -312,12 +312,12 @@ static NSString *LCJBRootPath(NSString *path) {
         return;
     }
 
-    // 相同文本 2.0s 内不重复请求（partial 节流）
+    // 相同文本 1.0s 内不重复请求（partial 节流）
     NSNumber *nowN = @([[NSDate date] timeIntervalSince1970]);
     NSString *lastText = _lastSentText[cacheKey];
     NSNumber *lastTime = _lastSentTime[cacheKey];
     if (lastText && [lastText isEqualToString:trimmed] && lastTime &&
-        ([nowN doubleValue] - [lastTime doubleValue]) < 2.0) {
+        ([nowN doubleValue] - [lastTime doubleValue]) < 1.0) {
         return;
     }
     _lastSentText[cacheKey] = trimmed;
@@ -358,13 +358,13 @@ static NSString *LCJBRootPath(NSString *path) {
         [order addObject:@"mymemory"]; // 永远保留兜底
 
         [self translateStep:trimmed sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                       order:order idx:0 maxRetries:2 completion:completion];
+                       order:order idx:0 completion:completion];
     });
 }
 
-// 按 order 顺序逐个厂商尝试，失败自动顺延下一个；网络超时错误可重试 maxRetries 次
+// 按 order 顺序逐个厂商尝试，失败(done=NO)自动顺延下一个；全部失败则结束
 - (void)translateStep:(NSString *)text sysPrompt:(NSString *)sysPrompt cacheKey:(NSString *)cacheKey
-               target:(NSString *)target order:(NSArray *)order idx:(NSInteger)idx maxRetries:(NSInteger)maxRetries
+               target:(NSString *)target order:(NSArray *)order idx:(NSInteger)idx
            completion:(void (^)(NSString *result))completion {
     if (idx >= order.count) {
         LCLogF(@"translate: all providers failed text=[%@]", text);
@@ -408,7 +408,7 @@ static NSString *LCJBRootPath(NSString *path) {
         } else {
             LCLogF(@"translate: provider '%@' failed, fallback", provider);
             [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                         order:order idx:idx+1 maxRetries:maxRetries completion:completion];
+                         order:order idx:idx+1 completion:completion];
         }
     };
     if ([provider isEqualToString:@"tencent"]) {
@@ -1010,7 +1010,6 @@ static BOOL gProcessingFormatValid = NO;
                         [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
                         [[LCTranslator shared] translate:text
                             completion:^(NSString *tr) {
-                                LCLogF(@"asr: translate done tr=[%@] len=%lu", tr, (unsigned long)(tr ? tr.length : 0));
                                 if (tr.length) [[LCSubtitleOverlay shared] showOriginal:text translation:tr];
                             }];
                     });
