@@ -2197,10 +2197,10 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     if (totalSamples <= 0) totalSamples = 1024;
     // 上限保护：单次解码最多约 30 秒音频，防止超大分配
     if (totalSamples > 16000 * 30) totalSamples = 16000 * 30;
-    UInt32 maxOut = 4096;
-    UInt32 propSz = sizeof(maxOut);
-    AudioConverterGetProperty(conv, kAudioConverterPropertyMaximumOutputPacketSize, &propSz, &maxOut);
-    UInt32 outCapacity = (UInt32)(totalSamples * outASBD.mBytesPerFrame + maxOut * 8);
+    // 输出缓冲：按【实际可解出的帧数】算，不要多留余量。
+    // 多留的部分会让转换器以为还能再解出几千帧，于是再次回调输入；
+    // 而输入早已耗尽（返回 0 包）-> AudioConverter 判定输入不完整 -> -50。
+    UInt32 outCapacity = (UInt32)(totalSamples * outASBD.mBytesPerFrame);
     if (outCapacity > 4 * 1024 * 1024) outCapacity = 4 * 1024 * 1024;
     if (outCapacity < 16384) outCapacity = 16384;
 
@@ -2219,14 +2219,15 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
 
     // 准备输入数据
     LCConvInput in = { (uint8_t *)dataPtr, dataLen, dataLen, descs, descCount, 0 };
+    // 请求的输出帧数不能超过【输入实际能解出的帧数】(包数 × 每包帧数)。
+    // 超出部分会让转换器再次回调输入，而输入已耗尽 -> -50。
+    UInt32 realFrames = (UInt32)totalSamples;
     UInt32 outNumPackets = (UInt32)(outCapacity / outASBD.mBytesPerFrame);
-    // 上限必须与 outCapacity 匹配：outNumPackets×mBytesPerFrame 不能超过 outCapacity，
-    // 否则 AudioConverter 会写出界 -> 闪退
-    UInt32 maxPackets = outCapacity / outASBD.mBytesPerFrame;
-    if (maxPackets < 1) maxPackets = 1;
-    if (outNumPackets > maxPackets) outNumPackets = maxPackets;
+    if (outNumPackets > realFrames) outNumPackets = realFrames;
     if (outNumPackets > 262144) outNumPackets = 262144;
     if (outNumPackets < 1) outNumPackets = 1;
+    LCLogF(@"audio: dec req pkts=%u realFrames=%u cap=%u", (unsigned)outNumPackets,
+           (unsigned)realFrames, (unsigned)outCapacity);
 
     st = AudioConverterFillComplexBuffer(conv, LCInputProc, &in, &outNumPackets, &outList, NULL);
     AudioConverterDispose(conv);
