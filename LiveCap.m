@@ -351,10 +351,12 @@ static NSString *LCJBRootPath(NSString *path) {
     NSString *provider = order[idx];
     void (^proceed)(NSString *res) = ^(NSString *res){
         if (res.length) {
+            LCLogF(@"translate: provider '%@' OK len=%lu", provider, (unsigned long)res.length);
             _cache[cacheKey] = res;
             if (_cache.count > 300) [_cache removeAllObjects];
             if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(res); });
         } else {
+            LCLogF(@"translate: provider '%@' failed, fallback", provider);
             [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
                          order:order idx:idx+1 completion:completion];
         }
@@ -1118,6 +1120,8 @@ static BOOL gProcessingFormatValid = NO;
     BOOL _installed;
     BOOL _dragging;
     CGPoint _dragStartCenter;
+    NSString *_lastTranslation;   // 保留最近一次翻译，避免被下一轮 ASR 的 nil 覆盖
+    NSString *_lastOrigin;
 }
 
 + (instancetype)shared {
@@ -1251,9 +1255,29 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 }
 
 - (void)showOriginal:(NSString *)origin translation:(NSString *)translation {
-    if (!_container || !_installed) return;
+    if (!_container || !_installed) {
+        LCLogF(@"overlay: show skipped (container=%d installed=%d)", _container != nil, _installed);
+        return;
+    }
     @try {
         if (origin.length == 0 && translation.length == 0) return;
+
+        // 竞态修复：ASR 每轮先调 showOriginal(text, nil) 显示英文原文，
+        // 翻译要几秒后才回填。若这期间又来新一轮 ASR，翻译会被 nil 覆盖，
+        // 导致字幕框永远只显示英文。这里保留最近一次翻译，
+        // 只有当原文变化时才考虑清空（同一句的连续分段仍复用翻译）。
+        if (translation.length) {
+            _lastTranslation = translation;
+            _lastOrigin = origin;
+        } else if (origin.length) {
+            if (![_lastOrigin isEqualToString:origin]) {
+                _lastTranslation = nil;
+            }
+            _lastOrigin = origin;
+            translation = _lastTranslation;   // 复用上一句的翻译
+        }
+
+        LCLogF(@"overlay: show origin=[%@] trans=[%@] transLen=%lu", origin, translation, (unsigned long)translation.length);
         UIColor *tc = [[LCConfig shared] textColor];
         _originLabel.attributedText = LCStrokedText(origin, tc, _originLabel.font);
         _transLabel.attributedText = LCStrokedText(translation, tc, _transLabel.font);
