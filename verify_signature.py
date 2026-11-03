@@ -16,6 +16,7 @@ import struct
 import sys
 
 FAT_MAGIC = 0xCAFEBABE
+FAT_MAGIC_64 = 0xCAFEBABF
 MH_MAGIC_64 = 0xFEEDFACF  # little-endian read of 0xCFFAEDFE
 LC_SEGMENT_64 = 0x19
 LC_CODE_SIGNATURE = 0x1D
@@ -26,14 +27,28 @@ def sha256(data):
 
 
 def parse_macho(data):
-    """解析（可能 fat 的）Mach-O，返回各 slice 的 (offset, size) 列表"""
+    """解析（可能 fat 的）Mach-O，返回各 slice 的 (offset, size) 列表
+
+    fat_arch     (20 字节): cputype(4) cpusubtype(4) offset(4) size(4) align(4)
+    fat_arch_64  (32 字节): cputype(4) cpusubtype(4) offset(8) size(8) align(4) reserved(4)
+    """
     magic = struct.unpack_from(">I", data, 0)[0]
     if magic == FAT_MAGIC:
         nfat = struct.unpack_from(">I", data, 4)[0]
         slices = []
         for i in range(nfat):
             off = 8 + i * 20
-            _, _, _, slice_off, slice_size = struct.unpack_from(">IIIII", data, off)
+            _, _, slice_off, slice_size, _ = struct.unpack_from(
+                ">IIIII", data, off)
+            slices.append((slice_off, slice_size))
+        return slices
+    if magic == FAT_MAGIC_64:
+        nfat = struct.unpack_from(">I", data, 4)[0]
+        slices = []
+        for i in range(nfat):
+            off = 8 + i * 32
+            _, _, slice_off, slice_size = struct.unpack_from(
+                ">IIQQ", data, off)
             slices.append((slice_off, slice_size))
         return slices
     # thin: 64-bit
