@@ -1301,6 +1301,10 @@ static BOOL gProcessingFormatValid = NO;
         handle.layer.borderColor = [UIColor colorWithWhite:0.1 alpha:0.9].CGColor;
         handle.userInteractionEnabled = YES;
         handle.accessibilityIdentifier = @"LiveCapDragHandle";
+        // 关键：必须立刻给出可见尺寸。
+        // 若等到 showOriginal 才定位，而 ASR 还没出结果（showOriginal 未被调用），
+        // 把手会一直是 CGRectZero —— 表现为「右上角没有白点」。
+        handle.frame = CGRectMake(2, 2, 26, 26);
         [container addSubview:handle];
         _dragHandle = handle;
 
@@ -1315,12 +1319,47 @@ static BOOL gProcessingFormatValid = NO;
         [parent addSubview:container];
         _container = container;
         _installed = YES;
+
+        // 关键：立即给 container 一个可见的尺寸和位置。
+        // 否则在 ASR 首次出结果之前，字幕框是 CGRectZero（不可见），
+        // 把手也跟着不可见 —— 表现为「字幕框没有、右上角没有白点」。
+        [self layoutInitialFrame];
+
         LCLog("overlay: installed");
     } @catch (NSException *e) {
         LCLog("overlay: install error");
         _container = nil;
         _installed = NO;
     }
+}
+
+// 初始化字幕框位置/尺寸（ASR 尚未出结果时也保证可见）
+- (void)layoutInitialFrame {
+    if (!_container) return;
+    CGFloat fs = [[LCConfig shared] fontSize];
+    CGFloat pad = 10;
+    CGRect hostBounds = _container.superview ? _container.superview.bounds
+                                             : [UIScreen mainScreen].bounds;
+    CGFloat hostW = hostBounds.size.width;
+    CGFloat hostH = hostBounds.size.height;
+    CGFloat w = hostW - 32 + pad * 2;
+    CGFloat h = fs + pad * 2;
+    if (w < 80) w = 80;
+    CGFloat mx = [[LCConfig shared] manualX];
+    CGFloat my = [[LCConfig shared] manualY];
+    CGFloat spanX = MAX(hostW - w, 1);
+    CGFloat spanY = MAX(hostH - h, 1);
+    CGFloat x = mx * spanX;
+    CGFloat y = my * spanY;
+    _container.frame = CGRectMake(x, y, w, h);
+    _container.hidden = NO;
+    // 把手定位到右上角内侧
+    if (_dragHandle) {
+        CGFloat hs = 26.0;
+        _dragHandle.frame = CGRectMake(w - hs - 4, 4, hs, hs);
+    }
+    LCLogF(@"overlay: initial frame c=(%.0f,%.0f,%.0f,%.0f)",
+           x, y, w, h);
 }
 
 #pragma mark - 手势同时识别
@@ -1475,8 +1514,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         }
         // 拖动把手：字幕框右上角内侧
         if (_dragHandle) {
-            CGFloat hs = 22.0;
-            _dragHandle.frame = CGRectMake(w - hs - 2, 2, hs, hs);
+            CGFloat hs = 26.0;
+            _dragHandle.frame = CGRectMake(w - hs - 4, 4, hs, hs);
             _dragHandle.hidden = NO;
         }
         _container.hidden = NO;
@@ -1732,6 +1771,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 typedef struct {
     uint8_t *data;
     size_t len;
+    size_t dataLen;          // buffer 实际字节数（越界校验用）
     AudioStreamPacketDescription *descs;
     UInt32 descCount;
     UInt32 idx;
@@ -1746,18 +1786,35 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     }
     UInt32 n = *numPackets;
     if (in->descCount - in->idx < n) n = in->descCount - in->idx;
+    // 关键：转换器的 packet description 里 mStartOffset 是【相对于 mData 指针】的偏移。
+    // 我们手上这份描述的 mStartOffset 是【相对于整个 buffer 起点】的绝对偏移，
+    // 直接交出去会被再加一次 mData 基址 -> 偏移翻倍 -> 读到垃圾 -> 解码失败(-50)。
+    //
+    // 解法：每次只交【1 个包】，并把它的 mStartOffset 归零
+    //       （mData 指向该包真实起点，偏移 0 即正确）。
+    // AAC 每包 1024 帧，多交几次不影响吞吐。
+    if (n > 1) n = 1;
     ioData->mNumberBuffers = 1;
-    // 解压(AAC->PCM)转换器按 packet 描述读取压缩包：mData 指向首个包起点，
-    // mDataByteSize 必须覆盖本回调提供的全部 n 个包的总字节跨度（含各包偏移），
-    // outPacketDesc 指向 n 个连续的 AudioStreamPacketDescription 数组。
-    SInt64 startOff = in->descs[in->idx].mStartOffset;
-    SInt64 endOff = in->descs[in->idx + n - 1].mStartOffset
-                  + in->descs[in->idx + n - 1].mDataByteSize;
-    ioData->mBuffers[0].mData = in->data + startOff;
-    ioData->mBuffers[0].mDataByteSize = (UInt32)(endOff - startOff);
-    if (outPacketDesc) *outPacketDesc = &in->descs[in->idx];
-    *numPackets = n;
-    in->idx += n;
+
+    // 该包在 buffer 内的绝对偏移
+    UInt32 absOff = in->descs[in->idx].mStartOffset;
+    UInt32 absLen = in->descs[in->idx].mDataByteSize;
+    if ((UInt64)absOff + absLen > (UInt64)in->dataLen) {
+        // 越界保护：包超出 buffer，停止喂数据
+        *numPackets = 0;
+        return noErr;
+    }
+
+    // mData 指向该包真实起点，描述里的偏移归零 —— 两者基准一致
+    static AudioStreamPacketDescription sOne;
+    sOne.mStartOffset = 0;
+    sOne.mDataByteSize = absLen;
+    sOne.mVariableFramesInPacket = in->descs[in->idx].mVariableFramesInPacket;
+    ioData->mBuffers[0].mData = in->data + absOff;
+    ioData->mBuffers[0].mDataByteSize = absLen;
+    if (outPacketDesc) *outPacketDesc = &sOne;
+    *numPackets = 1;
+    in->idx += 1;
     return noErr;
 }
 
@@ -2161,7 +2218,7 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     outList.mBuffers[0].mDataByteSize = outCapacity;
 
     // 准备输入数据
-    LCConvInput in = { (uint8_t *)dataPtr, dataLen, descs, descCount, 0 };
+    LCConvInput in = { (uint8_t *)dataPtr, dataLen, dataLen, descs, descCount, 0 };
     UInt32 outNumPackets = (UInt32)(outCapacity / outASBD.mBytesPerFrame);
     // 上限必须与 outCapacity 匹配：outNumPackets×mBytesPerFrame 不能超过 outCapacity，
     // 否则 AudioConverter 会写出界 -> 闪退
