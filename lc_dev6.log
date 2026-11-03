@@ -1,0 +1,140 @@
+[1793684272] ctor: prog=YouTube
+[1793684275] init: wake
+[1793684275] init: [0/4] dylib loaded in com.google.ios.youtube v21.33.6
+[1793684275] init: [1/4] swizzle avplayer
+[1793684275] hook: replaceCurrentItem OK
+[1793684275] hook: currentItem OK
+[1793684275] hook: avp init OK
+[1793684275] hook: avp initWithPlayerItem OK
+[1793684275] hook: avp initWithURL OK
+[1793684275] hook: item init(noargs) OK
+[1793684275] hook: item init OK
+[1793684275] hook: item initWithAsset OK
+[1793684275] hook: item initWithURL OK
+[1793684275] hook: setAudioMix OK
+[1793684275] hook: setMuted OK
+[1793684275] hook: setVolume OK
+[1793684275] discover: AVSampleBufferAudioRenderer has 44 methods
+[1793684275] discover:   - enqueueSampleBuffer:
+[1793684275] discover: AVSampleBufferRenderSynchronizer has 34 methods
+[1793684275] 
+[1793684275] 
+[1793684275] probe: AVAudioEngine.init OK
+[1793684275] probe: AVSampleBufferAudioRenderer.init OK
+[1793684275] hook: ASBR enqueueSampleBuffer OK
+[1793684275] probe: AVSampleBufferRenderSynchronizer.init OK
+[1793684275] probe: AVAudioPlayerNode.init OK
+[1793684275] probe: AVAudioSession.setActive OK
+[1793684275] probe: AVAudioSession.setCategory OK
+[1793684275] hook: AudioUnitSetProperty rebind=0
+[1793684275] init: [1b/4] hook AudioUnitSetProperty done
+[1793684275] init: [2/4] swizzle shortcut
+[1793684275] hook: shortcut action OK
+[1793684275] init: [3/4] install shortcut item
+[1793684275] shortcut: reinstalled (toggle+en+ja+zh)
+[1793684275] init: [4/4] speech auth + active observer
+[1793684275] speech: auth status=0
+[1793684275] speech: target app has NO speech usage description -> ‰ΩøÁî®ËÖæËÆØ‰∫ëÂú®Á∫øËØÜÂà´
+[1793684275] asr: waiting for audio format (tap prepare will call again)
+[1793684275] init: active, install overlay
+[1793684275] overlay: installed
+[1793684275] init: done
+[1793684276] touch: hitTest p=(72,283) -> (nil=ËêΩÂà∞Á™óÂè£Â§ñ)
+[1793684276] touch: hitTest p=(72,283) -> (nil=ËêΩÂà∞Á™óÂè£Â§ñ)
+[1793684277] touch: hitTest p=(57,250) -> (nil=ËêΩÂà∞Á™óÂè£Â§ñ)
+[1793684277] touch: hitTest p=(57,250) -> (nil=ËêΩÂà∞Á™óÂè£Â§ñ)
+[1793684277] audio: AVSampleBufferRenderSynchronizer init 0x2810d3380
+[1793684277] audio: AVAudioSession setActive 1 st=1
+[1793684277] audio: AVSampleBufferAudioRenderer init 0x2810f8840
+[1793684277] asbr: enqueue called sbuf=0x132eb9b40 self=<AVSampleBufferAudioRenderer: 0x2810f8840> cmd=enqueueSampleBuffer:
+[1793684277] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=1
+[1793684277] asr: tencent online ASR started (sr=44100 ch=2)
+[1793684277] audio: dec normalize aac->mp4a
+[1793684277] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=431
+[1793684277] audio: dec head[16]: 21 1a 94 dd ca 87 05 a1 a0 68 cc 44 10 0f 61 5c 
+[1793684277] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793684277] audio: dec pkts=16
+[1793684277] audio: decode fill err -50 (0xffffffce)
+[1793684277] asbr: enqueue called sbuf=0x12c3f5200 self=<AVSampleBufferAudioRenderer: 0x2810f8840> cmd=enqueueSampleBuffer:
+[1793684277] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793684277] audio: dec normalize aac->mp4a
+[1793684277] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3916
+[1793684277] audio: dec head[16]: 21 1a 94 cd b6 8e c4 71 50 60 48 1a 1c 0c 83 02 
+[1793684277] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793684277] audio: dec pkts=160
+[1793684280] ctor: prog=YouTube
+[1793684283] init: wake
+[1793684283] init: [0/4] dylib loaded in com.google.ios.youtube v21.33.6
+[1793684283] init: [1/4] swizzle avplayer
+[1793684283] hook: replaceCurrentItem OK
+[1793684283] hook: currentItem OK
+[1793684283] hook: avp init OK
+[1793684283] hook: avp initWithPlayerItem OK
+[1793684283] hook: avp initWithURL OK
+[1793684283] hook: item init(noargs) OK
+[1793684283] hook: item init OK
+[1793684283] hook: item initWithAsset OK
+[1793684283] hook: item initWithURL OK
+[1793684283] hook: setAudioMix OK
+[1793684283] hook: setMuted OK
+[1793684283] hook: setVolume OK
+[1793684283] discover: AVSampleBufferAudioRenderer has 44 methods
+[1793684283] discover:   - enqueueSampleBuffer:
+[1793684283] discover: AVSampleBufferRenderSynchronizer has 34 methods
+[1793684283] 
+[1793684283] 
+[1793684283] probe: AVAudioEngine.init OK
+[1793684283] probe: AVSampleBufferAudioRenderer.init OK
+[1793684283] hook: ASBR enqueueSampleBuffer OK
+[1793684283] probe: AVSampleBufferRenderSynchronizer.init OK
+[1793684283] probe: AVAudioPlayerNode.init OK
+[1793684283] probe: AVAudioSession.setActive OK
+[1793684283] probe: AVAudioSession.setCategory OK
+[1793684283] hook: AudioUnitSetProperty rebind=0
+[1793684283] init: [1b/4] hook AudioUnitSetProperty done
+[1793684283] init: [2/4] swizzle shortcut
+[1793684283] hook: shortcut action OK
+[1793684283] init: [3/4] install shortcut item
+[1793684283] shortcut: reinstalled (toggle+en+ja+zh)
+[1793684283] init: [4/4] speech auth + active observer
+[1793684283] speech: auth status=0
+[1793684283] speech: target app has NO speech usage description -> ‰ΩøÁî®ËÖæËÆØ‰∫ëÂú®Á∫øËØÜÂà´
+[1793684283] asr: waiting for audio format (tap prepare will call again)
+[1793684283] init: active, install overlay
+[1793684283] overlay: installed
+[1793684283] init: done
+[1793684283] audio: AVSampleBufferRenderSynchronizer init 0x281694f70
+[1793684283] audio: AVAudioSession setActive 1 st=1
+[1793684283] audio: AVSampleBufferAudioRenderer init 0x2816951f0
+[1793684283] asbr: enqueue called sbuf=0x124fbd250 self=<AVSampleBufferAudioRenderer: 0x2816951f0> cmd=enqueueSampleBuffer:
+[1793684283] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=1
+[1793684283] asr: tencent online ASR started (sr=44100 ch=2)
+[1793684283] audio: dec normalize aac->mp4a
+[1793684283] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=305
+[1793684283] audio: dec head[16]: 21 1a 94 a5 aa 9c c4 71 50 60 e2 43 60 b5 70 89 
+[1793684283] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793684283] audio: dec pkts=16
+[1793684283] audio: decode fill err -50 (0xffffffce)
+[1793684283] asbr: enqueue called sbuf=0x110afe600 self=<AVSampleBufferAudioRenderer: 0x2816951f0> cmd=enqueueSampleBuffer:
+[1793684283] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793684283] audio: dec normalize aac->mp4a
+[1793684283] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3670
+[1793684283] audio: dec head[16]: 21 1a 94 ad a2 a1 04 40 c0 68 8c 44 10 88 a0 f2 
+[1793684283] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793684283] audio: dec pkts=160
+[1793684283] audio: decode fill err -50 (0xffffffce)
+[1793684283] asbr: enqueue called sbuf=0x124fa3610 self=<AVSampleBufferAudioRenderer: 0x2816951f0> cmd=enqueueSampleBuffer:
+[1793684283] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=2
+[1793684283] audio: dec normalize aac->mp4a
+[1793684283] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=676
+[1793684283] audio: dec head[16]: 21 0a 94 65 ae 9a ca 42 09 08 51 2b 12 b2 af 5c 
+[1793684283] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793684283] audio: dec pkts=32
+[1793684283] audio: decode fill err -50 (0xffffffce)
+[1793684283] asbr: enqueue called sbuf=0x110b11000 self=<AVSampleBufferAudioRenderer: 0x2816951f0> cmd=enqueueSampleBuffer:
+[1793684283] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793684283] audio: dec normalize aac->mp4a
+[1793684283] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3802
+[1793684283] audio: dec head[16]: 21 1a 94 55 c2 90 c6 83 20 c4 20 20 15 56 29 0d 
+[1793684283] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793684283] audio: dec pkts=160

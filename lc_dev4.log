@@ -1,0 +1,2446 @@
+[1793681680] ctor: prog=YouTube
+[1793681683] init: wake
+[1793681683] init: [0/4] dylib loaded in com.google.ios.youtube v21.33.6
+[1793681683] init: [1/4] swizzle avplayer
+[1793681683] hook: replaceCurrentItem OK
+[1793681683] hook: currentItem OK
+[1793681683] hook: avp init OK
+[1793681683] hook: avp initWithPlayerItem OK
+[1793681683] hook: avp initWithURL OK
+[1793681683] hook: item init(noargs) OK
+[1793681683] hook: item init OK
+[1793681683] hook: item initWithAsset OK
+[1793681683] hook: item initWithURL OK
+[1793681683] hook: setAudioMix OK
+[1793681683] hook: setMuted OK
+[1793681683] hook: setVolume OK
+[1793681683] discover: AVSampleBufferAudioRenderer has 44 methods
+[1793681683] discover:   - enqueueSampleBuffer:
+[1793681683] discover: AVSampleBufferRenderSynchronizer has 34 methods
+[1793681683] 
+[1793681683] 
+[1793681683] probe: AVAudioEngine.init OK
+[1793681683] probe: AVSampleBufferAudioRenderer.init OK
+[1793681683] hook: ASBR enqueueSampleBuffer OK
+[1793681683] probe: AVSampleBufferRenderSynchronizer.init OK
+[1793681683] probe: AVAudioPlayerNode.init OK
+[1793681683] probe: AVAudioSession.setActive OK
+[1793681683] probe: AVAudioSession.setCategory OK
+[1793681683] hook: AudioUnitSetProperty rebind=0
+[1793681683] init: [1b/4] hook AudioUnitSetProperty done
+[1793681683] init: [2/4] swizzle shortcut
+[1793681683] hook: shortcut action OK
+[1793681683] init: [3/4] install shortcut item
+[1793681683] shortcut: reinstalled (toggle+en+ja+zh)
+[1793681683] init: [4/4] speech auth + active observer
+[1793681683] speech: auth status=0
+[1793681683] speech: target app has NO speech usage description -> ‰ΩøÁî®ËÖæËÆØ‰∫ëÂú®Á∫øËØÜÂà´
+[1793681683] asr: waiting for audio format (tap prepare will call again)
+[1793681683] init: active, install overlay
+[1793681683] overlay: installed
+[1793681683] init: done
+[1793681684] audio: AVSampleBufferRenderSynchronizer init 0x281422280
+[1793681684] audio: AVSampleBufferAudioRenderer init 0x28142f6d0
+[1793681684] asbr: enqueue called sbuf=0x156d86eb0 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=1
+[1793681684] asr: tencent online ASR started (sr=44100 ch=2)
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=349
+[1793681684] audio: dec head[16]: 21 1a 94 9d d2 13 42 41 b0 a0 4c 34 0b b2 32 da 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=16
+[1793681684] audio: decode fill err -50 (0xffffffce)
+[1793681684] asbr: enqueue called sbuf=0x1513d0e00 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3931
+[1793681684] audio: dec head[16]: 21 1a 94 8d b2 91 05 41 40 d8 64 16 14 15 02 32 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x1503d0000 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3682
+[1793681684] audio: dec head[16]: 21 0a 94 2d aa 08 dc 2e 80 e8 ac d2 6c b9 04 aa 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x15034a400 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3493
+[1793681684] audio: dec head[16]: 21 1a 94 bd b5 8d 42 62 d0 a0 74 14 0d 0d 82 85 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x15034aa00 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3752
+[1793681684] audio: dec head[16]: 21 1a 94 ad a6 0f 48 b0 d1 21 6c 26 00 38 24 65 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x1503fb800 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3703
+[1793681684] audio: dec head[16]: 21 2a 94 1d aa 0c cf 84 30 c0 4c 3b aa b2 f7 76 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x15188ba00 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3735
+[1793681684] audio: dec head[16]: 21 1a 94 dd a9 8b 46 61 50 58 54 66 1c 0d 08 1c 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x150287000 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4202
+[1793681684] audio: dec head[16]: 21 1a 94 3d aa 20 d0 22 5a c9 da a0 15 32 5a 68 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x150287600 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3233
+[1793681684] audio: dec head[16]: 21 7a 94 4d ad 1c c4 81 32 10 60 15 11 54 0a 20 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x1513d4400 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3737
+[1793681684] audio: dec head[16]: 21 1a 94 b5 ae 12 c2 a1 43 98 8d 90 ca 88 e7 17 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x1513d8000 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3804
+[1793681684] audio: dec head[16]: 21 1a 94 3d ad be 00 4b ab ad a9 42 8c 33 cd c5 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x150381e00 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3630
+[1793681684] audio: dec head[16]: 21 1a 94 ad b1 b1 01 62 20 47 c2 2e e0 b0 80 94 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x151574a00 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3830
+[1793681684] audio: dec head[16]: 21 1a 94 95 c2 8f 0a 63 a0 8c d4 1d ee aa ea 2b 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x151575000 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3628
+[1793681684] audio: dec head[16]: 21 1a 94 dd 9e 91 09 41 40 58 90 46 31 04 01 a5 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x1503fb800 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3826
+[1793681684] audio: dec head[16]: 21 1a 94 bd be 15 43 61 20 58 34 18 1b 15 02 56 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681684] asbr: enqueue called sbuf=0x15041c800 self=<AVSampleBufferAudioRenderer: 0x28142f6d0> cmd=enqueueSampleBuffer:
+[1793681684] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681684] audio: dec normalize aac->mp4a
+[1793681684] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3822
+[1793681684] audio: dec head[16]: 21 0a 94 2d ae 90 d6 40 80 0b 70 24 40 a5 88 33 
+[1793681684] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681684] audio: dec pkts=160
+[1793681684] audio: decoded 2048 frames
+[1793681685] audio: AVSampleBufferRenderSynchronizer init 0x281461230
+[1793681685] audio: AVSampleBufferRenderSynchronizer init 0x281463eb0
+[1793681685] audio: AVSampleBufferAudioRenderer init 0x281469150
+[1793681685] audio: AVAudioSession setActive 1 st=1
+[1793681685] asbr: enqueue called sbuf=0x156eb7640 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=1
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=324
+[1793681685] audio: dec head[16]: 21 1a 94 f5 c2 0a c5 a1 10 58 30 26 38 8d cd 1c 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=16
+[1793681685] audio: decode fill err -50 (0xffffffce)
+[1793681685] asbr: enqueue called sbuf=0x15055e600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3776
+[1793681685] audio: dec head[16]: 21 1a 94 e5 ae 8d 09 a1 30 a0 cc 43 10 02 5a ea 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151542c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3523
+[1793681685] audio: dec head[16]: 21 1a 94 f5 b2 12 c4 a1 b0 90 2c 44 30 04 00 26 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151419000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3589
+[1793681685] audio: dec head[16]: 21 1a 94 7d 9e 8a a2 a0 b3 20 6c 18 0b 12 04 c2 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x1511a3400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3990
+[1793681685] audio: dec head[16]: 21 1a 95 15 c9 8f 02 b0 c0 e8 8c 28 18 88 b4 81 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x150566a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3529
+[1793681685] audio: dec head[16]: 21 1a 94 cd ca 87 62 41 30 68 44 3a 0b 1d 02 22 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] audio: AVAudioSession setActive 1 st=1
+[1793681685] asbr: enqueue called sbuf=0x1511e9a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3771
+[1793681685] audio: dec head[16]: 21 1a 94 9d c2 06 c7 86 21 11 95 45 5c 73 c0 2b 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x15053ca00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3974
+[1793681685] audio: dec head[16]: 21 1a 94 ad 05 1c 25 42 40 e8 56 1a 44 0d 02 c5 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x150542400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=7
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=2610
+[1793681685] audio: dec head[16]: 21 1a 94 75 39 96 8b 62 20 93 5c c5 ee 29 d9 2b 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=112
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x15038b200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3322
+[1793681685] audio: dec head[16]: 21 4c 6d 40 59 6a 3a f3 14 23 2e d2 67 05 4d aa 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x150542400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3823
+[1793681685] audio: dec head[16]: 21 1a 94 b5 be 8b 61 61 50 98 90 36 0c 20 82 02 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151113000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3885
+[1793681685] audio: dec head[16]: 21 1a 94 9d ca 18 c1 41 31 90 42 17 3e 1d 12 8c 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151548400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3547
+[1793681685] audio: dec head[16]: 21 1a 94 4d ae 0e d7 40 a1 b0 5f 89 be 95 9a e1 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151542c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3640
+[1793681685] audio: dec head[16]: 21 2a 94 15 b5 b8 81 08 02 42 67 05 44 aa ab 89 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x15053ca00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=8
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3038
+[1793681685] audio: dec head[16]: 21 1a 94 b5 c6 87 61 a1 c0 d8 50 5a 23 11 e0 b2 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=128
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151113000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3849
+[1793681685] audio: dec head[16]: 21 1a 94 8d 2d 90 86 62 51 60 c8 22 07 34 a5 39 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151542c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3560
+[1793681685] audio: dec head[16]: 21 1a 94 85 c6 10 c6 84 30 c0 02 33 22 5e 5e 4b 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x150542400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3692
+[1793681685] audio: dec head[16]: 21 4c d9 41 5b 67 09 94 15 36 69 c2 6a 66 fd bf 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x15053ca00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4017
+[1793681685] audio: dec head[16]: 21 0a 94 2d ae 3c c1 01 a5 2f 49 44 c6 a0 08 ab 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x15055e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3620
+[1793681685] audio: dec head[16]: 21 1a 94 4d ae 10 cf 80 b1 c0 2e ce 2a 1d 6d c2 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151542c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3710
+[1793681685] audio: dec head[16]: 21 1a 94 d5 ba 08 c5 81 21 19 48 16 0a 05 ef 48 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x15055c800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3654
+[1793681685] audio: dec head[16]: 21 1a 94 a5 ae 8b 65 81 b0 90 6c c3 0a ac 51 ce 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x150445e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3655
+[1793681685] audio: dec head[16]: 21 6a 94 8d aa 0f 44 b0 c1 59 68 21 11 27 2e d5 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x150451e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3937
+[1793681685] audio: dec head[16]: 21 1a 94 bd b5 c9 64 83 10 58 88 26 38 85 58 02 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x151113000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3797
+[1793681685] audio: dec head[16]: 21 1a 94 cd c2 88 88 64 c1 0c 2c 5a ac 79 5e 07 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681685] asbr: enqueue called sbuf=0x15181be00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681685] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681685] audio: dec normalize aac->mp4a
+[1793681685] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3516
+[1793681685] audio: dec head[16]: 21 7a 94 25 aa 86 cc 22 a3 0d b9 d5 81 92 8a d2 
+[1793681685] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681685] audio: dec pkts=160
+[1793681685] audio: decoded 2048 frames
+[1793681686] asbr: enqueue called sbuf=0x1506bb800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681686] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681686] audio: dec normalize aac->mp4a
+[1793681686] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3501
+[1793681686] audio: dec head[16]: 21 1a 94 e5 96 0b 61 83 d1 18 90 16 78 0f 68 a5 
+[1793681686] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681686] audio: dec pkts=160
+[1793681686] audio: decoded 2048 frames
+[1793681686] asbr: enqueue called sbuf=0x1538c5e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681686] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681686] audio: dec normalize aac->mp4a
+[1793681686] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3727
+[1793681686] audio: dec head[16]: 21 1a 94 3d 9e 8e c9 a0 b0 e0 8c b5 b3 9b 8d d8 
+[1793681686] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681686] audio: dec pkts=160
+[1793681686] audio: decoded 2048 frames
+[1793681686] asbr: enqueue called sbuf=0x1520db600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681686] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681686] audio: dec normalize aac->mp4a
+[1793681686] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3885
+[1793681686] audio: dec head[16]: 21 1a 94 ed bd 99 02 62 40 d8 6a 12 10 01 0e 22 
+[1793681686] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681686] audio: dec pkts=160
+[1793681686] audio: decoded 2048 frames
+[1793681686] asbr: enqueue called sbuf=0x154064860 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681686] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=1
+[1793681686] audio: dec normalize aac->mp4a
+[1793681686] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=330
+[1793681686] audio: dec head[16]: 21 1a 94 ed 9a 91 62 82 33 a0 2c 44 18 05 bc a2 
+[1793681686] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681686] audio: dec pkts=16
+[1793681686] audio: decode fill err -50 (0xffffffce)
+[1793681686] asbr: enqueue called sbuf=0x152857800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681686] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681686] audio: dec normalize aac->mp4a
+[1793681686] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3549
+[1793681686] audio: dec head[16]: 21 1a 94 d5 a2 8f 65 82 b4 10 2d 87 b7 d2 30 a3 
+[1793681686] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681686] audio: dec pkts=160
+[1793681686] audio: decoded 2048 frames
+[1793681687] asbr: enqueue called sbuf=0x15189f600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681687] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681687] audio: dec normalize aac->mp4a
+[1793681687] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3643
+[1793681687] audio: dec head[16]: 21 1a 94 e5 a5 8f 47 41 30 68 50 2a 43 09 04 0d 
+[1793681687] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681687] audio: dec pkts=160
+[1793681687] audio: decoded 2048 frames
+[1793681687] asbr: enqueue called sbuf=0x1538d8800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681687] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681687] audio: dec normalize aac->mp4a
+[1793681687] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3886
+[1793681687] audio: dec head[16]: 21 1a 94 c5 cd 84 83 85 50 58 a8 20 98 86 e6 80 
+[1793681687] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681687] audio: dec pkts=160
+[1793681687] audio: decoded 2048 frames
+[1793681687] asbr: enqueue called sbuf=0x1538d8800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681687] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681687] audio: dec normalize aac->mp4a
+[1793681687] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3666
+[1793681687] audio: dec head[16]: 21 1a 94 ad c6 0a 61 62 40 90 4c 18 42 04 42 90 
+[1793681687] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681687] audio: dec pkts=160
+[1793681687] audio: decoded 2048 frames
+[1793681687] asbr: enqueue called sbuf=0x15292b600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681687] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681687] audio: dec normalize aac->mp4a
+[1793681687] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3924
+[1793681687] audio: dec head[16]: 21 6a 94 ad 2d 1b 03 a5 41 10 2a 91 90 cc cc ab 
+[1793681687] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681687] audio: dec pkts=160
+[1793681687] audio: decoded 2048 frames
+[1793681688] asbr: enqueue called sbuf=0x151921000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681688] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681688] audio: dec normalize aac->mp4a
+[1793681688] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3552
+[1793681688] audio: dec head[16]: 21 0a 94 0d ae 10 d6 20 80 32 5c 37 d1 4a ba 82 
+[1793681688] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681688] audio: dec pkts=160
+[1793681688] audio: decoded 2048 frames
+[1793681688] asbr: enqueue called sbuf=0x152938a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681688] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681688] audio: dec normalize aac->mp4a
+[1793681688] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3676
+[1793681688] audio: dec head[16]: 21 2a 94 e5 9e 9a ca 84 30 d0 20 70 70 b6 6d 9c 
+[1793681688] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681688] audio: dec pkts=160
+[1793681688] audio: decoded 2048 frames
+[1793681688] asbr: enqueue called sbuf=0x152938a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681688] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681688] audio: dec normalize aac->mp4a
+[1793681688] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3883
+[1793681688] audio: dec head[16]: 21 2a 94 2d b1 9d 03 64 a1 02 ab 77 63 2e 32 2c 
+[1793681688] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681688] audio: dec pkts=160
+[1793681688] audio: decoded 2048 frames
+[1793681688] asbr: enqueue called sbuf=0x1516cb400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681688] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681688] audio: dec normalize aac->mp4a
+[1793681688] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3675
+[1793681688] audio: dec head[16]: 21 1a 94 e5 99 8f 47 62 98 60 94 28 33 08 44 03 
+[1793681688] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681688] audio: dec pkts=160
+[1793681688] audio: decoded 2048 frames
+[1793681688] asbr: enqueue called sbuf=0x150221000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681688] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681688] audio: dec normalize aac->mp4a
+[1793681688] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3548
+[1793681688] audio: dec head[16]: 21 1a 95 15 9e 0f 65 63 d0 98 54 18 3a 91 16 a9 
+[1793681688] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681688] audio: dec pkts=160
+[1793681688] audio: decoded 2048 frames
+[1793681689] asbr: enqueue called sbuf=0x1502c5c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681689] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681689] audio: dec normalize aac->mp4a
+[1793681689] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3887
+[1793681689] audio: dec head[16]: 21 1a 94 9d ca 04 c4 82 30 e8 ac 42 11 14 28 be 
+[1793681689] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681689] audio: dec pkts=160
+[1793681689] audio: decoded 2048 frames
+[1793681689] asbr: enqueue called sbuf=0x153841600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681689] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681689] audio: dec normalize aac->mp4a
+[1793681689] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3914
+[1793681689] audio: dec head[16]: 21 1a 94 a3 38 90 c3 a5 41 18 44 10 05 33 6c 00 
+[1793681689] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681689] audio: dec pkts=160
+[1793681689] audio: decoded 2048 frames
+[1793681689] asbr: enqueue called sbuf=0x151868600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681689] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681689] audio: dec normalize aac->mp4a
+[1793681689] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3467
+[1793681689] audio: dec head[16]: 21 2a 93 ed ad 86 8c 61 21 18 6a 16 32 15 62 13 
+[1793681689] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681689] audio: dec pkts=160
+[1793681689] audio: decoded 2048 frames
+[1793681689] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681689] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681689] audio: dec normalize aac->mp4a
+[1793681689] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3558
+[1793681689] audio: dec head[16]: 21 1a 94 bd c6 8b 03 40 c0 50 4c 58 13 06 02 c3 
+[1793681689] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681689] audio: dec pkts=160
+[1793681689] audio: decoded 2048 frames
+[1793681690] asbr: enqueue called sbuf=0x151869c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681690] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681690] audio: dec normalize aac->mp4a
+[1793681690] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4019
+[1793681690] audio: dec head[16]: 21 1a 94 80 8a 92 c6 22 31 a0 56 2a 4b 09 ef ec 
+[1793681690] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681690] audio: dec pkts=160
+[1793681690] audio: decoded 2048 frames
+[1793681690] asbr: enqueue called sbuf=0x1529be400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681690] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681690] audio: dec normalize aac->mp4a
+[1793681690] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3517
+[1793681690] audio: dec head[16]: 21 1a 94 d5 a9 ca c2 b2 c2 18 70 36 2a 84 e5 55 
+[1793681690] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681690] audio: dec pkts=160
+[1793681690] audio: decoded 2048 frames
+[1793681690] asbr: enqueue called sbuf=0x151926e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681690] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681690] audio: dec normalize aac->mp4a
+[1793681690] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3643
+[1793681690] audio: dec head[16]: 21 1a 94 5d ad 86 84 64 d0 d8 b0 36 19 04 36 b2 
+[1793681690] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681690] audio: dec pkts=160
+[1793681690] audio: decoded 2048 frames
+[1793681690] asbr: enqueue called sbuf=0x153841600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681690] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681690] audio: dec normalize aac->mp4a
+[1793681690] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3870
+[1793681690] audio: dec head[16]: 21 1a 94 8d 9a 17 45 82 b1 21 48 13 b0 f2 f1 ec 
+[1793681690] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681690] audio: dec pkts=160
+[1793681690] audio: decoded 2048 frames
+[1793681691] asbr: enqueue called sbuf=0x152999800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681691] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681691] audio: dec normalize aac->mp4a
+[1793681691] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3590
+[1793681691] audio: dec head[16]: 21 1a 94 ad b2 07 61 83 30 d0 90 b4 10 00 5a a9 
+[1793681691] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681691] audio: dec pkts=160
+[1793681691] audio: decoded 2048 frames
+[1793681691] asbr: enqueue called sbuf=0x15282b600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681691] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681691] audio: dec normalize aac->mp4a
+[1793681691] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3700
+[1793681691] audio: dec head[16]: 21 1a 94 7d aa 89 62 a4 20 98 70 96 19 04 05 8b 
+[1793681691] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681691] audio: dec pkts=160
+[1793681691] audio: decoded 2048 frames
+[1793681691] asbr: enqueue called sbuf=0x152011000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681691] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681691] audio: dec normalize aac->mp4a
+[1793681691] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3940
+[1793681691] audio: dec head[16]: 21 1a 94 45 aa 8c d8 81 16 a9 05 d9 62 92 cc bb 
+[1793681691] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681691] audio: dec pkts=160
+[1793681691] audio: decoded 2048 frames
+[1793681691] asbr: enqueue called sbuf=0x15210e800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681691] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681691] audio: dec normalize aac->mp4a
+[1793681691] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3510
+[1793681691] audio: dec head[16]: 21 1a 94 8d a1 12 e1 64 58 a8 90 74 10 84 05 49 
+[1793681691] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681691] audio: dec pkts=160
+[1793681691] audio: decoded 2048 frames
+[1793681692] asbr: enqueue called sbuf=0x152011000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681692] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681692] audio: dec normalize aac->mp4a
+[1793681692] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3626
+[1793681692] audio: dec head[16]: 21 1a 94 bd a9 09 06 41 b0 e1 14 46 10 88 42 ea 
+[1793681692] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681692] audio: dec pkts=160
+[1793681692] audio: decoded 2048 frames
+[1793681692] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681692] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681692] audio: dec normalize aac->mp4a
+[1793681692] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3685
+[1793681692] audio: dec head[16]: 21 1a 94 dd a2 8f 64 61 d0 50 54 36 15 0a 0e c1 
+[1793681692] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681692] audio: dec pkts=160
+[1793681692] audio: decoded 2048 frames
+[1793681692] asbr: enqueue called sbuf=0x151926e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681692] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681692] audio: dec normalize aac->mp4a
+[1793681692] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4078
+[1793681692] audio: dec head[16]: 21 1a 94 1d aa 8f 63 87 b1 20 2c 20 18 f2 55 5e 
+[1793681692] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681692] audio: dec pkts=160
+[1793681692] audio: decoded 2048 frames
+[1793681692] asbr: enqueue called sbuf=0x151868600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681692] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681692] audio: dec normalize aac->mp4a
+[1793681692] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3402
+[1793681692] audio: dec head[16]: 21 4c 9b 43 59 46 3c db 6e 48 dc 85 66 a1 9b 50 
+[1793681692] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681692] audio: dec pkts=160
+[1793681692] audio: decoded 2048 frames
+[1793681693] audio: AVAudioSession setCategory AVAudioSessionCategorySystemSoundsAndHaptics st=1
+[1793681693] asbr: enqueue called sbuf=0x15213bc00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681693] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681693] audio: dec normalize aac->mp4a
+[1793681693] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3871
+[1793681693] audio: dec head[16]: 21 2a 94 dd b6 8e c4 41 d1 2c 30 5a 0c 08 84 dd 
+[1793681693] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681693] audio: dec pkts=160
+[1793681693] audio: decoded 2048 frames
+[1793681693] asbr: enqueue called sbuf=0x151175a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681693] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681693] audio: dec normalize aac->mp4a
+[1793681693] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3571
+[1793681693] audio: dec head[16]: 21 1a 94 bd 2d 1f 44 b1 51 58 68 25 2c ca 63 65 
+[1793681693] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681693] audio: dec pkts=160
+[1793681693] audio: decoded 2048 frames
+[1793681693] asbr: enqueue called sbuf=0x151133c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681693] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681693] audio: dec normalize aac->mp4a
+[1793681693] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3888
+[1793681693] audio: dec head[16]: 21 1a 95 0d a5 8b 63 81 90 68 6c 6a 2c 15 04 67 
+[1793681693] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681693] audio: dec pkts=160
+[1793681693] audio: decoded 2048 frames
+[1793681693] asbr: enqueue called sbuf=0x15170d000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681693] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681693] audio: dec normalize aac->mp4a
+[1793681693] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3757
+[1793681693] audio: dec head[16]: 21 7a 94 fd aa 89 61 a1 b0 e0 28 28 1b 12 88 c2 
+[1793681693] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681693] audio: dec pkts=160
+[1793681693] audio: decoded 2048 frames
+[1793681693] asbr: enqueue called sbuf=0x151555400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681693] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681693] audio: dec normalize aac->mp4a
+[1793681693] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3622
+[1793681693] audio: dec head[16]: 21 1a 94 b5 a6 0b 45 41 40 d9 30 56 20 4c d3 0d 
+[1793681693] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681693] audio: dec pkts=160
+[1793681693] audio: decoded 2048 frames
+[1793681693] asbr: enqueue called sbuf=0x151855600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681693] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681693] audio: dec normalize aac->mp4a
+[1793681693] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3945
+[1793681693] audio: dec head[16]: 21 1a 94 a5 ac 8b 04 43 51 6c 70 46 11 89 00 58 
+[1793681693] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681693] audio: dec pkts=160
+[1793681693] audio: decoded 2048 frames
+[1793681693] asbr: enqueue called sbuf=0x152133c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681693] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681693] audio: dec normalize aac->mp4a
+[1793681693] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3543
+[1793681693] audio: dec head[16]: 21 7a 94 35 aa 08 c7 72 24 51 2b 34 19 cd 4a 8d 
+[1793681693] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681693] audio: dec pkts=160
+[1793681693] audio: decoded 2048 frames
+[1793681694] asbr: enqueue called sbuf=0x152999800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681694] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681694] audio: dec normalize aac->mp4a
+[1793681694] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3601
+[1793681694] audio: dec head[16]: 21 1a 94 dd aa 88 c8 42 40 d0 30 2a 23 15 02 00 
+[1793681694] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681694] audio: dec pkts=160
+[1793681694] audio: decoded 2048 frames
+[1793681694] asbr: enqueue called sbuf=0x151864a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681694] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681694] audio: dec normalize aac->mp4a
+[1793681694] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3896
+[1793681694] audio: dec head[16]: 21 0a 94 75 b2 8e d7 43 38 b2 3c e8 2f 38 21 5b 
+[1793681694] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681694] audio: dec pkts=160
+[1793681694] audio: decoded 2048 frames
+[1793681694] asbr: enqueue called sbuf=0x15188fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681694] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681694] audio: dec normalize aac->mp4a
+[1793681694] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3485
+[1793681694] audio: dec head[16]: 21 7a 95 0d 99 95 04 42 c1 68 50 64 20 db 85 e9 
+[1793681694] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681694] audio: dec pkts=160
+[1793681694] audio: decoded 2048 frames
+[1793681694] asbr: enqueue called sbuf=0x15387de00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681694] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681694] audio: dec normalize aac->mp4a
+[1793681694] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3927
+[1793681694] audio: dec head[16]: 21 1a 94 ad 9e 0d 65 42 28 50 74 24 0c 0a 92 81 
+[1793681694] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681694] audio: dec pkts=160
+[1793681694] audio: decoded 2048 frames
+[1793681695] asbr: enqueue called sbuf=0x15280e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681695] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681695] audio: dec normalize aac->mp4a
+[1793681695] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3537
+[1793681695] audio: dec head[16]: 21 1a 94 85 ad 88 8b 62 c2 58 44 a9 24 a7 3d 15 
+[1793681695] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681695] audio: dec pkts=160
+[1793681695] audio: decoded 2048 frames
+[1793681695] asbr: enqueue called sbuf=0x151864a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681695] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681695] audio: dec normalize aac->mp4a
+[1793681695] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3840
+[1793681695] audio: dec head[16]: 21 1a 94 bb 29 0c 47 61 d0 ac 74 86 1a aa d5 b4 
+[1793681695] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681695] audio: dec pkts=160
+[1793681695] audio: decoded 2048 frames
+[1793681695] asbr: enqueue called sbuf=0x15282e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681695] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681695] audio: dec normalize aac->mp4a
+[1793681695] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3892
+[1793681695] audio: dec head[16]: 21 1a 94 d5 b6 1e 83 61 41 18 48 30 68 d0 d5 d8 
+[1793681695] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681695] audio: dec pkts=160
+[1793681695] audio: decoded 2048 frames
+[1793681695] asbr: enqueue called sbuf=0x15387de00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681695] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681695] audio: dec normalize aac->mp4a
+[1793681695] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3470
+[1793681695] audio: dec head[16]: 21 1a 94 dd ae 0c 8e 64 40 4c 4b ba 9d 4b ad 58 
+[1793681695] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681695] audio: dec pkts=160
+[1793681695] audio: decoded 2048 frames
+[1793681696] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681696] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681696] audio: dec normalize aac->mp4a
+[1793681696] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3794
+[1793681696] audio: dec head[16]: 21 2a 8f 37 4c 7d d7 ff 13 6b a4 35 90 21 28 cc 
+[1793681696] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681696] audio: dec pkts=160
+[1793681696] audio: decoded 2048 frames
+[1793681696] asbr: enqueue called sbuf=0x15384f000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681696] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681696] audio: dec normalize aac->mp4a
+[1793681696] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3955
+[1793681696] audio: dec head[16]: 21 0a 94 2d aa 8a db 14 03 4d 9c 70 89 57 4a b0 
+[1793681696] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681696] audio: dec pkts=160
+[1793681696] audio: decoded 2048 frames
+[1793681696] asbr: enqueue called sbuf=0x153808200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681696] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681696] audio: dec normalize aac->mp4a
+[1793681696] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3396
+[1793681696] audio: dec head[16]: 21 1a 94 3d b1 9c 83 66 b2 ef bc 94 8d f2 b7 75 
+[1793681696] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681696] audio: dec pkts=160
+[1793681696] audio: decoded 2048 frames
+[1793681696] asbr: enqueue called sbuf=0x152833a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681696] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681696] audio: dec normalize aac->mp4a
+[1793681696] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3675
+[1793681696] audio: dec head[16]: 21 1a 94 a5 b2 0b 63 61 d0 60 64 16 24 21 84 1b 
+[1793681696] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681696] audio: dec pkts=160
+[1793681696] audio: decoded 2048 frames
+[1793681697] asbr: enqueue called sbuf=0x15215e800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681697] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681697] audio: dec normalize aac->mp4a
+[1793681697] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3914
+[1793681697] audio: dec head[16]: 21 1a 94 9d ba 08 c3 83 50 58 70 24 0b 0e 82 c4 
+[1793681697] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681697] audio: dec pkts=160
+[1793681697] audio: decoded 2048 frames
+[1793681697] asbr: enqueue called sbuf=0x152833a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681697] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681697] audio: dec normalize aac->mp4a
+[1793681697] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3641
+[1793681697] audio: dec head[16]: 21 1a 94 95 a9 8b 43 66 20 58 70 54 09 08 09 75 
+[1793681697] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681697] audio: dec pkts=160
+[1793681697] audio: decoded 2048 frames
+[1793681697] asbr: enqueue called sbuf=0x153821a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681697] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681697] audio: dec normalize aac->mp4a
+[1793681697] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3461
+[1793681697] audio: dec head[16]: 21 2a 94 35 9e 8c dc 30 82 ea ae e3 73 73 7c 26 
+[1793681697] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681697] audio: dec pkts=160
+[1793681697] audio: decoded 2048 frames
+[1793681697] asbr: enqueue called sbuf=0x153889400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681697] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681697] audio: dec normalize aac->mp4a
+[1793681697] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3755
+[1793681697] audio: dec head[16]: 21 1a 94 ad ae 8d 64 a2 20 60 8c 48 2b 08 82 00 
+[1793681697] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681697] audio: dec pkts=160
+[1793681697] audio: decoded 2048 frames
+[1793681697] asbr: enqueue called sbuf=0x151867200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681697] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681697] audio: dec normalize aac->mp4a
+[1793681697] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3784
+[1793681697] audio: dec head[16]: 21 1a 94 95 96 0e 89 61 d0 ec 94 3b 15 0a 06 c1 
+[1793681697] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681697] audio: dec pkts=160
+[1793681697] audio: decoded 2048 frames
+[1793681698] asbr: enqueue called sbuf=0x15215e800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681698] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681698] audio: dec normalize aac->mp4a
+[1793681698] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3742
+[1793681698] audio: dec head[16]: 21 1a 94 9d aa 11 42 10 b1 08 68 16 1a 06 89 04 
+[1793681698] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681698] audio: dec pkts=160
+[1793681698] audio: decoded 2048 frames
+[1793681698] asbr: enqueue called sbuf=0x153821a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681698] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681698] audio: dec normalize aac->mp4a
+[1793681698] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3862
+[1793681698] audio: dec head[16]: 21 1a 94 b5 c2 08 c4 41 30 50 4c 58 3a 04 04 cb 
+[1793681698] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681698] audio: dec pkts=160
+[1793681698] audio: decoded 2048 frames
+[1793681698] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681698] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681698] audio: dec normalize aac->mp4a
+[1793681698] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3895
+[1793681698] audio: dec head[16]: 21 1a 94 8d aa 89 62 82 b0 d0 ac 12 0b 0e 07 41 
+[1793681698] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681698] audio: dec pkts=160
+[1793681698] audio: decoded 2048 frames
+[1793681698] asbr: enqueue called sbuf=0x15215e800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681698] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681698] audio: dec normalize aac->mp4a
+[1793681698] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3424
+[1793681698] audio: dec head[16]: 21 1a 94 bd a2 08 cd 20 b2 20 c8 25 00 8b 60 b0 
+[1793681698] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681698] audio: dec pkts=160
+[1793681698] audio: decoded 2048 frames
+[1793681699] asbr: enqueue called sbuf=0x15200c400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681699] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681699] audio: dec normalize aac->mp4a
+[1793681699] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3661
+[1793681699] audio: dec head[16]: 21 4c 6d 42 5a 34 58 55 ca 90 a8 a9 b7 0d 8a 41 
+[1793681699] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681699] audio: dec pkts=160
+[1793681699] audio: decoded 2048 frames
+[1793681699] asbr: enqueue called sbuf=0x15200c400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681699] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681699] audio: dec normalize aac->mp4a
+[1793681699] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4035
+[1793681699] audio: dec head[16]: 21 1a 94 9d c6 0e c4 81 08 50 2c 28 1d 0a 04 61 
+[1793681699] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681699] audio: dec pkts=160
+[1793681699] audio: decoded 2048 frames
+[1793681699] asbr: enqueue called sbuf=0x15215e800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681699] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681699] audio: dec normalize aac->mp4a
+[1793681699] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3623
+[1793681699] audio: dec head[16]: 21 1a 94 75 ca 0c c4 41 b2 04 66 91 40 01 e2 f8 
+[1793681699] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681699] audio: dec pkts=160
+[1793681699] audio: decoded 2048 frames
+[1793681699] asbr: enqueue called sbuf=0x153821a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681699] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681699] audio: dec normalize aac->mp4a
+[1793681699] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3517
+[1793681699] audio: dec head[16]: 21 7a 94 45 ad 9e 86 61 a0 d4 28 30 03 54 61 b5 
+[1793681699] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681699] audio: dec pkts=160
+[1793681699] audio: decoded 2048 frames
+[1793681700] asbr: enqueue called sbuf=0x153821a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681700] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681700] audio: dec normalize aac->mp4a
+[1793681700] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3824
+[1793681700] audio: dec head[16]: 21 1a 94 f5 92 a6 82 64 40 d8 88 26 14 3a 65 c3 
+[1793681700] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681700] audio: dec pkts=160
+[1793681700] audio: decoded 2048 frames
+[1793681700] asbr: enqueue called sbuf=0x152017800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681700] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681700] audio: dec normalize aac->mp4a
+[1793681700] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3537
+[1793681700] audio: dec head[16]: 21 1a 94 b5 bd 45 0a a1 30 e0 cc 40 e4 01 d2 a4 
+[1793681700] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681700] audio: dec pkts=160
+[1793681700] audio: decoded 2048 frames
+[1793681700] asbr: enqueue called sbuf=0x15280bc00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681700] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681700] audio: dec normalize aac->mp4a
+[1793681700] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3856
+[1793681700] audio: dec head[16]: 21 1a 94 c5 8e 93 63 a4 31 20 4c 38 2d 0a 02 c2 
+[1793681700] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681700] audio: dec pkts=160
+[1793681700] audio: decoded 2048 frames
+[1793681700] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681700] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681700] audio: dec normalize aac->mp4a
+[1793681700] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3671
+[1793681700] audio: dec head[16]: 21 2a 94 a5 9a 9a c6 a1 31 20 6c 38 22 04 06 99 
+[1793681700] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681700] audio: dec pkts=160
+[1793681700] audio: decoded 2048 frames
+[1793681700] asbr: enqueue called sbuf=0x15280e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681700] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681700] audio: dec normalize aac->mp4a
+[1793681700] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3963
+[1793681700] audio: dec head[16]: 21 1a 94 bd a6 97 02 40 d0 a1 34 3b 0b 05 02 22 
+[1793681700] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681700] audio: dec pkts=160
+[1793681700] audio: decoded 2048 frames
+[1793681701] asbr: enqueue called sbuf=0x15280e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681701] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681701] audio: dec normalize aac->mp4a
+[1793681701] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3470
+[1793681701] audio: dec head[16]: 21 1a 94 dd a2 0d 43 62 c2 19 08 42 ec b7 71 55 
+[1793681701] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681701] audio: dec pkts=160
+[1793681701] audio: decoded 2048 frames
+[1793681701] asbr: enqueue called sbuf=0x15280e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681701] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681701] audio: dec normalize aac->mp4a
+[1793681701] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4176
+[1793681701] audio: dec head[16]: 21 1a 94 bd c2 0a c3 81 30 e0 6c 92 0a c6 02 1c 
+[1793681701] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681701] audio: dec pkts=160
+[1793681701] audio: decoded 2048 frames
+[1793681701] asr: sending 160540 bytes (16k_en)
+[1793681701] asbr: enqueue called sbuf=0x151859000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681701] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681701] audio: dec normalize aac->mp4a
+[1793681701] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3445
+[1793681701] audio: dec head[16]: 21 6a 94 75 9e 90 c3 a0 a8 d8 70 16 4a 10 46 98 
+[1793681701] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681701] audio: dec pkts=160
+[1793681701] audio: decoded 2048 frames
+[1793681702] asbr: enqueue called sbuf=0x152854a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681702] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681702] audio: dec normalize aac->mp4a
+[1793681702] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3507
+[1793681702] audio: dec head[16]: 21 1a 94 0d be 07 23 6a 10 41 40 74 53 58 95 6b 
+[1793681702] asr: req err Error Domain=NSURLErrorDomain Code=-1200 "ÂèëÁîü‰∫ÜSSLÈîôËØØÔºåÊó†Ê≥ïÂª∫Á´ã‰∏éËØ•ÊúçÂä°Âô®ÁöÑÂÆâÂÖ®ËøûÊé•„ÄÇ" UserInfo={NSLocalizedRecoverySuggestion=‰Ω†‰ªçË¶ÅËøûÊé•Ê≠§ÊúçÂä°Âô®ÂêóÔºü, _kCFStreamErrorDomainKey=3, NSErrorPeerCertificateChainKey=(
+    "<cert(0x15200e800) s: www.paypal.com i: DigiCert EV RSA CA G2>",
+    "<cert(0x152854200) s: DigiCert EV RSA CA G2 i: DigiCert Global Root G2>"
+), NSErrorClientCertificateStateKey=0, NSErrorFailingURLKey=https://asr.tencentcloudapi.com/, NSErrorFailingURLStringKey=https://asr.tencentcloudapi.com/, NSUnderlyingError=0x280524240 {Error Domain=kCFErrorDomainCFNetwork Code=-1200 "(null)" UserInfo={_kCFStreamPropertySSLClientCertificateState=0, kCFStreamPropertySSLPeerTrust=<SecTrustRef: 0x282752580>, _kCFNetworkCFStreamSSLErrorOriginalValue=-9802, _kCFStreamErrorDomainKey=3, _kCFStreamErrorCodeKey=-9802, kCFStreamPropertySSLPeerCertificates=(
+    "<cert(0x15200e800) s: www.paypal.com i: DigiCert EV RSA CA G2>",
+    "<cert(0x152854200) s: DigiCert EV RSA CA G2 i: DigiCert Global Root G2>"
+)}}, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <EAB724F7-1BEF-4034-95F2-A4EF2F0A0596>.<1>"
+), _kCFStreamErrorCodeKey=-9802, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <EAB724F7-1BEF-4034-95F2-A4EF2F0A0596>.<1>, NSURLErrorFailingURLPeerTrustErrorKey=<SecTrustRef: 0x282752580>, NSLocalizedDescription=ÂèëÁîü‰∫ÜSSLÈîôËØØÔºåÊó†Ê≥ïÂª∫Á´ã‰∏éËØ•ÊúçÂä°Âô®ÁöÑÂÆâÂÖ®ËøûÊé•„ÄÇ}
+[1793681702] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681702] audio: dec pkts=160
+[1793681702] audio: decoded 2048 frames
+[1793681702] asbr: enqueue called sbuf=0x153857600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681702] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681702] audio: dec normalize aac->mp4a
+[1793681702] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3778
+[1793681702] audio: dec head[16]: 21 1a 94 bc 0d 9a 89 61 40 6c 34 2b 0d 1d 86 ba 
+[1793681702] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681702] audio: dec pkts=160
+[1793681702] audio: decoded 2048 frames
+[1793681702] asbr: enqueue called sbuf=0x15200fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681702] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681702] audio: dec normalize aac->mp4a
+[1793681702] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3619
+[1793681702] audio: dec head[16]: 21 5c cd 40 59 4c c5 18 9b ad 51 5e a7 6e dd 74 
+[1793681702] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681702] audio: dec pkts=160
+[1793681702] audio: decoded 2048 frames
+[1793681702] asbr: enqueue called sbuf=0x152854a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681702] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681702] audio: dec normalize aac->mp4a
+[1793681702] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3747
+[1793681702] audio: dec head[16]: 21 1a 94 9d 99 11 02 43 30 e8 76 2a 24 15 84 81 
+[1793681702] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681702] audio: dec pkts=160
+[1793681702] audio: decoded 2048 frames
+[1793681702] asbr: enqueue called sbuf=0x151859000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681702] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681702] audio: dec normalize aac->mp4a
+[1793681702] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3698
+[1793681702] audio: dec head[16]: 21 1a 94 25 aa 0b 61 63 c1 59 c0 05 8a a1 22 2a 
+[1793681702] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681702] audio: dec pkts=160
+[1793681702] audio: decoded 2048 frames
+[1793681703] asbr: enqueue called sbuf=0x151859000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681703] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681703] audio: dec normalize aac->mp4a
+[1793681703] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3621
+[1793681703] audio: dec head[16]: 21 4c d9 40 d9 86 d5 10 9b 35 96 df b7 ea 77 e6 
+[1793681703] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681703] audio: dec pkts=160
+[1793681703] audio: decoded 2048 frames
+[1793681703] asbr: enqueue called sbuf=0x152833a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681703] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681703] audio: dec normalize aac->mp4a
+[1793681703] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3720
+[1793681703] audio: dec head[16]: 21 4c c7 46 5a 64 8d 8a 31 36 9b 94 57 e2 1b d4 
+[1793681703] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681703] audio: dec pkts=160
+[1793681703] audio: decoded 2048 frames
+[1793681703] asbr: enqueue called sbuf=0x152013600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681703] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681703] audio: dec normalize aac->mp4a
+[1793681703] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3805
+[1793681703] audio: dec head[16]: 21 1a 94 85 9e 13 62 a1 d8 69 4c 14 13 18 42 09 
+[1793681703] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681703] audio: dec pkts=160
+[1793681703] audio: decoded 2048 frames
+[1793681703] asbr: enqueue called sbuf=0x151858a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681703] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681703] audio: dec normalize aac->mp4a
+[1793681703] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4026
+[1793681703] audio: dec head[16]: 21 2a 94 25 aa 20 cf 40 80 07 0d b8 20 cd 5e 49 
+[1793681703] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681703] audio: dec pkts=160
+[1793681703] audio: decoded 2048 frames
+[1793681704] asbr: enqueue called sbuf=0x151858a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681704] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681704] audio: dec normalize aac->mp4a
+[1793681704] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3601
+[1793681704] audio: dec head[16]: 21 0a 94 15 a6 0a 87 62 a0 98 6e 16 1b 9c 70 1c 
+[1793681704] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681704] audio: dec pkts=160
+[1793681704] audio: decoded 2048 frames
+[1793681704] asbr: enqueue called sbuf=0x15200fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681704] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681704] audio: dec normalize aac->mp4a
+[1793681704] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3561
+[1793681704] audio: dec head[16]: 21 2a 94 ad 9e 0f 64 62 c0 d8 44 16 1a 20 44 a0 
+[1793681704] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681704] audio: dec pkts=160
+[1793681704] audio: decoded 2048 frames
+[1793681704] asbr: enqueue called sbuf=0x152854a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681704] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681704] audio: dec normalize aac->mp4a
+[1793681704] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3618
+[1793681704] audio: dec head[16]: 21 1a 94 dd d9 8d 42 63 a0 d8 28 13 6b 8c 25 5a 
+[1793681704] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681704] audio: dec pkts=160
+[1793681704] audio: decoded 2048 frames
+[1793681704] asbr: enqueue called sbuf=0x151858a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681704] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681704] audio: dec normalize aac->mp4a
+[1793681704] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3901
+[1793681704] audio: dec head[16]: 21 4c d3 41 59 a6 8e 0a 4b 8d 12 5e 8a a6 f8 aa 
+[1793681704] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681704] audio: dec pkts=160
+[1793681704] audio: decoded 2048 frames
+[1793681705] asbr: enqueue called sbuf=0x15200fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681705] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681705] audio: dec normalize aac->mp4a
+[1793681705] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3642
+[1793681705] audio: dec head[16]: 21 4c 6d 43 5e 88 8a eb 38 28 84 da a7 11 10 9b 
+[1793681705] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681705] audio: dec pkts=160
+[1793681705] audio: decoded 2048 frames
+[1793681705] asbr: enqueue called sbuf=0x15200fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681705] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681705] audio: dec normalize aac->mp4a
+[1793681705] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3549
+[1793681705] audio: dec head[16]: 21 1a 94 bd c9 85 43 61 50 59 50 26 23 06 6e ba 
+[1793681705] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681705] audio: dec pkts=160
+[1793681705] audio: decoded 2048 frames
+[1793681705] asbr: enqueue called sbuf=0x152854a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681705] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681705] audio: dec normalize aac->mp4a
+[1793681705] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3985
+[1793681705] audio: dec head[16]: 21 4c 37 45 52 6a 76 f3 51 37 cd 35 37 22 32 42 
+[1793681705] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681705] audio: dec pkts=160
+[1793681705] audio: decoded 2048 frames
+[1793681705] asbr: enqueue called sbuf=0x152013600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681705] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681705] audio: dec normalize aac->mp4a
+[1793681705] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3650
+[1793681705] audio: dec head[16]: 21 1a 94 95 d2 06 c6 81 20 d8 88 40 6b 74 01 ca 
+[1793681705] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681705] audio: dec pkts=160
+[1793681705] audio: decoded 2048 frames
+[1793681705] asbr: enqueue called sbuf=0x151858a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681705] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681705] audio: dec normalize aac->mp4a
+[1793681705] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3958
+[1793681705] audio: dec head[16]: 21 6a 94 5d a2 8f 62 a3 58 a0 6c 28 13 15 08 21 
+[1793681705] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681705] audio: dec pkts=160
+[1793681705] audio: decoded 2048 frames
+[1793681706] asbr: enqueue called sbuf=0x152019c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681706] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681706] audio: dec normalize aac->mp4a
+[1793681706] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3433
+[1793681706] audio: dec head[16]: 21 7a 94 ad ae 08 84 82 50 90 b0 24 13 05 04 45 
+[1793681706] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681706] audio: dec pkts=160
+[1793681706] audio: decoded 2048 frames
+[1793681706] asbr: enqueue called sbuf=0x153880e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681706] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681706] audio: dec normalize aac->mp4a
+[1793681706] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3741
+[1793681706] audio: dec head[16]: 21 0a 94 85 aa 10 d3 80 b0 d0 20 74 9a bc 8a d6 
+[1793681706] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681706] audio: dec pkts=160
+[1793681706] audio: decoded 2048 frames
+[1793681706] asbr: enqueue called sbuf=0x15387de00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681706] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681706] audio: dec normalize aac->mp4a
+[1793681706] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3568
+[1793681706] audio: dec head[16]: 21 1a 94 ad c2 89 61 a1 b0 68 4c 2a 13 11 0e 02 
+[1793681706] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681706] audio: dec pkts=160
+[1793681706] audio: decoded 2048 frames
+[1793681706] asbr: enqueue called sbuf=0x152833a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681706] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681706] audio: dec normalize aac->mp4a
+[1793681706] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3620
+[1793681706] audio: dec head[16]: 21 1a 94 95 95 8c 86 23 31 28 76 4a 3b 04 37 97 
+[1793681706] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681706] audio: dec pkts=160
+[1793681706] audio: decoded 2048 frames
+[1793681707] asbr: enqueue called sbuf=0x153841600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681707] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681707] audio: dec normalize aac->mp4a
+[1793681707] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3779
+[1793681707] audio: dec head[16]: 21 1a 94 9d b6 91 61 a3 40 d9 6f 55 9a 54 ce 1e 
+[1793681707] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681707] audio: dec pkts=160
+[1793681707] audio: decoded 2048 frames
+[1793681707] asbr: enqueue called sbuf=0x15184de00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681707] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681707] audio: dec normalize aac->mp4a
+[1793681707] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3960
+[1793681707] audio: dec head[16]: 21 1a 94 95 c2 8b 0a 64 20 d8 3e e1 35 8a 2a f5 
+[1793681707] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681707] audio: dec pkts=160
+[1793681707] audio: decoded 2048 frames
+[1793681707] asbr: enqueue called sbuf=0x152169800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681707] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681707] audio: dec normalize aac->mp4a
+[1793681707] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3540
+[1793681707] audio: dec head[16]: 21 1a 94 35 a9 92 8b 61 a0 58 68 56 4e 3b ac b5 
+[1793681707] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681707] audio: dec pkts=160
+[1793681707] audio: decoded 2048 frames
+[1793681707] asbr: enqueue called sbuf=0x15182a400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681707] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681707] audio: dec normalize aac->mp4a
+[1793681707] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3554
+[1793681707] audio: dec head[16]: 21 1a 94 da 54 c4 82 61 59 68 30 96 85 52 8a 37 
+[1793681707] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681707] audio: dec pkts=160
+[1793681707] audio: decoded 2048 frames
+[1793681707] asbr: enqueue called sbuf=0x152013600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681707] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681707] audio: dec normalize aac->mp4a
+[1793681707] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3736
+[1793681707] audio: dec head[16]: 21 1a 94 dd be 10 a2 a1 c3 10 40 16 e3 85 29 65 
+[1793681707] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681707] audio: dec pkts=160
+[1793681707] audio: decoded 2048 frames
+[1793681708] asbr: enqueue called sbuf=0x152854a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681708] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681708] audio: dec normalize aac->mp4a
+[1793681708] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3954
+[1793681708] audio: dec head[16]: 21 1a 94 d5 9a 99 63 62 d0 ec 54 76 20 5a d2 2d 
+[1793681708] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681708] audio: dec pkts=160
+[1793681708] audio: decoded 2048 frames
+[1793681708] asbr: enqueue called sbuf=0x15a9aac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681708] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681708] audio: dec normalize aac->mp4a
+[1793681708] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3509
+[1793681708] audio: dec head[16]: 21 1a 94 bd be 88 c5 21 40 98 90 14 0c 11 86 81 
+[1793681708] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681708] audio: dec pkts=160
+[1793681708] audio: decoded 2048 frames
+[1793681708] asbr: enqueue called sbuf=0x15182a400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681708] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681708] audio: dec normalize aac->mp4a
+[1793681708] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3884
+[1793681708] audio: dec head[16]: 21 1a 95 0d 9a 9b 61 82 a0 68 4c 2a 0d 86 0b 42 
+[1793681708] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681708] audio: dec pkts=160
+[1793681708] audio: decoded 2048 frames
+[1793681708] asbr: enqueue called sbuf=0x15298da00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681708] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681708] audio: dec normalize aac->mp4a
+[1793681708] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3787
+[1793681708] audio: dec head[16]: 21 1a 94 b5 ba 90 81 80 b8 99 14 18 22 0c 01 df 
+[1793681708] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681708] audio: dec pkts=160
+[1793681708] audio: decoded 2048 frames
+[1793681709] asbr: enqueue called sbuf=0x151869400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681709] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681709] audio: dec normalize aac->mp4a
+[1793681709] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3536
+[1793681709] audio: dec head[16]: 21 1a 94 d5 b5 8d 01 62 a0 a0 4c 33 14 09 88 82 
+[1793681709] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681709] audio: dec pkts=160
+[1793681709] audio: decoded 2048 frames
+[1793681709] asbr: enqueue called sbuf=0x151869c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681709] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681709] audio: dec normalize aac->mp4a
+[1793681709] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3726
+[1793681709] audio: dec head[16]: 21 4c d9 42 da 6d 05 90 9b 4d a0 b2 33 66 2d b8 
+[1793681709] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681709] audio: dec pkts=160
+[1793681709] audio: decoded 2048 frames
+[1793681709] asbr: enqueue called sbuf=0x152899400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681709] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681709] audio: dec normalize aac->mp4a
+[1793681709] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3751
+[1793681709] audio: dec head[16]: 21 1a 94 ad 9a a0 c4 81 d2 18 82 10 13 4a 4a a1 
+[1793681709] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681709] audio: dec pkts=160
+[1793681709] audio: decoded 2048 frames
+[1793681709] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681709] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681709] audio: dec normalize aac->mp4a
+[1793681709] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3993
+[1793681709] audio: dec head[16]: 21 1a 94 75 ae 10 c7 a1 20 e9 0c 12 10 78 06 b5 
+[1793681709] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681709] audio: dec pkts=160
+[1793681709] audio: decoded 2048 frames
+[1793681710] asbr: enqueue called sbuf=0x15387de00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681710] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681710] audio: dec normalize aac->mp4a
+[1793681710] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3715
+[1793681710] audio: dec head[16]: 21 5c d9 3f 5a 6e 8c da 84 da 0b 1b 55 d3 9b 55 
+[1793681710] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681710] audio: dec pkts=160
+[1793681710] audio: decoded 2048 frames
+[1793681710] asbr: enqueue called sbuf=0x15380da00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681710] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681710] audio: dec normalize aac->mp4a
+[1793681710] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3542
+[1793681710] audio: dec head[16]: 21 1a 94 8d 96 90 c6 21 c1 18 d0 36 2a 08 45 15 
+[1793681710] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681710] audio: dec pkts=160
+[1793681710] audio: decoded 2048 frames
+[1793681710] asbr: enqueue called sbuf=0x152876800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681710] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681710] audio: dec normalize aac->mp4a
+[1793681710] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3567
+[1793681710] audio: dec head[16]: 21 1a 94 e5 9d 95 62 a1 b0 90 4c 38 62 04 1e 54 
+[1793681710] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681710] audio: dec pkts=160
+[1793681710] audio: decoded 2048 frames
+[1793681710] asbr: enqueue called sbuf=0x15213b400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681710] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681710] audio: dec normalize aac->mp4a
+[1793681710] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4213
+[1793681710] audio: dec head[16]: 21 1a 94 4d c2 09 62 10 b1 20 2c 3a 0c 21 04 00 
+[1793681710] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681710] audio: dec pkts=160
+[1793681710] audio: decoded 2048 frames
+[1793681710] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681710] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681710] audio: dec normalize aac->mp4a
+[1793681710] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3273
+[1793681710] audio: dec head[16]: 21 0a 94 85 ad 47 03 61 21 58 28 26 1a 15 82 86 
+[1793681710] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681710] audio: dec pkts=160
+[1793681710] audio: decoded 2048 frames
+[1793681711] asbr: enqueue called sbuf=0x151831c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681711] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681711] audio: dec normalize aac->mp4a
+[1793681711] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3624
+[1793681711] audio: dec head[16]: 21 1a 94 ad d6 16 82 63 a8 41 39 ac 13 75 77 ad 
+[1793681711] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681711] audio: dec pkts=160
+[1793681711] audio: decoded 2048 frames
+[1793681711] asbr: enqueue called sbuf=0x151831c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681711] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681711] audio: dec normalize aac->mp4a
+[1793681711] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3666
+[1793681711] audio: dec head[16]: 21 1a 94 c2 85 31 04 a1 58 68 96 2a 1b 05 56 50 
+[1793681711] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681711] audio: dec pkts=160
+[1793681711] audio: decoded 2048 frames
+[1793681711] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681711] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681711] audio: dec normalize aac->mp4a
+[1793681711] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4158
+[1793681711] audio: dec head[16]: 21 1a 94 95 c1 8b 61 a1 44 50 20 01 38 d4 ab ba 
+[1793681711] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681711] audio: dec pkts=160
+[1793681711] audio: decoded 2048 frames
+[1793681711] asbr: enqueue called sbuf=0x15387de00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681711] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681711] audio: dec normalize aac->mp4a
+[1793681711] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4038
+[1793681711] audio: dec head[16]: 21 0a 8f f5 ff e5 03 91 15 6f 62 21 58 64 24 23 
+[1793681711] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681711] audio: dec pkts=160
+[1793681711] audio: decoded 2048 frames
+[1793681712] asbr: enqueue called sbuf=0x15380da00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681712] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681712] audio: dec normalize aac->mp4a
+[1793681712] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3216
+[1793681712] audio: dec head[16]: 21 7a 94 b5 b1 92 8e 60 a1 8f 0d de f5 81 ba 3d 
+[1793681712] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681712] audio: dec pkts=160
+[1793681712] audio: decoded 2048 frames
+[1793681712] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681712] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681712] audio: dec normalize aac->mp4a
+[1793681712] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3512
+[1793681712] audio: dec head[16]: 21 1a 94 9d 19 8c 8d 61 50 ac 34 28 25 0e 04 81 
+[1793681712] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681712] audio: dec pkts=160
+[1793681712] audio: decoded 2048 frames
+[1793681712] asbr: enqueue called sbuf=0x151831c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681712] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681712] audio: dec normalize aac->mp4a
+[1793681712] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3730
+[1793681712] audio: dec head[16]: 21 1a 94 85 b1 88 85 61 51 60 4c 68 23 09 19 55 
+[1793681712] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681712] audio: dec pkts=160
+[1793681712] audio: decoded 2048 frames
+[1793681712] asbr: enqueue called sbuf=0x15215e800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681712] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681712] audio: dec normalize aac->mp4a
+[1793681712] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4258
+[1793681712] audio: dec head[16]: 21 1a 94 3d b6 06 c5 81 b0 e0 4c 18 43 09 04 8e 
+[1793681712] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681712] audio: dec pkts=160
+[1793681712] audio: decoded 2048 frames
+[1793681713] asbr: enqueue called sbuf=0x153841600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681713] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681713] audio: dec normalize aac->mp4a
+[1793681713] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3256
+[1793681713] audio: dec head[16]: 21 2a 94 45 aa 8a c6 43 13 d1 1a e4 a3 91 9a 86 
+[1793681713] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681713] audio: dec pkts=160
+[1793681713] audio: decoded 2048 frames
+[1793681713] asbr: enqueue called sbuf=0x151830600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681713] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681713] audio: dec normalize aac->mp4a
+[1793681713] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3625
+[1793681713] audio: dec head[16]: 21 1a 94 bd 9a 8d 08 62 c1 58 90 46 12 08 09 c6 
+[1793681713] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681713] audio: dec pkts=160
+[1793681713] audio: decoded 2048 frames
+[1793681713] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681713] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681713] audio: dec normalize aac->mp4a
+[1793681713] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3810
+[1793681713] audio: dec head[16]: 21 1a 94 a5 9a a6 c4 85 b0 8e 2a 46 6e 5b df 04 
+[1793681713] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681713] audio: dec pkts=160
+[1793681713] audio: decoded 2048 frames
+[1793681713] asbr: enqueue called sbuf=0x15387de00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681713] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681713] audio: dec normalize aac->mp4a
+[1793681713] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3719
+[1793681713] audio: dec head[16]: 21 1a 94 cd be 8e c4 81 30 54 2c 28 43 05 02 00 
+[1793681713] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681713] audio: dec pkts=160
+[1793681713] audio: decoded 2048 frames
+[1793681714] asbr: enqueue called sbuf=0x1529bb000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681714] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681714] audio: dec normalize aac->mp4a
+[1793681714] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3705
+[1793681714] audio: dec head[16]: 21 1a 94 bd bd 8f 41 61 d0 a0 6c 28 2b 0d 02 4a 
+[1793681714] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681714] audio: dec pkts=160
+[1793681714] audio: decoded 2048 frames
+[1793681714] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681714] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681714] audio: dec normalize aac->mp4a
+[1793681714] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3698
+[1793681714] audio: dec head[16]: 21 1a 94 c5 b1 8b 42 43 42 28 cc 12 10 68 68 ea 
+[1793681714] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681714] audio: dec pkts=160
+[1793681714] audio: decoded 2048 frames
+[1793681714] asbr: enqueue called sbuf=0x15380da00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681714] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681714] audio: dec normalize aac->mp4a
+[1793681714] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3711
+[1793681714] audio: dec head[16]: 21 7a 94 cd a6 a0 c5 85 a0 40 14 49 81 2d 4d 4c 
+[1793681714] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681714] audio: dec pkts=160
+[1793681714] audio: decoded 2048 frames
+[1793681714] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681714] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681714] audio: dec normalize aac->mp4a
+[1793681714] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3778
+[1793681714] audio: dec head[16]: 21 1a 94 5d 9e 9e c6 82 32 54 20 3b d6 f9 a6 2a 
+[1793681714] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681714] audio: dec pkts=160
+[1793681714] audio: decoded 2048 frames
+[1793681714] asbr: enqueue called sbuf=0x15182a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681714] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681714] audio: dec normalize aac->mp4a
+[1793681714] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3551
+[1793681714] audio: dec head[16]: 21 1a 94 d5 b2 0e c4 41 c0 d0 54 38 33 04 42 00 
+[1793681714] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681714] audio: dec pkts=160
+[1793681714] audio: decoded 2048 frames
+[1793681715] asbr: enqueue called sbuf=0x1538d6000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681715] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681715] audio: dec normalize aac->mp4a
+[1793681715] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3899
+[1793681715] audio: dec head[16]: 21 1a 94 75 ca 8a c4 80 b0 a9 48 20 0f 04 ea c7 
+[1793681715] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681715] audio: dec pkts=160
+[1793681715] audio: decoded 2048 frames
+[1793681715] asbr: enqueue called sbuf=0x152833400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681715] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681715] audio: dec normalize aac->mp4a
+[1793681715] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3719
+[1793681715] audio: dec head[16]: 21 1a 94 55 c6 8b 09 62 21 c2 94 b4 40 2b 26 a6 
+[1793681715] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681715] audio: dec pkts=160
+[1793681715] audio: decoded 2048 frames
+[1793681715] asbr: enqueue called sbuf=0x15215e800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681715] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681715] audio: dec normalize aac->mp4a
+[1793681715] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3690
+[1793681715] audio: dec head[16]: 21 1a 94 d5 9a 9c 81 a1 30 e0 4c 38 2b 11 04 04 
+[1793681715] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681715] audio: dec pkts=160
+[1793681715] audio: decoded 2048 frames
+[1793681715] asbr: enqueue called sbuf=0x1529bb000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681715] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681715] audio: dec normalize aac->mp4a
+[1793681715] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3582
+[1793681715] audio: dec head[16]: 21 1a 94 95 a5 1a c2 41 31 69 30 20 1d d9 81 62 
+[1793681715] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681715] audio: dec pkts=160
+[1793681715] audio: decoded 2048 frames
+[1793681716] asbr: enqueue called sbuf=0x152854200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681716] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681716] audio: dec normalize aac->mp4a
+[1793681716] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3763
+[1793681716] audio: dec head[16]: 21 1a 94 fd b2 8d 04 61 41 50 30 3a 1b 0a 04 c2 
+[1793681716] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681716] audio: dec pkts=160
+[1793681716] audio: decoded 2048 frames
+[1793681716] asbr: enqueue called sbuf=0x1529bb000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681716] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681716] audio: dec normalize aac->mp4a
+[1793681716] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3756
+[1793681716] audio: dec head[16]: 21 1a 94 b5 9a 92 c7 82 50 a0 cc 54 1a 5b 4a 6c 
+[1793681716] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681716] audio: dec pkts=160
+[1793681716] audio: decoded 2048 frames
+[1793681716] asbr: enqueue called sbuf=0x153841600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681716] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681716] audio: dec normalize aac->mp4a
+[1793681716] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3572
+[1793681716] audio: dec head[16]: 21 1a 94 65 ad 87 42 81 90 98 62 28 25 0a 10 22 
+[1793681716] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681716] audio: dec pkts=160
+[1793681716] audio: decoded 2048 frames
+[1793681716] asbr: enqueue called sbuf=0x153841600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681716] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681716] audio: dec normalize aac->mp4a
+[1793681716] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3758
+[1793681716] audio: dec head[16]: 21 4c 9b 3f da 6e 8c df 88 6e c2 b5 46 09 98 4d 
+[1793681716] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681716] audio: dec pkts=160
+[1793681716] audio: decoded 2048 frames
+[1793681716] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681716] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681716] audio: dec normalize aac->mp4a
+[1793681716] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4011
+[1793681716] audio: dec head[16]: 21 2a 94 d5 be 8c ca a2 c1 10 40 1f 07 3a df 8b 
+[1793681716] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681716] audio: dec pkts=160
+[1793681716] audio: decoded 2048 frames
+[1793681717] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681717] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681717] audio: dec normalize aac->mp4a
+[1793681717] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3702
+[1793681717] audio: dec head[16]: 21 7a 95 15 b2 88 c5 43 40 58 74 38 32 09 52 6f 
+[1793681717] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681717] audio: dec pkts=160
+[1793681717] audio: decoded 2048 frames
+[1793681717] asbr: enqueue called sbuf=0x1529bb000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681717] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681717] audio: dec normalize aac->mp4a
+[1793681717] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4065
+[1793681717] audio: dec head[16]: 21 1a 94 b5 ae 90 83 63 20 e0 e8 30 08 2d ae 7d 
+[1793681717] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681717] audio: dec pkts=160
+[1793681717] audio: decoded 2048 frames
+[1793681717] asbr: enqueue called sbuf=0x153841600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681717] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681717] audio: dec normalize aac->mp4a
+[1793681717] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3300
+[1793681717] audio: dec head[16]: 21 0a 94 3d b2 52 45 41 90 d0 a4 50 24 e6 5d 45 
+[1793681717] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681717] audio: dec pkts=160
+[1793681717] audio: decoded 2048 frames
+[1793681717] asbr: enqueue called sbuf=0x1529bb000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681717] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681717] audio: dec normalize aac->mp4a
+[1793681717] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3797
+[1793681717] audio: dec head[16]: 21 1a 94 d5 9a 8d 63 82 d0 58 54 26 24 05 87 03 
+[1793681717] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681717] audio: dec pkts=160
+[1793681717] audio: decoded 2048 frames
+[1793681718] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681718] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681718] audio: dec normalize aac->mp4a
+[1793681718] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3756
+[1793681718] audio: dec head[16]: 21 7a 95 15 ae 93 05 61 c0 d0 2c 54 2a 9a 56 81 
+[1793681718] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681718] audio: dec pkts=160
+[1793681718] audio: decoded 2048 frames
+[1793681718] asbr: enqueue called sbuf=0x151144c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681718] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681718] audio: dec normalize aac->mp4a
+[1793681718] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3420
+[1793681718] audio: dec head[16]: 21 1a 94 cd a6 90 c2 a1 31 10 4c 1a 1a 84 82 c5 
+[1793681718] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681718] audio: dec pkts=160
+[1793681718] audio: decoded 2048 frames
+[1793681718] asbr: enqueue called sbuf=0x1529b4600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681718] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681718] audio: dec normalize aac->mp4a
+[1793681718] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3899
+[1793681718] audio: dec head[16]: 21 1a 94 9d c2 8b 09 64 90 84 26 19 6e 75 ec 66 
+[1793681718] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681718] audio: dec pkts=160
+[1793681718] audio: decoded 2048 frames
+[1793681718] asbr: enqueue called sbuf=0x15380da00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681718] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681718] audio: dec normalize aac->mp4a
+[1793681718] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3800
+[1793681718] audio: dec head[16]: 21 6a 94 5d ae 8b 04 64 40 98 90 16 30 84 37 c3 
+[1793681718] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681718] audio: dec pkts=160
+[1793681718] audio: decoded 2048 frames
+[1793681719] asbr: enqueue called sbuf=0x15380da00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681719] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681719] audio: dec normalize aac->mp4a
+[1793681719] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3435
+[1793681719] audio: dec head[16]: 21 0a 94 c4 29 10 46 60 a0 a0 d4 46 20 05 5a 29 
+[1793681719] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681719] audio: dec pkts=160
+[1793681719] audio: decoded 2048 frames
+[1793681719] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681719] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681719] audio: dec normalize aac->mp4a
+[1793681719] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3705
+[1793681719] audio: dec head[16]: 21 1a 94 c5 aa 13 62 a2 10 58 50 5a 1c 09 88 02 
+[1793681719] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681719] audio: dec pkts=160
+[1793681719] audio: decoded 2048 frames
+[1793681719] asbr: enqueue called sbuf=0x1538d2e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681719] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681719] audio: dec normalize aac->mp4a
+[1793681719] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3688
+[1793681719] audio: dec head[16]: 21 1a 94 c5 9a 8c c4 b2 d1 58 f0 36 22 08 02 e0 
+[1793681719] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681719] audio: dec pkts=160
+[1793681719] audio: decoded 2048 frames
+[1793681719] asbr: enqueue called sbuf=0x1529bb000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681719] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681719] audio: dec normalize aac->mp4a
+[1793681719] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3833
+[1793681719] audio: dec head[16]: 21 1a 94 9d b1 8b 64 a3 41 d8 c8 24 48 6f 4a a9 
+[1793681719] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681719] audio: dec pkts=160
+[1793681719] audio: decoded 2048 frames
+[1793681720] asbr: enqueue called sbuf=0x1538d2e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681720] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681720] audio: dec normalize aac->mp4a
+[1793681720] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3614
+[1793681720] audio: dec head[16]: 21 1a 94 dd 9a 9f 61 64 41 98 a4 10 aa 74 e1 2a 
+[1793681720] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681720] audio: dec pkts=160
+[1793681720] audio: decoded 2048 frames
+[1793681720] asbr: enqueue called sbuf=0x1529bb600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681720] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681720] audio: dec normalize aac->mp4a
+[1793681720] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3906
+[1793681720] audio: dec head[16]: 21 4c d3 41 5a a6 ca 0b 33 35 21 d1 66 26 ed 46 
+[1793681720] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681720] audio: dec pkts=160
+[1793681720] audio: decoded 2048 frames
+[1793681720] asbr: enqueue called sbuf=0x15192f200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681720] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681720] audio: dec normalize aac->mp4a
+[1793681720] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3695
+[1793681720] audio: dec head[16]: 21 1a 94 d5 be 89 61 82 31 20 34 26 11 0d 02 c1 
+[1793681720] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681720] audio: dec pkts=160
+[1793681720] audio: decoded 2048 frames
+[1793681720] asbr: enqueue called sbuf=0x1538d2e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681720] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681720] audio: dec normalize aac->mp4a
+[1793681720] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3575
+[1793681720] audio: dec head[16]: 21 1a 94 c5 05 90 85 24 b1 28 56 3a 24 0d 84 81 
+[1793681720] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681720] audio: dec pkts=160
+[1793681720] audio: decoded 2048 frames
+[1793681720] asbr: enqueue called sbuf=0x1529f6000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681720] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681720] audio: dec normalize aac->mp4a
+[1793681720] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3834
+[1793681720] audio: dec head[16]: 21 1a 94 65 b5 8d 42 b1 c1 d9 48 15 45 53 2f 34 
+[1793681720] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681720] audio: dec pkts=160
+[1793681720] audio: decoded 2048 frames
+[1793681721] asbr: enqueue called sbuf=0x152126200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681721] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681721] audio: dec normalize aac->mp4a
+[1793681721] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3907
+[1793681721] audio: dec head[16]: 21 1a 94 b5 b2 0b 65 82 a8 a0 4c 28 15 05 8c 04 
+[1793681721] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681721] audio: dec pkts=160
+[1793681721] audio: decoded 2048 frames
+[1793681721] asbr: enqueue called sbuf=0x153936600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681721] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681721] audio: dec normalize aac->mp4a
+[1793681721] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3611
+[1793681721] audio: dec head[16]: 21 1a 94 cd aa 20 82 21 a0 a0 ca 33 90 13 ab 2b 
+[1793681721] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681721] audio: dec pkts=160
+[1793681721] audio: decoded 2048 frames
+[1793681721] asbr: enqueue called sbuf=0x15299dc00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681721] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681721] audio: dec normalize aac->mp4a
+[1793681721] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3603
+[1793681721] audio: dec head[16]: 21 1a 94 55 aa 8c c6 41 32 60 ac 24 13 f4 a4 39 
+[1793681721] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681721] audio: dec pkts=160
+[1793681721] audio: decoded 2048 frames
+[1793681721] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681721] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681721] audio: dec normalize aac->mp4a
+[1793681721] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3921
+[1793681721] audio: dec head[16]: 21 2a 94 a5 ad 8b 62 a1 b1 08 30 26 72 f7 c4 99 
+[1793681721] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681721] audio: dec pkts=160
+[1793681721] audio: decoded 2048 frames
+[1793681722] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681722] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681722] audio: dec normalize aac->mp4a
+[1793681722] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3386
+[1793681722] audio: dec head[16]: 21 6a 94 2d a6 25 41 81 31 50 c2 10 f9 12 86 cc 
+[1793681722] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681722] audio: dec pkts=160
+[1793681722] audio: decoded 2048 frames
+[1793681722] asbr: enqueue called sbuf=0x15299dc00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681722] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681722] audio: dec normalize aac->mp4a
+[1793681722] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3956
+[1793681722] audio: dec head[16]: 21 1a 94 3d 9e af 03 64 10 49 9d ad 15 45 bb 4d 
+[1793681722] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681722] audio: dec pkts=160
+[1793681722] audio: decoded 2048 frames
+[1793681722] asbr: enqueue called sbuf=0x1518b3c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681722] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681722] audio: dec normalize aac->mp4a
+[1793681722] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3930
+[1793681722] audio: dec head[16]: 21 1a 94 c5 c6 89 04 42 c1 98 88 26 00 b9 7a 6e 
+[1793681722] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681722] audio: dec pkts=160
+[1793681722] audio: decoded 2048 frames
+[1793681722] asbr: enqueue called sbuf=0x1518b3c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681722] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681722] audio: dec normalize aac->mp4a
+[1793681722] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3489
+[1793681722] audio: dec head[16]: 21 7a 94 95 a2 14 45 63 c0 98 e8 31 30 30 76 dd 
+[1793681722] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681722] audio: dec pkts=160
+[1793681722] audio: decoded 2048 frames
+[1793681723] asbr: enqueue called sbuf=0x1520c6600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681723] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681723] audio: dec normalize aac->mp4a
+[1793681723] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3623
+[1793681723] audio: dec head[16]: 21 1a 94 c5 ae 06 d3 40 b1 10 80 d2 f3 47 05 d2 
+[1793681723] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681723] audio: dec pkts=160
+[1793681723] audio: decoded 2048 frames
+[1793681723] asbr: enqueue called sbuf=0x15299dc00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681723] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681723] audio: dec normalize aac->mp4a
+[1793681723] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4197
+[1793681723] audio: dec head[16]: 21 1a 94 65 ad a7 09 61 20 4b 0a b7 04 c8 93 05 
+[1793681723] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681723] audio: dec pkts=160
+[1793681723] audio: decoded 2048 frames
+[1793681723] asbr: enqueue called sbuf=0x1518b3c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681723] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681723] audio: dec normalize aac->mp4a
+[1793681723] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3534
+[1793681723] audio: dec head[16]: 21 3a 94 4d aa 06 c7 45 30 d0 6c 14 28 01 04 d1 
+[1793681723] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681723] audio: dec pkts=160
+[1793681723] audio: decoded 2048 frames
+[1793681723] asbr: enqueue called sbuf=0x1518b3c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681723] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681723] audio: dec normalize aac->mp4a
+[1793681723] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3399
+[1793681723] audio: dec head[16]: 21 1a 95 05 8e 9c c6 42 33 88 22 46 3c f3 c4 db 
+[1793681723] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681723] audio: dec pkts=160
+[1793681723] audio: decoded 2048 frames
+[1793681724] asbr: enqueue called sbuf=0x15383b200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681724] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681724] audio: dec normalize aac->mp4a
+[1793681724] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3558
+[1793681724] audio: dec head[16]: 21 1a 94 a4 15 25 47 b0 d0 e0 c8 11 0a b2 d8 32 
+[1793681724] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681724] audio: dec pkts=160
+[1793681724] audio: decoded 2048 frames
+[1793681724] asbr: enqueue called sbuf=0x15288ee00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681724] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681724] audio: dec normalize aac->mp4a
+[1793681724] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3969
+[1793681724] audio: dec head[16]: 21 1a 94 a5 b6 0c c5 81 b0 e1 4c 20 08 b5 71 79 
+[1793681724] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681724] audio: dec pkts=160
+[1793681724] audio: decoded 2048 frames
+[1793681724] asbr: enqueue called sbuf=0x1518e3000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681724] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681724] audio: dec normalize aac->mp4a
+[1793681724] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3824
+[1793681724] audio: dec head[16]: 21 1a 94 ad b1 8b 01 61 91 20 48 48 0b 0a 88 c2 
+[1793681724] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681724] audio: dec pkts=160
+[1793681724] audio: decoded 2048 frames
+[1793681724] asbr: enqueue called sbuf=0x15393b000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681724] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681724] audio: dec normalize aac->mp4a
+[1793681724] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3732
+[1793681724] audio: dec head[16]: 21 6a 94 a5 24 de c2 a5 c1 10 20 56 00 a1 98 ac 
+[1793681724] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681724] audio: dec pkts=160
+[1793681724] audio: decoded 2048 frames
+[1793681724] asbr: enqueue called sbuf=0x152937200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681724] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681724] audio: dec normalize aac->mp4a
+[1793681724] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3514
+[1793681724] audio: dec head[16]: 21 1a 94 15 a9 8f 04 44 32 90 60 cb ab aa a4 d2 
+[1793681724] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681724] audio: dec pkts=160
+[1793681724] audio: decoded 2048 frames
+[1793681725] asbr: enqueue called sbuf=0x152836c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681725] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681725] audio: dec normalize aac->mp4a
+[1793681725] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3536
+[1793681725] audio: dec head[16]: 21 1a 94 f5 a5 8b 09 22 30 50 4c 18 23 15 04 a1 
+[1793681725] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681725] audio: dec pkts=160
+[1793681725] audio: decoded 2048 frames
+[1793681725] asbr: enqueue called sbuf=0x152899400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681725] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681725] audio: dec normalize aac->mp4a
+[1793681725] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3764
+[1793681725] audio: dec head[16]: 21 1a 94 dd b1 0b 43 63 c1 e8 30 64 08 a2 af 57 
+[1793681725] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681725] audio: dec pkts=160
+[1793681725] audio: decoded 2048 frames
+[1793681725] asbr: enqueue called sbuf=0x15216b400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681725] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681725] audio: dec normalize aac->mp4a
+[1793681725] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3655
+[1793681725] audio: dec head[16]: 21 4c cd 44 dc 69 05 90 9b 48 e3 21 b3 12 8d d7 
+[1793681725] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681725] audio: dec pkts=160
+[1793681725] audio: decoded 2048 frames
+[1793681725] asbr: enqueue called sbuf=0x151920800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681725] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681725] audio: dec normalize aac->mp4a
+[1793681725] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3830
+[1793681725] audio: dec head[16]: 21 1a 94 dd 9e 8d 62 a4 b1 e9 0c 22 08 2c d2 46 
+[1793681725] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681725] audio: dec pkts=160
+[1793681725] audio: decoded 2048 frames
+[1793681726] asbr: enqueue called sbuf=0x152979000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681726] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681726] audio: dec normalize aac->mp4a
+[1793681726] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3664
+[1793681726] audio: dec head[16]: 21 1a 94 bd c5 96 83 a0 d8 68 6c 1a 13 08 02 02 
+[1793681726] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681726] audio: dec pkts=160
+[1793681726] audio: decoded 2048 frames
+[1793681726] asbr: enqueue called sbuf=0x15216a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681726] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681726] audio: dec normalize aac->mp4a
+[1793681726] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3910
+[1793681726] audio: dec head[16]: 21 1a 94 85 9a 9a c6 a1 a0 e0 d4 16 19 04 1d 0a 
+[1793681726] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681726] audio: dec pkts=160
+[1793681726] audio: decoded 2048 frames
+[1793681726] asbr: enqueue called sbuf=0x15216ae00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681726] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681726] audio: dec normalize aac->mp4a
+[1793681726] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3539
+[1793681726] audio: dec head[16]: 21 0a 94 15 b2 0c d8 00 25 59 65 ac 54 c9 08 08 
+[1793681726] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681726] audio: dec pkts=160
+[1793681726] audio: decoded 2048 frames
+[1793681726] asr: sending 160540 bytes (16k_en)
+[1793681726] asbr: enqueue called sbuf=0x15182ee00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681726] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681726] audio: dec normalize aac->mp4a
+[1793681726] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3680
+[1793681726] audio: dec head[16]: 21 1a 94 ad c9 82 42 61 50 d8 28 28 35 12 04 81 
+[1793681726] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681726] audio: dec pkts=160
+[1793681726] audio: decoded 2048 frames
+[1793681726] asbr: enqueue called sbuf=0x1514a9a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681726] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681726] audio: dec normalize aac->mp4a
+[1793681726] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3848
+[1793681726] audio: dec head[16]: 21 4c d9 41 59 ab 66 22 9b 91 cd ca 71 6f d5 f0 
+[1793681726] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681726] audio: dec pkts=160
+[1793681726] audio: decoded 2048 frames
+[1793681727] asr: text [Can of ts five five butatingasc zero]
+[1793681727] overlay: show origin=[Can of ts five five butatingasc zero] trans=[(null)] transLen=0
+[1793681727] overlay: layout c=(6,124,840,39) oLbl=(10,10,h=19) tLbl=(0,0,h=0) oh=19.1 th=0.0 super={{0, 0}, {852, 393}}
+[1793681727] overlay: tLbl text=[] hidden=0 alpha=1.00 superHidden=0
+[1793681727] translate: step 0 -> tencent
+[1793681727] asbr: enqueue called sbuf=0x15212aa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681727] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681727] audio: dec normalize aac->mp4a
+[1793681727] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3545
+[1793681727] audio: dec head[16]: 21 1a 94 9d a2 94 c6 80 b0 a1 0c 64 09 14 68 ee 
+[1793681727] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681727] audio: dec pkts=160
+[1793681727] audio: decoded 2048 frames
+[1793681727] asbr: enqueue called sbuf=0x15212aa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681727] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681727] audio: dec normalize aac->mp4a
+[1793681727] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3935
+[1793681727] audio: dec head[16]: 21 1a 94 a5 b2 0f 63 a1 90 58 74 26 0d 12 0a 81 
+[1793681727] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681727] audio: dec pkts=160
+[1793681727] audio: decoded 2048 frames
+[1793681727] asbr: enqueue called sbuf=0x15393f800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681727] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681727] audio: dec normalize aac->mp4a
+[1793681727] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3613
+[1793681727] audio: dec head[16]: 21 1a 94 cd ae 9a 86 80 b2 8c 2e f8 33 2b 50 ba 
+[1793681727] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681727] audio: dec pkts=160
+[1793681727] audio: decoded 2048 frames
+[1793681727] asbr: enqueue called sbuf=0x15207c400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681727] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681727] audio: dec normalize aac->mp4a
+[1793681727] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3750
+[1793681727] audio: dec head[16]: 21 2a 94 b5 d6 20 c5 3d db 69 71 c0 05 5d dd c1 
+[1793681727] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681727] audio: dec pkts=160
+[1793681727] audio: decoded 2048 frames
+[1793681728] asbr: enqueue called sbuf=0x15393f800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681728] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681728] audio: dec normalize aac->mp4a
+[1793681728] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3761
+[1793681728] audio: dec head[16]: 21 1a 94 9d a9 8b 64 83 b3 90 4d e0 5e 9b e0 df 
+[1793681728] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681728] audio: dec pkts=160
+[1793681728] audio: decoded 2048 frames
+[1793681728] asbr: enqueue called sbuf=0x15182a400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681728] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681728] audio: dec normalize aac->mp4a
+[1793681728] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4093
+[1793681728] audio: dec head[16]: 21 1a 94 a5 aa 92 c2 80 b2 60 6c 64 10 1f 01 72 
+[1793681728] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681728] audio: dec pkts=160
+[1793681728] audio: decoded 2048 frames
+[1793681728] asbr: enqueue called sbuf=0x15207c400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681728] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681728] audio: dec normalize aac->mp4a
+[1793681728] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3617
+[1793681728] audio: dec head[16]: 21 0a 8f b7 ff 48 52 81 0f 6c 46 11 10 ac 14 0b 
+[1793681728] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681728] audio: dec pkts=160
+[1793681728] audio: decoded 2048 frames
+[1793681728] asbr: enqueue called sbuf=0x152836c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681728] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681728] audio: dec normalize aac->mp4a
+[1793681728] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3370
+[1793681728] audio: dec head[16]: 21 7a 94 cd ae 94 83 62 c0 98 48 26 30 84 38 ec 
+[1793681728] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681728] audio: dec pkts=160
+[1793681728] audio: decoded 2048 frames
+[1793681728] translate: tencent api err {
+    Code = "FailedOperation.UserNotRegistered";
+    Message = "Service has not been opened, please open service at Tencent Cloud console";
+}
+[1793681728] translate: provider 'tencent' failed, fallback
+[1793681728] translate: step 1 -> agnes
+[1793681728] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-3.0-flash
+[1793681729] asbr: enqueue called sbuf=0x15394e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681729] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681729] audio: dec normalize aac->mp4a
+[1793681729] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3863
+[1793681729] audio: dec head[16]: 21 1a 94 c5 ae 08 c4 a1 c1 18 74 38 33 10 04 13 
+[1793681729] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681729] audio: dec pkts=160
+[1793681729] audio: decoded 2048 frames
+[1793681729] asbr: enqueue called sbuf=0x152852e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681729] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681729] audio: dec normalize aac->mp4a
+[1793681729] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3466
+[1793681729] audio: dec head[16]: 21 1a 94 95 b2 9a a1 82 32 90 4c 8a ca 17 03 7e 
+[1793681729] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681729] audio: dec pkts=160
+[1793681729] audio: decoded 2048 frames
+[1793681729] asbr: enqueue called sbuf=0x15394e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681729] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681729] audio: dec normalize aac->mp4a
+[1793681729] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3734
+[1793681729] audio: dec head[16]: 21 1a 94 e5 ca 8c c2 80 a8 a0 4c 28 13 14 84 00 
+[1793681729] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681729] audio: dec pkts=160
+[1793681729] audio: decoded 2048 frames
+[1793681729] asbr: enqueue called sbuf=0x15394e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681729] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681729] audio: dec normalize aac->mp4a
+[1793681729] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3700
+[1793681729] audio: dec head[16]: 21 1a 94 a5 9e 9b 04 10 b1 28 30 86 20 23 cd ef 
+[1793681729] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681729] audio: dec pkts=160
+[1793681729] audio: decoded 2048 frames
+[1793681730] asbr: enqueue called sbuf=0x15207c400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681730] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681730] audio: dec normalize aac->mp4a
+[1793681730] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3754
+[1793681730] audio: dec head[16]: 21 4c d9 41 da 8e 94 d9 8e 9d 5c 88 b2 f9 a8 9f 
+[1793681730] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681730] audio: dec pkts=160
+[1793681730] audio: decoded 2048 frames
+[1793681730] asbr: enqueue called sbuf=0x15394e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681730] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681730] audio: dec normalize aac->mp4a
+[1793681730] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4100
+[1793681730] audio: dec head[16]: 21 2a 94 55 a9 09 05 43 31 11 4c 14 11 29 78 99 
+[1793681730] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681730] audio: dec pkts=160
+[1793681730] audio: decoded 2048 frames
+[1793681730] asbr: enqueue called sbuf=0x15394e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681730] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681730] audio: dec normalize aac->mp4a
+[1793681730] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3403
+[1793681730] audio: dec head[16]: 21 0a 93 dd 8d 8a eb 56 38 d0 2e 46 0b 88 10 aa 
+[1793681730] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681730] audio: dec pkts=160
+[1793681730] audio: decoded 2048 frames
+[1793681730] translate: openai response len=36 text=[Can of ts five five butatingasc zero]
+[1793681730] translate: provider 'agnes' OK len=36
+[1793681730] overlay: show origin=[Can of ts five five butatingasc zero] trans=[Can of ts five five butatingasc zero] transLen=36
+[1793681730] overlay: layout c=(6,116,840,61) oLbl=(10,10,h=19) tLbl=(10,33,h=18) oh=19.1 th=17.9 super={{0, 0}, {852, 393}}
+[1793681730] overlay: tLbl text=[Can of ts five five butatingasc zero] hidden=0 alpha=1.00 superHidden=0
+[1793681730] asbr: enqueue called sbuf=0x152808200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681730] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681730] audio: dec normalize aac->mp4a
+[1793681730] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3837
+[1793681730] audio: dec head[16]: 21 1a 94 c5 ba 89 0e 64 20 80 5e a8 69 4b 8b 41 
+[1793681730] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681730] audio: dec pkts=160
+[1793681730] audio: decoded 2048 frames
+[1793681730] asbr: enqueue called sbuf=0x15207c400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681730] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681730] audio: dec normalize aac->mp4a
+[1793681730] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3635
+[1793681730] audio: dec head[16]: 21 7a 94 b5 9a 8f 62 a1 c5 d0 25 a9 9a aa da c1 
+[1793681730] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681730] audio: dec pkts=160
+[1793681730] audio: decoded 2048 frames
+[1793681731] asbr: enqueue called sbuf=0x15195e600 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681731] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681731] audio: dec normalize aac->mp4a
+[1793681731] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3729
+[1793681731] audio: dec head[16]: 21 1a 94 e5 a1 8d 49 41 51 d0 6c 34 10 88 0e be 
+[1793681731] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681731] audio: dec pkts=160
+[1793681731] audio: decoded 2048 frames
+[1793681731] asbr: enqueue called sbuf=0x15394e400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681731] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681731] audio: dec normalize aac->mp4a
+[1793681731] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3883
+[1793681731] audio: dec head[16]: 21 1a 94 bd aa 0a 86 82 58 e0 8c 44 13 08 44 e9 
+[1793681731] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681731] audio: dec pkts=160
+[1793681731] audio: decoded 2048 frames
+[1793681731] asbr: enqueue called sbuf=0x152852e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681731] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681731] audio: dec normalize aac->mp4a
+[1793681731] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3657
+[1793681731] audio: dec head[16]: 21 6a 8f bc e6 7f 90 41 0d 6a 68 22 98 28 51 1c 
+[1793681731] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681731] audio: dec pkts=160
+[1793681731] audio: decoded 2048 frames
+[1793681731] asbr: enqueue called sbuf=0x152808200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681731] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681731] audio: dec normalize aac->mp4a
+[1793681731] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3497
+[1793681731] audio: dec head[16]: 21 1a 94 ad 96 91 06 62 a8 68 4c f6 59 5c 69 bd 
+[1793681731] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681731] audio: dec pkts=160
+[1793681731] audio: decoded 2048 frames
+[1793681732] asbr: enqueue called sbuf=0x15185f200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681732] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681732] audio: dec normalize aac->mp4a
+[1793681732] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3757
+[1793681732] audio: dec head[16]: 21 2a 94 45 ae 86 c9 80 b1 11 c4 c5 34 c0 a2 ae 
+[1793681732] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681732] audio: dec pkts=160
+[1793681732] audio: decoded 2048 frames
+[1793681732] asbr: enqueue called sbuf=0x15390f000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681732] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681732] audio: dec normalize aac->mp4a
+[1793681732] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3768
+[1793681732] audio: dec head[16]: 21 7a 94 f5 9a 8f 62 a4 a0 60 ec 64 18 84 ab 1a 
+[1793681732] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681732] audio: dec pkts=160
+[1793681732] audio: decoded 2048 frames
+[1793681732] asbr: enqueue called sbuf=0x15192fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681732] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681732] audio: dec normalize aac->mp4a
+[1793681732] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3647
+[1793681732] audio: dec head[16]: 21 1a 94 cd c1 0a a5 a1 30 a8 36 1a 1b 0d 08 01 
+[1793681732] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681732] audio: dec pkts=160
+[1793681732] audio: decoded 2048 frames
+[1793681732] asbr: enqueue called sbuf=0x15390f000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681732] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681732] audio: dec normalize aac->mp4a
+[1793681732] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4048
+[1793681732] audio: dec head[16]: 21 1a 8f 8f ef ff f1 83 1f 6b 61 38 a0 8d 54 12 
+[1793681732] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681732] audio: dec pkts=160
+[1793681732] audio: decoded 2048 frames
+[1793681733] asbr: enqueue called sbuf=0x1520f5a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681733] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681733] audio: dec normalize aac->mp4a
+[1793681733] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3577
+[1793681733] audio: dec head[16]: 21 0a 8f 29 bc 20 10 95 05 6c 52 92 14 24 44 52 
+[1793681733] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681733] audio: dec pkts=160
+[1793681733] audio: decoded 2048 frames
+[1793681733] asbr: enqueue called sbuf=0x15185f200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681733] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681733] audio: dec normalize aac->mp4a
+[1793681733] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3626
+[1793681733] audio: dec head[16]: 21 1a 95 05 92 99 06 41 41 a8 6c 71 13 41 55 97 
+[1793681733] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681733] audio: dec pkts=160
+[1793681733] audio: decoded 2048 frames
+[1793681733] asbr: enqueue called sbuf=0x152129000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681733] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681733] audio: dec normalize aac->mp4a
+[1793681733] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3918
+[1793681733] audio: dec head[16]: 21 1a 94 dd b9 8b 42 61 d1 20 84 16 14 05 02 44 
+[1793681733] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681733] audio: dec pkts=160
+[1793681733] audio: decoded 2048 frames
+[1793681733] asbr: enqueue called sbuf=0x15185f200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681733] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681733] audio: dec normalize aac->mp4a
+[1793681733] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3726
+[1793681733] audio: dec head[16]: 21 1a 94 a5 9e 92 cd a1 c2 50 20 d1 54 e4 04 2d 
+[1793681733] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681733] audio: dec pkts=160
+[1793681733] audio: decoded 2048 frames
+[1793681734] asbr: enqueue called sbuf=0x15192fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681734] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681734] audio: dec normalize aac->mp4a
+[1793681734] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3744
+[1793681734] audio: dec head[16]: 21 1a 94 d5 bd 89 03 42 b1 20 2c 34 18 91 19 be 
+[1793681734] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681734] audio: dec pkts=160
+[1793681734] audio: decoded 2048 frames
+[1793681734] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681734] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681734] audio: dec normalize aac->mp4a
+[1793681734] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3635
+[1793681734] audio: dec head[16]: 21 1a 94 6d b1 8d 48 60 a1 c4 4c 13 29 a7 b1 4a 
+[1793681734] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681734] audio: dec pkts=160
+[1793681734] audio: decoded 2048 frames
+[1793681734] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681734] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681734] audio: dec normalize aac->mp4a
+[1793681734] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3450
+[1793681734] audio: dec head[16]: 21 1a 94 3d aa 8a 82 b1 29 11 a4 34 18 46 07 95 
+[1793681734] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681734] audio: dec pkts=160
+[1793681734] audio: decoded 2048 frames
+[1793681734] asbr: enqueue called sbuf=0x153915e00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681734] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681734] audio: dec normalize aac->mp4a
+[1793681734] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3739
+[1793681734] audio: dec head[16]: 21 1a 94 dd ca 07 62 41 30 60 48 1a 23 1c 84 02 
+[1793681734] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681734] audio: dec pkts=160
+[1793681734] audio: decoded 2048 frames
+[1793681734] asbr: enqueue called sbuf=0x1518fe000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681734] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681734] audio: dec normalize aac->mp4a
+[1793681734] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3900
+[1793681734] audio: dec head[16]: 21 7a 94 ed c2 8a c2 81 33 10 4c 22 08 02 70 21 
+[1793681734] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681734] audio: dec pkts=160
+[1793681734] audio: decoded 2048 frames
+[1793681735] asbr: enqueue called sbuf=0x15288a000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681735] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681735] audio: dec normalize aac->mp4a
+[1793681735] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3600
+[1793681735] audio: dec head[16]: 21 1a 94 ed a2 9b 03 a0 b1 a0 4c 74 10 6d 8a 2e 
+[1793681735] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681735] audio: dec pkts=160
+[1793681735] audio: decoded 2048 frames
+[1793681735] asbr: enqueue called sbuf=0x15288a000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681735] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681735] audio: dec normalize aac->mp4a
+[1793681735] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3949
+[1793681735] audio: dec head[16]: 21 1a 94 a5 ae 92 c5 81 b1 51 20 df 92 74 a5 d1 
+[1793681735] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681735] audio: dec pkts=160
+[1793681735] audio: decoded 2048 frames
+[1793681735] asbr: enqueue called sbuf=0x1520f5a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681735] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681735] audio: dec normalize aac->mp4a
+[1793681735] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3618
+[1793681735] audio: dec head[16]: 21 1a 8e f9 e7 f0 04 61 0d 6a 73 9b 90 e2 40 00 
+[1793681735] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681735] audio: dec pkts=160
+[1793681735] audio: decoded 2048 frames
+[1793681735] asbr: enqueue called sbuf=0x1518fe000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681735] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681735] audio: dec normalize aac->mp4a
+[1793681735] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3377
+[1793681735] audio: dec head[16]: 21 2a 93 ed 96 8e 8b 69 9a d9 f2 3e 1e 25 e9 51 
+[1793681735] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681735] audio: dec pkts=160
+[1793681735] audio: decoded 2048 frames
+[1793681736] asbr: enqueue called sbuf=0x15288a000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681736] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681736] audio: dec normalize aac->mp4a
+[1793681736] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3741
+[1793681736] audio: dec head[16]: 21 4c 6d 44 c9 2a 3a dc 3b 70 8c db 87 4e 12 9b 
+[1793681736] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681736] audio: dec pkts=160
+[1793681736] audio: decoded 2048 frames
+[1793681736] asbr: enqueue called sbuf=0x15288a000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681736] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681736] audio: dec normalize aac->mp4a
+[1793681736] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3662
+[1793681736] audio: dec head[16]: 21 1a 94 35 9e 14 cb 83 32 05 55 b3 7d 7d 91 50 
+[1793681736] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681736] audio: dec pkts=160
+[1793681736] audio: decoded 2048 frames
+[1793681736] asbr: enqueue called sbuf=0x152119800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681736] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681736] audio: dec normalize aac->mp4a
+[1793681736] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3949
+[1793681736] audio: dec head[16]: 21 4c d9 43 5b 88 d1 0d a8 e9 4d ca 71 6e d7 07 
+[1793681736] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681736] audio: dec pkts=160
+[1793681736] audio: decoded 2048 frames
+[1793681736] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681736] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681736] audio: dec normalize aac->mp4a
+[1793681736] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3830
+[1793681736] audio: dec head[16]: 21 4c 6d 3d df 14 d9 59 a9 6a 9c 2b 74 db 5b aa 
+[1793681736] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681736] audio: dec pkts=160
+[1793681736] audio: decoded 2048 frames
+[1793681736] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681736] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681736] audio: dec normalize aac->mp4a
+[1793681736] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3760
+[1793681736] audio: dec head[16]: 21 0a 94 15 a9 90 87 66 21 51 9c f1 57 74 04 b8 
+[1793681736] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681736] audio: dec pkts=160
+[1793681736] audio: decoded 2048 frames
+[1793681737] asbr: enqueue called sbuf=0x15192fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681737] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681737] audio: dec normalize aac->mp4a
+[1793681737] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3400
+[1793681737] audio: dec head[16]: 21 1a 94 d5 a5 0f 49 40 c2 50 c2 10 74 33 5b d6 
+[1793681737] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681737] audio: dec pkts=160
+[1793681737] audio: decoded 2048 frames
+[1793681737] asbr: enqueue called sbuf=0x15192fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681737] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681737] audio: dec normalize aac->mp4a
+[1793681737] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4015
+[1793681737] audio: dec head[16]: 21 4c 9b 42 d9 66 54 5d c4 a4 ef aa 4c 6d d7 2c 
+[1793681737] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681737] audio: dec pkts=160
+[1793681737] audio: decoded 2048 frames
+[1793681737] asbr: enqueue called sbuf=0x15192fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681737] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681737] audio: dec normalize aac->mp4a
+[1793681737] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3506
+[1793681737] audio: dec head[16]: 21 5c 9b 46 52 58 3a ec 61 37 a9 c2 53 6e 1b 34 
+[1793681737] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681737] audio: dec pkts=160
+[1793681737] audio: decoded 2048 frames
+[1793681737] asbr: enqueue called sbuf=0x15292c000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681737] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681737] audio: dec normalize aac->mp4a
+[1793681737] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3603
+[1793681737] audio: dec head[16]: 21 1a 94 f5 c2 07 42 63 90 58 54 36 22 11 55 88 
+[1793681737] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681737] audio: dec pkts=160
+[1793681737] audio: decoded 2048 frames
+[1793681738] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681738] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681738] audio: dec normalize aac->mp4a
+[1793681738] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4128
+[1793681738] audio: dec head[16]: 21 1a 94 7d aa 09 62 83 51 98 e8 36 0a 0c 3c 75 
+[1793681738] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681738] audio: dec pkts=160
+[1793681738] audio: decoded 2048 frames
+[1793681738] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681738] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681738] audio: dec normalize aac->mp4a
+[1793681738] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3409
+[1793681738] audio: dec head[16]: 21 0a 94 1d ad d2 96 00 25 db 9b d0 5a c2 ac 29 
+[1793681738] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681738] audio: dec pkts=160
+[1793681738] audio: decoded 2048 frames
+[1793681738] asbr: enqueue called sbuf=0x15292c000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681738] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681738] audio: dec normalize aac->mp4a
+[1793681738] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3710
+[1793681738] audio: dec head[16]: 21 1a 94 ed c2 0b 62 41 b0 e8 70 36 32 04 02 49 
+[1793681738] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681738] audio: dec pkts=160
+[1793681738] audio: decoded 2048 frames
+[1793681738] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681738] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681738] audio: dec normalize aac->mp4a
+[1793681738] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3916
+[1793681738] audio: dec head[16]: 21 1a 94 fd a6 9a c4 85 a1 51 6a 11 2f 9c 7c 0e 
+[1793681738] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681738] audio: dec pkts=160
+[1793681738] audio: decoded 2048 frames
+[1793681739] asbr: enqueue called sbuf=0x152129000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681739] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681739] audio: dec normalize aac->mp4a
+[1793681739] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3629
+[1793681739] audio: dec head[16]: 21 1a 94 ed 99 91 46 61 50 98 50 26 34 05 8a 82 
+[1793681739] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681739] audio: dec pkts=160
+[1793681739] audio: decoded 2048 frames
+[1793681739] asbr: enqueue called sbuf=0x15292c000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681739] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681739] audio: dec normalize aac->mp4a
+[1793681739] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4216
+[1793681739] audio: dec head[16]: 21 1a 94 bd aa 92 c6 a1 b1 a0 2c 63 0a ca b7 c4 
+[1793681739] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681739] audio: dec pkts=160
+[1793681739] audio: decoded 2048 frames
+[1793681739] asbr: enqueue called sbuf=0x1538b3c00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681739] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681739] audio: dec normalize aac->mp4a
+[1793681739] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3434
+[1793681739] audio: dec head[16]: 21 0a 8f f4 f2 08 52 01 11 6c 58 11 50 24 34 09 
+[1793681739] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681739] audio: dec pkts=160
+[1793681739] audio: decoded 2048 frames
+[1793681739] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681739] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681739] audio: dec normalize aac->mp4a
+[1793681739] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3457
+[1793681739] audio: dec head[16]: 21 1a 94 ed ae 91 05 61 88 98 44 36 21 90 01 04 
+[1793681739] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681739] audio: dec pkts=160
+[1793681739] audio: decoded 2048 frames
+[1793681740] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681740] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681740] audio: dec normalize aac->mp4a
+[1793681740] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3717
+[1793681740] audio: dec head[16]: 21 1a 94 bd c2 8d 05 21 40 98 b0 26 19 04 ed 51 
+[1793681740] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681740] audio: dec pkts=160
+[1793681740] audio: decoded 2048 frames
+[1793681740] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681740] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681740] audio: dec normalize aac->mp4a
+[1793681740] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3550
+[1793681740] audio: dec head[16]: 21 1a 94 d5 ca 8d 03 61 40 90 6c 38 1a 88 02 d1 
+[1793681740] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681740] audio: dec pkts=160
+[1793681740] audio: decoded 2048 frames
+[1793681740] asbr: enqueue called sbuf=0x15192fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681740] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681740] audio: dec normalize aac->mp4a
+[1793681740] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3798
+[1793681740] audio: dec head[16]: 21 1a 94 5d 9e 91 12 61 c0 e8 2c 20 59 4c ad a3 
+[1793681740] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681740] audio: dec pkts=160
+[1793681740] audio: decoded 2048 frames
+[1793681740] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681740] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681740] audio: dec normalize aac->mp4a
+[1793681740] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3909
+[1793681740] audio: dec head[16]: 21 1a 94 9d c6 8e c1 a1 20 a0 4c a1 09 d8 98 1a 
+[1793681740] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681740] audio: dec pkts=160
+[1793681740] audio: decoded 2048 frames
+[1793681740] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681740] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681740] audio: dec normalize aac->mp4a
+[1793681740] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3501
+[1793681740] audio: dec head[16]: 21 0a 94 2d b1 a4 81 65 10 40 00 a8 42 08 a9 32 
+[1793681740] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681740] audio: dec pkts=160
+[1793681740] audio: decoded 2048 frames
+[1793681741] asbr: enqueue called sbuf=0x15192fa00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681741] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681741] audio: dec normalize aac->mp4a
+[1793681741] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3665
+[1793681741] audio: dec head[16]: 21 1a 94 95 aa 95 61 a3 b1 50 4c 54 11 0c 39 8b 
+[1793681741] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681741] audio: dec pkts=160
+[1793681741] audio: decoded 2048 frames
+[1793681741] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681741] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681741] audio: dec normalize aac->mp4a
+[1793681741] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3593
+[1793681741] audio: dec head[16]: 21 1a 94 9d ca 0e d0 40 b3 83 c9 b7 21 c0 b8 2d 
+[1793681741] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681741] audio: dec pkts=160
+[1793681741] audio: decoded 2048 frames
+[1793681741] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681741] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681741] audio: dec normalize aac->mp4a
+[1793681741] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3806
+[1793681741] audio: dec head[16]: 21 1a 94 cd ba 0f 44 82 51 59 00 04 eb c3 8e b5 
+[1793681741] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681741] audio: dec pkts=160
+[1793681741] audio: decoded 2048 frames
+[1793681741] asbr: enqueue called sbuf=0x152126a00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681741] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681741] audio: dec normalize aac->mp4a
+[1793681741] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3777
+[1793681741] audio: dec head[16]: 21 1a 94 b5 d2 87 61 a4 32 80 e3 a5 b5 29 5a 66 
+[1793681741] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681741] audio: dec pkts=160
+[1793681741] audio: decoded 2048 frames
+[1793681742] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681742] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681742] audio: dec normalize aac->mp4a
+[1793681742] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3660
+[1793681742] audio: dec head[16]: 21 1a 94 25 a2 8c cc 82 b0 e0 ec 11 3b a8 77 80 
+[1793681742] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681742] audio: dec pkts=160
+[1793681742] audio: decoded 2048 frames
+[1793681742] asbr: enqueue called sbuf=0x15288a000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681742] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681742] audio: dec normalize aac->mp4a
+[1793681742] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3814
+[1793681742] audio: dec head[16]: 21 1a 94 5d c2 0d 62 82 50 e0 4c 84 08 88 c2 0d 
+[1793681742] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681742] audio: dec pkts=160
+[1793681742] audio: decoded 2048 frames
+[1793681742] asbr: enqueue called sbuf=0x151926200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681742] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681742] audio: dec normalize aac->mp4a
+[1793681742] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3779
+[1793681742] audio: dec head[16]: 21 1a 94 7d 9e 0e d5 81 31 08 25 af 79 5a dd b3 
+[1793681742] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681742] audio: dec pkts=160
+[1793681742] audio: decoded 2048 frames
+[1793681742] asbr: enqueue called sbuf=0x151926200 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681742] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681742] audio: dec normalize aac->mp4a
+[1793681742] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3580
+[1793681742] audio: dec head[16]: 21 1a 94 c5 b2 0b 65 a1 c0 99 ca 10 03 55 a2 56 
+[1793681742] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681742] audio: dec pkts=160
+[1793681742] audio: decoded 2048 frames
+[1793681743] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681743] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681743] audio: dec normalize aac->mp4a
+[1793681743] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3979
+[1793681743] audio: dec head[16]: 21 1a 94 d5 d2 8d 61 a1 b2 c8 25 a5 55 29 c0 f6 
+[1793681743] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681743] audio: dec pkts=160
+[1793681743] audio: decoded 2048 frames
+[1793681743] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681743] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681743] audio: dec normalize aac->mp4a
+[1793681743] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3563
+[1793681743] audio: dec head[16]: 21 6a 94 75 b1 bc d5 e4 52 99 eb 72 ea ea 4c 9a 
+[1793681743] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681743] audio: dec pkts=160
+[1793681743] audio: decoded 2048 frames
+[1793681743] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681743] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681743] audio: dec normalize aac->mp4a
+[1793681743] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3612
+[1793681743] audio: dec head[16]: 21 1a 94 c5 9a 96 c7 80 b0 a0 54 18 3b 0d 04 9c 
+[1793681743] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681743] audio: dec pkts=160
+[1793681743] audio: decoded 2048 frames
+[1793681743] asbr: enqueue called sbuf=0x15207c400 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681743] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681743] audio: dec normalize aac->mp4a
+[1793681743] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3770
+[1793681743] audio: dec head[16]: 21 1a 94 bc 19 46 8f 62 50 ac 74 86 08 4a 50 0c 
+[1793681743] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681743] audio: dec pkts=160
+[1793681743] audio: decoded 2048 frames
+[1793681743] asbr: enqueue called sbuf=0x15288a000 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681743] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681743] audio: dec normalize aac->mp4a
+[1793681743] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3880
+[1793681743] audio: dec head[16]: 21 1a 94 95 ad a1 0e 40 8b 96 f1 17 ba d9 b9 11 
+[1793681743] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681743] audio: dec pkts=160
+[1793681743] audio: decoded 2048 frames
+[1793681744] asbr: enqueue called sbuf=0x15191ac00 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681744] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681744] audio: dec normalize aac->mp4a
+[1793681744] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3562
+[1793681744] audio: dec head[16]: 21 7a 8f db e1 90 80 01 27 64 a4 31 8c 64 e4 30 
+[1793681744] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681744] audio: dec pkts=160
+[1793681744] audio: decoded 2048 frames
+[1793681744] asbr: enqueue called sbuf=0x15383a800 self=<AVSampleBufferAudioRenderer: 0x281469150> cmd=enqueueSampleBuffer:
+[1793681744] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793681744] audio: dec normalize aac->mp4a
+[1793681744] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3676
+[1793681744] audio: dec head[16]: 21 1a 8f f9 dd 20 00 01 1f 6b 49 32 d0 4e 24 02 
+[1793681744] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793681744] audio: dec pkts=160
+[1793681744] audio: decoded 2048 frames

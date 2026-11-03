@@ -1,0 +1,121 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 125703193236,
+      "run_id": 41570869425,
+      "workflow_name": "Build LiveCap roothide deb",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/sykeswzq/livecap-roothide/actions/runs/41570869425",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVZM-3s8AAAAdRH6ClA",
+      "head_sha": "1d76284cfe80442f153099772db20c8aea63b68c",
+      "url": "https://api.github.com/repos/sykeswzq/livecap-roothide/actions/jobs/125703193236",
+      "html_url": "https://github.com/sykeswzq/livecap-roothide/actions/runs/41570869425/job/125703193236",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-11-03T03:13:13Z",
+      "started_at": "2026-11-03T03:13:15Z",
+      "completed_at": "2026-11-03T03:13:52Z",
+      "name": "build",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-03T03:13:16Z",
+          "completed_at": "2026-11-03T03:13:18Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-03T03:13:18Z",
+          "completed_at": "2026-11-03T03:13:19Z"
+        },
+        {
+          "name": "Resolve version",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-03T03:13:19Z",
+          "completed_at": "2026-11-03T03:13:19Z"
+        },
+        {
+          "name": "Install build tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-03T03:13:19Z",
+          "completed_at": "2026-11-03T03:13:36Z"
+        },
+        {
+          "name": "Clean stale debs",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-03T03:13:36Z",
+          "completed_at": "2026-11-03T03:13:36Z"
+        },
+        {
+          "name": "Build",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 6,
+          "started_at": "2026-11-03T03:13:36Z",
+          "completed_at": "2026-11-03T03:13:47Z"
+        },
+        {
+          "name": "Verify deb",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7,
+          "started_at": "2026-11-03T03:13:47Z",
+          "completed_at": "2026-11-03T03:13:47Z"
+        },
+        {
+          "name": "Upload artifact",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8,
+          "started_at": "2026-11-03T03:13:47Z",
+          "completed_at": "2026-11-03T03:13:47Z"
+        },
+        {
+          "name": "Create Release",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9,
+          "started_at": "2026-11-03T03:13:47Z",
+          "completed_at": "2026-11-03T03:13:47Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-11-03T03:13:47Z",
+          "completed_at": "2026-11-03T03:13:49Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-11-03T03:13:49Z",
+          "completed_at": "2026-11-03T03:13:50Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/sykeswzq/livecap-roothide/check-runs/125703193236",
+      "labels": [
+        "macos-latest"
+      ],
+      "runner_id": 1000006815,
+      "runner_name": "GitHub Actions 1000006815",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}
