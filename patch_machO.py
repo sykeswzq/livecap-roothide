@@ -44,7 +44,7 @@ def patch_machO(dylib_path, new_id):
                 linkedit_off = off
                 linkedit_fileoff = fileoff
                 linkedit_filesize = filesize
-        elif cmd == 0x1D:  # LC_ID_DYLIB
+        elif cmd == 0x0D:  # LC_ID_DYLIB  (注意: 0x1D 是 LC_CODE_SIGNATURE，别搞混)
             id_dylib_off = off
         off += cmdsize
 
