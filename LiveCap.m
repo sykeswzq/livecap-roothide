@@ -1194,28 +1194,6 @@ static BOOL gProcessingFormatValid = NO;
 
 #pragma mark - 悬浮字幕
 
-// 诊断用容器：重写 hitTest 记录触摸最终落到哪个 view。
-// 这是判断「拖不动」根因的决定性证据 ——
-// 若日志显示触摸落到的是 YouTube 的 view，说明我们的 overlay 被压在下面。
-@interface LCOverlayContainer : UIView
-@end
-
-@implementation LCOverlayContainer
-
-static int g_lcHitCount = 0;
-
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    UIView *r = [super hitTest:point withEvent:event];
-    if (g_lcHitCount < 30) {
-        g_lcHitCount++;
-        LCLogF(@"touch: hitTest p=(%.0f,%.0f) -> %@", point.x, point.y,
-               r ? NSStringFromClass([r class]) : @"(nil=落到窗口外)");
-    }
-    return r;
-}
-
-@end
-
 @implementation LCSubtitleOverlay {
     UIView *_container;
     UIVisualEffectView *_blurView;
@@ -1285,7 +1263,7 @@ static int g_lcHitCount = 0;
 
         CGFloat fs = [LCConfig shared].fontSize;
         BOOL bold = [[LCConfig shared] boldText];
-        UIView *container = [[LCOverlayContainer alloc] initWithFrame:CGRectZero];
+        UIView *container = [[UIView alloc] initWithFrame:CGRectZero];
         container.backgroundColor = [UIColor clearColor];
 
         UILabel *ol = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -2018,20 +1996,24 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     UInt32 descCount = 0;
     CMItemCount dCnt = 0;
     st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, 0, NULL, &dCnt);
-    if (st == noErr && dCnt > 0) {
+    if (st == noErr && dCnt > 0 && dCnt <= 8192) {
         AudioStreamPacketDescription *tmp =
             (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)dCnt);
         if (tmp) {
             st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, dCnt, tmp, &dCnt);
-            // 校验：官方描述的总字节跨度必须落在当前 buffer 内，否则是码流级描述，不能用
-            if (st == noErr && dCnt > 0) {
-                SInt64 span = (SInt64)tmp[dCnt - 1].mStartOffset + (SInt64)tmp[dCnt - 1].mDataByteSize;
-                if (span <= (SInt64)dataLen) {
-                    descs = tmp;
-                    descCount = (UInt32)dCnt;
-                } else {
-                    free(tmp);
+            // 校验：官方描述必须完全落在当前 buffer 内，否则是码流级描述，不能用。
+            // 实测 YouTube 的 AAC buffer：官方恒返回 frames×16 个包（码流级），
+            // 其中只有前 ~2 个落在本 buffer 内，其余指向 buffer 之外 —— 直接用会越界读。
+            BOOL valid = (st == noErr && dCnt > 0);
+            if (valid) {
+                for (CMItemCount i = 0; i < dCnt; i++) {
+                    SInt64 end = (SInt64)tmp[i].mStartOffset + (SInt64)tmp[i].mDataByteSize;
+                    if (tmp[i].mDataByteSize == 0 || end > (SInt64)dataLen) { valid = NO; break; }
                 }
+            }
+            if (valid) {
+                descs = tmp;
+                descCount = (UInt32)dCnt;
             } else {
                 free(tmp);
             }
@@ -2039,8 +2021,15 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     }
 
     // 用 sample sizes 重建【当前 buffer 内】的包描述。
-    // 注意：numSizes==1 时 CoreMedia 只给「统一大小」，
-    // 但仍要把 numSamples 个包全部列出（每个 sizes[0] 字节），不能只建 1 个包。
+    //
+    // 实测（YouTube AAC buffer）：
+    //   frames=10, len=3670 字节 → 官方包描述 160 个（= frames×16，码流级）
+    //   frames=1,  len=431  字节 → 官方包描述 16 个
+    // 可见官方描述与本 buffer 无关，不能直接用。
+    //
+    // 正确做法：用 CMSampleBufferGetSampleSizeArray 拿到每个【sample】的字节数，
+    // 累加直到填满 dataLen 为止 —— 这样得到的包数与字节数天然自洽，
+    // 既不会越界，也不会漏解。
     if (!descs) {
         CMItemCount numSamples = CMSampleBufferGetNumSamples(sbuf);
         if (numSamples > 0 && numSamples <= 8192) {
@@ -2049,20 +2038,24 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
                 CMItemCount numSizes = 0;
                 CMSampleBufferGetSampleSizeArray(sbuf, numSamples, sizes, &numSizes);
                 if (numSizes > 0) {
-                    // effN = 本 buffer 内实际的包数
+                    // numSizes==1：CoreMedia 只给「统一大小」，展开成 numSamples 个包
                     CMItemCount effN = (numSizes == 1 && numSamples > 1) ? numSamples : numSizes;
+                    if (effN > 8192) effN = 8192;
                     descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)effN);
                     if (descs) {
                         size_t off = 0;
                         for (CMItemCount i = 0; i < effN; i++) {
                             size_t sz = (numSizes == 1) ? sizes[0] : sizes[i];
+                            // 越界保护：包不能为空，累计偏移不能超出 buffer
+                            if (sz == 0 || off + sz > (size_t)dataLen) break;
                             descs[i].mStartOffset = (UInt32)off;
                             descs[i].mDataByteSize = (UInt32)sz;
                             descs[i].mVariableFramesInPacket = 0;
                             off += sz;
                             descCount++;
                         }
-                        LCLogF(@"audio: dec built %u pkt descs from %lld sample sizes (eff=%lld, dataLen=%lld)",
+                        if (descCount == 0) { free(descs); descs = NULL; }
+                        LCLogF(@"audio: dec built %u pkt descs from %lld sizes (eff=%lld, dataLen=%lld)",
                                (unsigned)descCount, (long long)numSizes, (long long)effN, (long long)dataLen);
                     }
                 }
@@ -2107,6 +2100,31 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         AudioConverterDispose(conv);
         return;
     }
+    // 兜底 2：整段当单包解码通常会失败(-50)。
+    // 若可用字节数足够，按 AAC 典型包长(~384 字节)切分成多个等长包，
+    // 这样 AudioConverter 至少能解出大部分音频，而不是整段丢弃。
+    if (descCount == 1 && descs[0].mDataByteSize > 800) {
+        UInt32 approx = (UInt32)(dataLen / 384);
+        if (approx >= 2 && approx <= 512) {
+            AudioStreamPacketDescription *nd =
+                (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * approx);
+            if (nd) {
+                UInt32 each = (UInt32)dataLen / approx;
+                UInt32 used = 0;
+                for (UInt32 i = 0; i < approx; i++) {
+                    UInt32 sz = (i == approx - 1) ? ((UInt32)dataLen - used) : each;
+                    nd[i].mStartOffset = used;
+                    nd[i].mDataByteSize = sz;
+                    nd[i].mVariableFramesInPacket = 0;
+                    used += sz;
+                }
+                free(descs);
+                descs = nd;
+                descCount = approx;
+                LCLogF(@"audio: dec fallback split into %u pkts (%u bytes each)", (unsigned)descCount, (unsigned)each);
+            }
+        }
+    }
     LCLogF(@"audio: dec pkts=%u", (unsigned)descCount);
 
     // 计算输出缓冲大小
@@ -2115,9 +2133,13 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     // 正确算法：输出帧数 ≈ 包数 × 每包帧数(AAC-LC = 1024)。
     CMItemCount numPkts = (CMItemCount)descCount;
     CMItemCount framesPerPacket = (CMItemCount)(inASBD2.mFramesPerPacket > 0 ? inASBD2.mFramesPerPacket : 1024);
+    // 防御：每包帧数异常时按 1024 算（AAC-LC 标准值），避免乘法溢出
+    if (framesPerPacket <= 0 || framesPerPacket > 4096) framesPerPacket = 1024;
     CMItemCount totalSamples = numPkts * framesPerPacket;
     if (totalSamples <= 0) totalSamples = (CMItemCount)CMSampleBufferGetNumSamples(sbuf);
     if (totalSamples <= 0) totalSamples = 1024;
+    // 上限保护：单次解码最多约 30 秒音频，防止超大分配
+    if (totalSamples > 16000 * 30) totalSamples = 16000 * 30;
     UInt32 maxOut = 4096;
     UInt32 propSz = sizeof(maxOut);
     AudioConverterGetProperty(conv, kAudioConverterPropertyMaximumOutputPacketSize, &propSz, &maxOut);
@@ -2141,6 +2163,11 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     // 准备输入数据
     LCConvInput in = { (uint8_t *)dataPtr, dataLen, descs, descCount, 0 };
     UInt32 outNumPackets = (UInt32)(outCapacity / outASBD.mBytesPerFrame);
+    // 上限必须与 outCapacity 匹配：outNumPackets×mBytesPerFrame 不能超过 outCapacity，
+    // 否则 AudioConverter 会写出界 -> 闪退
+    UInt32 maxPackets = outCapacity / outASBD.mBytesPerFrame;
+    if (maxPackets < 1) maxPackets = 1;
+    if (outNumPackets > maxPackets) outNumPackets = maxPackets;
     if (outNumPackets > 262144) outNumPackets = 262144;
     if (outNumPackets < 1) outNumPackets = 1;
 
@@ -2155,6 +2182,13 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     }
 
     UInt32 producedFrames = outList.mBuffers[0].mDataByteSize / outASBD.mBytesPerFrame;
+    // 安全：转换器写入的字节数绝不能超过我们给的容量
+    if (outList.mBuffers[0].mDataByteSize > outCapacity) {
+        LCLogF(@"audio: dec overflow guard %lu > %lu",
+               (unsigned long)outList.mBuffers[0].mDataByteSize, (unsigned long)outCapacity);
+        free(outData);
+        return;
+    }
     if (producedFrames == 0 || producedFrames > 262144) {
         free(outData);
         return;
