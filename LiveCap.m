@@ -408,7 +408,7 @@ static NSString *LCJBRootPath(NSString *path) {
         } else {
             LCLogF(@"translate: provider '%@' failed, fallback", provider);
             [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                         order:order idx:idx+1 completion:completion];
+                         order:order idx:idx+1 maxRetries:maxRetries completion:completion];
         }
     };
     if ([provider isEqualToString:@"tencent"]) {
