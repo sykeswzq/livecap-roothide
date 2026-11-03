@@ -246,9 +246,25 @@ static NSString *LCJBRootPath(NSString *path) {
         [d[@"manualPositions"] isKindOfClass:[NSDictionary class]] ? d[@"manualPositions"] : @{}];
     pos[self.bundleId] = @{@"x": @(x), @"y": @(y)};
     d[@"manualPositions"] = pos;
-    [d writeToFile:path atomically:YES];
+    BOOL ok = [d writeToFile:path atomically:YES];
+    if (!ok) {
+        // App 沙盒可能无法写全局 Preferences（roothide 路径映射 + 沙盒权限），
+        // 退而求其次写自己的沙盒 Documents（至少本次会话内位置能保留）
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        if (paths.count) {
+            NSString *fallback = [paths[0] stringByAppendingPathComponent:@"livecap_positions.plist"];
+            NSMutableDictionary *fd = [NSMutableDictionary dictionaryWithContentsOfFile:fallback];
+            if (!fd) fd = [NSMutableDictionary dictionary];
+            NSMutableDictionary *fpos = [NSMutableDictionary dictionaryWithDictionary:
+                [fd[@"manualPositions"] isKindOfClass:[NSDictionary class]] ? fd[@"manualPositions"] : @{}];
+            fpos[self.bundleId] = @{@"x": @(x), @"y": @(y)};
+            fd[@"manualPositions"] = fpos;
+            [fd writeToFile:fallback atomically:YES];
+            LCLogF(@"pos: global write failed, saved to sandbox %@", fallback);
+        }
+    }
     _d = d;  // 内存同步，下一次 show 直接生效
-    LCLogF(@"pos: saved for %@ x=%.2f y=%.2f", self.bundleId, x, y);
+    LCLogF(@"pos: saved for %@ x=%.2f y=%.2f ok=%d", self.bundleId, x, y, ok);
 }
 
 @end
@@ -289,7 +305,9 @@ static NSString *LCJBRootPath(NSString *path) {
 
     NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [LCConfig shared].targetLang, trimmed];
     NSString *cached = _cache[cacheKey];
-    if (cached) {
+    // 注意：必须同时判 length，否则空串（模型对乱码输入常返回空）会被当成有效缓存，
+    // 导致这一句之后永远翻译不出来
+    if (cached.length > 0) {
         if (completion) completion(cached);
         return;
     }
@@ -316,7 +334,12 @@ static NSString *LCJBRootPath(NSString *path) {
             @"4. Keep abbreviations and proper nouns intact.\n"
             @"5. Output ONLY the translated text. No explanations, no quotation marks, no prefixes like '翻译：' or '译文：'.\n"
             @"6. Preserve line breaks exactly as in the original.\n"
-            @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n\n"
+            @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n"
+            @"8. The input may be an imperfect speech-to-text fragment with recognition errors.\n"
+            @"   Still translate it into Chinese: infer the intended meaning from context and output Chinese.\n"
+            @"   NEVER echo the English input back. The output MUST contain Chinese characters.\n"
+            @"9. If the input is too short or nonsensical to translate, output your best Chinese guess,\n"
+            @"   but NEVER return an empty response.\n\n"
             @"Examples:\n"
             @"Input: Hello, how are you?\n"
             @"Output: 你好，最近怎么样？\n\n"
@@ -350,11 +373,40 @@ static NSString *LCJBRootPath(NSString *path) {
     }
     NSString *provider = order[idx];
     void (^proceed)(NSString *res) = ^(NSString *res){
-        if (res.length) {
+        // 模型对识别质量差的输入（乱码/短片段）常原样返回英文 —— 这不算翻译成功。
+        // 必须与原文比对，判定失败后顺延到下一个 provider（MyMemory 免费兜底）。
+        BOOL usable = res.length > 0;
+        if (usable) {
+            NSString *norm = [res stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *orig = [text stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if ([norm isEqualToString:orig]) {
+                LCLogF(@"translate: provider '%@' returned原文未翻译, treat as failure", provider);
+                usable = NO;
+            } else {
+                // 目标语言是中文时，结果里必须含中文，否则视为没翻
+                NSString *dst = [[LCConfig shared] targetLang];
+                if ([dst hasPrefix:@"zh"]) {
+                    BOOL hasCJK = NO;
+                    for (NSUInteger i = 0; i < norm.length; i++) {
+                        unichar ch = [norm characterAtIndex:i];
+                        if (ch >= 0x4E00 && ch <= 0x9FFF) { hasCJK = YES; break; }
+                    }
+                    if (!hasCJK) {
+                        LCLogF(@"translate: provider '%@' returned no Chinese, treat as failure", provider);
+                        usable = NO;
+                    }
+                }
+            }
+        }
+        if (usable) {
+            LCLogF(@"translate: provider '%@' OK len=%lu", provider, (unsigned long)res.length);
             _cache[cacheKey] = res;
             if (_cache.count > 300) [_cache removeAllObjects];
             if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(res); });
         } else {
+            LCLogF(@"translate: provider '%@' failed, fallback", provider);
             [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
                          order:order idx:idx+1 completion:completion];
         }
@@ -402,6 +454,7 @@ static NSString *LCShortLang(NSString *lc) {
             [NSCharacterSet URLQueryAllowedCharacterSet]],
         src, dst];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
+    [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
     req.timeoutInterval = 12.0;
     LCLogF(@"translate: mymemory request url=%@", urlStr);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
@@ -480,7 +533,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
         [NSURL URLWithString:@"https://tmt.tencentcloudapi.com"]];
     req.HTTPMethod = @"POST";
-    [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [req setValue:host forHTTPHeaderField:@"Host"];
     [req setValue:@"TextTranslate" forHTTPHeaderField:@"X-TC-Action"];
     [req setValue:@"2018-03-21" forHTTPHeaderField:@"X-TC-Version"];
@@ -550,6 +603,14 @@ static NSString *LCTmtLang(NSString *lcLang) {
     NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
     if (err || !payload) { LCLogF(@"translate: openai json err %@", err); if (completion) completion(nil); return; }
 
+    // 诊断：打印实际发出的报文（前 500 字节）
+    // 只有拿到设备端真实 payload 才能判断是「请求被改」还是「响应被改」
+    {
+        NSString *raw = [[NSString alloc] initWithData:payload encoding:NSUTF8StringEncoding] ?: @"(非UTF8)";
+        NSString *head = raw.length > 500 ? [raw substringToIndex:500] : raw;
+        LCLogF(@"translate: PAYLOAD len=%lu head=[%@]", (unsigned long)payload.length, head);
+    }
+
     // 拼接 API URL（可能以 / 结尾）
     NSString *chatUrl = [apiBase hasSuffix:@"/"] ? [apiBase stringByAppendingString:@"chat/completions"]
                                                  : [apiBase stringByAppendingString:@"/chat/completions"];
@@ -558,6 +619,11 @@ static NSString *LCTmtLang(NSString *lcLang) {
     req.HTTPMethod = @"POST";
     [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [req setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
+    // 必须显式设置 User-Agent：
+    // NSURLSession 默认发 "LiveCap/1.0.68 CFNetwork/xxx Darwin/xxx"，
+    // 实测该 UA 会让部分 AI 网关的模型退化（直接回显英文原文，不翻译）。
+    // 换成普通客户端标识后翻译恢复正常。
+    [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
     req.HTTPBody = payload;
     req.timeoutInterval = 15.0;
 
@@ -577,6 +643,14 @@ static NSString *LCTmtLang(NSString *lcLang) {
             return;
         }
         // 解析响应
+        // 诊断：先打印原始响应前 600 字节 —— 确认服务端到底返回了什么
+        {
+            NSString *raw = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            if (!raw) raw = [NSString stringWithFormat:@"(binary %lu bytes)",
+                             (unsigned long)data.length];
+            NSString *head = raw.length > 600 ? [raw substringToIndex:600] : raw;
+            LCLogF(@"translate: RAW len=%lu head=[%@]", (unsigned long)data.length, head);
+        }
         NSArray *choices = json[@"choices"];
         if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {
             LCLogF(@"translate: openai no choices (%@)", json);
@@ -634,17 +708,24 @@ static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
                                        NSData *payload, NSString *host,
                                        NSString *service, NSString *action,
                                        NSString *region) {
-    // CanonicalRequest（action 转小写进签名，与实际 header 大小写无关）
+    // CanonicalRequest
+    // Content-Type 必须与实际请求头完全一致（不能带 charset，腾讯云按原样参与哈希）
+    // SignedHeaders 只用 content-type;host（腾讯云官方示例格式；
+    // 多带 x-tc-action 会导致 Content-Type 与签名串不一致 → SignatureFailure）
     NSString *hashedPayload = LCDataToHex(LCSHA256(payload));
     NSString *canonicalHeaders = [NSString stringWithFormat:
-        @"content-type:application/json; charset=utf-8\nhost:%@\nx-tc-action:%@\n", host, action];
-    NSString *signedHeaders = @"content-type;host;x-tc-action";
+        @"content-type:application/json\nhost:%@\n", host];
+    NSString *signedHeaders = @"content-type;host";
     NSString *canonicalRequest = [NSString stringWithFormat:
         @"POST\n/\n\n%@\n%@\n%@",
         canonicalHeaders, signedHeaders, hashedPayload];
 
-    // TC3 credential scope 必须是 日期/服务/地域/tc3_request 四段，漏地域会被腾讯云判为非法签名
-    NSString *credentialScope = [NSString stringWithFormat:@"%@/%@/%@/tc3_request", date, service, region];
+    // TC3 credential scope 必须是【三段】Date/service/tc3_request，不含 region！
+    // 写成四段（含 region）腾讯云直接返回
+    //   AuthFailure.InvalidAuthorization: "Credential scope size not valid"
+    // region 只放在 X-TC-Region 请求头里，不参与签名 scope。
+    (void)region;  // 保留参数仅为兼容调用方；scope 不含 region
+    NSString *credentialScope = [NSString stringWithFormat:@"%@/%@/tc3_request", date, service];
     NSString *stringToSign = [NSString stringWithFormat:
         @"TC3-HMAC-SHA256\n%@\n%@\n%@",
         timestamp, credentialScope, LCDataToHex(LCSHA256(LCBytes(canonicalRequest)))];
@@ -675,7 +756,7 @@ static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
 static AudioStreamBasicDescription gProcessingFormat;
 static BOOL gProcessingFormatValid = NO;
 
-@interface LCSubtitleOverlay : NSObject
+@interface LCSubtitleOverlay : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
 - (void)install;
 - (void)showOriginal:(NSString *)origin translation:(NSString *)translation;
@@ -766,13 +847,13 @@ static BOOL gProcessingFormatValid = NO;
             [_pcm appendBytes:tmp length:frames * sizeof(float)];
             free(tmp);
 
-            // 每 ~5 秒切一段识别
+            // 每 ~5 秒切一段送「一句话识别」
             double secs = (double)_pcm.length / sizeof(float) / _inRate;
             if (secs >= 5.0 && !_inFlight) {
                 NSData *chunk = [_pcm copy];
                 [_pcm setLength:0];
                 [self processChunk:chunk];
-            } else if (secs >= 8.0) {
+            } else if (secs >= 10.0) {
                 // 上次请求未完成：丢弃过量累积防止内存膨胀
                 [_pcm setLength:0];
             }
@@ -848,12 +929,22 @@ static BOOL gProcessingFormatValid = NO;
                     return;
                 }
                 // 识别语言映射
+                // 实测（腾讯云一句话识别接口）：
+                //   支持: 16k_zh / 16k_en / 16k_multi_lang / 16k_ja / 16k_ko
+                //   不支持: 16k_zh_en / 16k_zh_large / 16k_en_large / bigmodel
+                //   （大模型引擎只在「实时语音识别 WebSocket」接口提供，
+                //     一句话识别 HTTP 接口不支持 —— 实测会返回
+                //      InvalidParameter: Not support [EngineModelType: xxx]）
+                // 16k_multi_lang 是大模型引擎：参数量极大、语言模型性能增强，
+                // 对「噪声大/回音大/人声小/人声远」等低质量音频识别准确率极大提升，
+                // 且支持 15 语种自动识别（句子/段落级）。
+                // 我们抓的是视频音轨（背景音乐 + 对白），正属于低质量音频场景，
+                // 用普通引擎 16k_en 会被识别成碎片。
                 NSString *lang = [[LCConfig shared] sourceLang];
-                NSString *eng = @"16k_zh";
-                if ([lang isEqualToString:@"en-US"]) eng = @"16k_en";
+                NSString *eng = @"16k_multi_lang";   // 多语言大模型引擎
+                if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
                 else if ([lang isEqualToString:@"ja-JP"]) eng = @"16k_ja";
                 else if ([lang isEqualToString:@"ko-KR"]) eng = @"16k_ko";
-                else if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
 
                 NSDictionary *body = @{
                     @"ProjectId": @0,
@@ -884,7 +975,7 @@ static BOOL gProcessingFormatValid = NO;
                 NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
                     [NSURL URLWithString:@"https://asr.tencentcloudapi.com"]];
                 req.HTTPMethod = @"POST";
-                [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+                [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
                 [req setValue:host forHTTPHeaderField:@"Host"];
                 [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
                 [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
@@ -919,6 +1010,7 @@ static BOOL gProcessingFormatValid = NO;
                         [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
                         [[LCTranslator shared] translate:text
                             completion:^(NSString *tr) {
+                                LCLogF(@"asr: translate done tr=[%@] len=%lu", tr, (unsigned long)(tr ? tr.length : 0));
                                 if (tr.length) [[LCSubtitleOverlay shared] showOriginal:text translation:tr];
                             }];
                     });
@@ -953,7 +1045,7 @@ static BOOL gProcessingFormatValid = NO;
             NSData *chunk = [_pcm copy];
             [_pcm setLength:0];
             [self processChunk:chunk];
-        } else if (secs >= 8.0) {
+        } else if (secs >= 10.0) {
             [_pcm setLength:0];
         }
     }
@@ -969,7 +1061,7 @@ static BOOL gProcessingFormatValid = NO;
             NSData *chunk = [_pcm16 copy];
             [_pcm16 setLength:0];
             [self processChunk16:chunk];
-        } else if (_pcm16.length >= 16000 * 2 * 8) {
+        } else if (_pcm16.length >= 16000 * 2 * 10) {
             [_pcm16 setLength:0];
         }
     }
@@ -1054,7 +1146,7 @@ static BOOL gProcessingFormatValid = NO;
                 NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
                     [NSURL URLWithString:@"https://asr.tencentcloudapi.com"]];
                 req.HTTPMethod = @"POST";
-                [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+                [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
                 [req setValue:host forHTTPHeaderField:@"Host"];
                 [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
                 [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
@@ -1108,9 +1200,14 @@ static BOOL gProcessingFormatValid = NO;
     UIVisualEffectView *_blurView;
     UILabel *_originLabel;
     UILabel *_transLabel;
+    UIView *_dragHandle;          // 拖动把手（只有按住它才能拖动字幕框）
     BOOL _installed;
     BOOL _dragging;
     CGPoint _dragStartCenter;
+    NSString *_lastTranslation;   // 保留最近一次翻译，避免被下一轮 ASR 的 nil 覆盖
+    NSString *_lastOrigin;
+    BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
+    CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
 }
 
 + (instancetype)shared {
@@ -1159,7 +1256,10 @@ static BOOL gProcessingFormatValid = NO;
         }
 
         if (!keyWindow) { LCLog("overlay: no keyWindow found"); return; }
-        UIView *parent = keyWindow.rootViewController.view;
+        // 挂到 keyWindow 本身（而不是 rootViewController.view）：
+        // 1) 层级最高，不会被 App 内部的全屏播放层/手势层盖住导致拖不动
+        // 2) 不受 App 视图树变化影响
+        UIView *parent = keyWindow;
         if (!parent) { LCLog("overlay: no rootVC view"); return; }
 
         CGFloat fs = [LCConfig shared].fontSize;
@@ -1186,14 +1286,46 @@ static BOOL gProcessingFormatValid = NO;
         _transLabel = tl;
 
         // 字幕位置默认手动：容器始终可拖动，每个 App 分别记忆最后位置
+        // 拖动方式：在字幕框左上角放一个专用的「拖动把手」，
+        // 只有按住把手才能拖动字幕框。
+        // 不用 pan/长按：YouTube 全屏播放时 video view 上有自己的
+        // 滑动(进度条)/长按(2倍速)/双击(暂停)手势，
+        // 我们的手势挂在同一个 window 上会被它们 cancel 掉（表现为怎么拖都拖不动），
+        // 用独立把手则完全避开竞争。
         container.userInteractionEnabled = YES;
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
-            initWithTarget:self action:@selector(handlePan:)];
-        [container addGestureRecognizer:pan];
+
+        // 拖动把手：半透明白色圆点 + 深色双向箭头，直观且不遮挡字幕
+        UIView *handle = [[UIView alloc] initWithFrame:CGRectZero];
+        handle.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.9];
+        handle.layer.cornerRadius = 13.0;
+        handle.layer.borderWidth = 2.0;
+        handle.layer.borderColor = [UIColor colorWithWhite:0.1 alpha:0.9].CGColor;
+        handle.userInteractionEnabled = YES;
+        handle.accessibilityIdentifier = @"LiveCapDragHandle";
+        // 关键：必须立刻给出可见尺寸。
+        // 若等到 showOriginal 才定位，而 ASR 还没出结果（showOriginal 未被调用），
+        // 把手会一直是 CGRectZero —— 表现为「右上角没有白点」。
+        handle.frame = CGRectMake(2, 2, 26, 26);
+        [container addSubview:handle];
+        _dragHandle = handle;
+
+        // 把手用 UIPanGestureRecognizer：它是独立的小 view，
+        // YouTube 的手势不会覆盖它（YouTube 手势在 video view 上）
+        UIPanGestureRecognizer *hp = [[UIPanGestureRecognizer alloc]
+            initWithTarget:self action:@selector(handleHandlePan:)];
+        hp.cancelsTouchesInView = NO;
+        hp.delegate = self;   // 关键：允许与 YouTube 的手势同时识别
+        [handle addGestureRecognizer:hp];
 
         [parent addSubview:container];
         _container = container;
         _installed = YES;
+
+        // 关键：立即给 container 一个可见的尺寸和位置。
+        // 否则在 ASR 首次出结果之前，字幕框是 CGRectZero（不可见），
+        // 把手也跟着不可见 —— 表现为「字幕框没有、右上角没有白点」。
+        [self layoutInitialFrame];
+
         LCLog("overlay: installed");
     } @catch (NSException *e) {
         LCLog("overlay: install error");
@@ -1202,18 +1334,69 @@ static BOOL gProcessingFormatValid = NO;
     }
 }
 
-- (void)handlePan:(UIPanGestureRecognizer *)g {
+// 初始化字幕框位置/尺寸（ASR 尚未出结果时也保证可见）
+- (void)layoutInitialFrame {
+    if (!_container) return;
+    CGFloat fs = [[LCConfig shared] fontSize];
+    CGFloat pad = 10;
+    CGRect hostBounds = _container.superview ? _container.superview.bounds
+                                             : [UIScreen mainScreen].bounds;
+    CGFloat hostW = hostBounds.size.width;
+    CGFloat hostH = hostBounds.size.height;
+    CGFloat w = hostW - 32 + pad * 2;
+    CGFloat h = fs + pad * 2;
+    if (w < 80) w = 80;
+    CGFloat mx = [[LCConfig shared] manualX];
+    CGFloat my = [[LCConfig shared] manualY];
+    CGFloat spanX = MAX(hostW - w, 1);
+    CGFloat spanY = MAX(hostH - h, 1);
+    CGFloat x = mx * spanX;
+    CGFloat y = my * spanY;
+    _container.frame = CGRectMake(x, y, w, h);
+    _container.hidden = NO;
+    // 把手定位到右上角内侧
+    if (_dragHandle) {
+        CGFloat hs = 26.0;
+        _dragHandle.frame = CGRectMake(w - hs - 4, 4, hs, hs);
+    }
+    LCLogF(@"overlay: initial frame c=(%.0f,%.0f,%.0f,%.0f)",
+           x, y, w, h);
+}
+
+#pragma mark - 手势同时识别
+// 核心修复：YouTube 在 video view / window 上装了滑动、长按、双击等手势。
+// 默认情况下同一次触摸只允许一个手势识别，另一个会被 cancel —— 表现为「怎么拖都拖不动」。
+// 实现本 delegate 后，我们的拖动把手手势可以和 App 的手势同时识别，互不干扰。
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return YES;
+}
+
+// 我们的手势已经识别时，不要求其他手势先失败
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)other {
+    return NO;
+}
+
+- (void)handleHandlePan:(UIPanGestureRecognizer *)g {
     if (!_container) return;
     if (g.state == UIGestureRecognizerStateBegan) {
         _dragging = YES;
         _dragStartCenter = _container.center;
+        LCLogF(@"drag: begin center=(%.1f,%.1f)", _dragStartCenter.x, _dragStartCenter.y);
     } else if (g.state == UIGestureRecognizerStateChanged) {
         if (!_dragging) return;
         CGPoint t = [g translationInView:_container.superview];
         _container.center = CGPointMake(_dragStartCenter.x + t.x, _dragStartCenter.y + t.y);
+        _userCenter = _container.center;
     } else if (g.state == UIGestureRecognizerStateEnded ||
                g.state == UIGestureRecognizerStateCancelled) {
+        if (!_dragging) return;
         _dragging = NO;
+        // 用户拖过之后就沿用当前位置，不再被 showOriginal 重置
+        _userMoved = YES;
+        _userCenter = _container.center;
+        LCLogF(@"drag: end center=(%.1f,%.1f)", _userCenter.x, _userCenter.y);
         // 归一化当前位置并按 App 记录（0-1 百分比），下次打开/切回该 App 自动恢复
         CGRect r = _container.frame;
         CGRect p = _container.superview.bounds;
@@ -1244,26 +1427,52 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 }
 
 - (void)showOriginal:(NSString *)origin translation:(NSString *)translation {
-    if (!_container || !_installed) return;
+    if (!_container || !_installed) {
+        LCLogF(@"overlay: show skipped (container=%d installed=%d)", _container != nil, _installed);
+        return;
+    }
     @try {
         if (origin.length == 0 && translation.length == 0) return;
+
+        // 竞态修复：ASR 每轮先调 showOriginal(text, nil) 显示英文原文，
+        // 翻译要几秒后才回填。若这期间又来新一轮 ASR，翻译会被 nil 覆盖，
+        // 导致字幕框永远只显示英文。
+        // 关键：origin 变化【不能】清空 _lastTranslation —— 必须保留上一句的中文，
+        // 直到新翻译回填为止，否则英文会一直霸屏。
+        if (translation.length) {
+            _lastTranslation = translation;
+            _lastOrigin = origin;
+        } else if (origin.length) {
+            translation = _lastTranslation;   // 复用上一句的中文，等新翻译回来再替换
+            _lastOrigin = origin;
+        }
+
+        LCLogF(@"overlay: show origin=[%@] trans=[%@] transLen=%lu", origin, translation, (unsigned long)translation.length);
         UIColor *tc = [[LCConfig shared] textColor];
         _originLabel.attributedText = LCStrokedText(origin, tc, _originLabel.font);
         _transLabel.attributedText = LCStrokedText(translation, tc, _transLabel.font);
 
         CGFloat fs = [LCConfig shared].fontSize;
         CGFloat margin = 16;
-        CGFloat maxW = [UIScreen mainScreen].bounds.size.width - margin * 2;
+        // 尺寸基于 superview（现在是 keyWindow），
+        // 横屏时 window.bounds 的宽高与屏幕相反，不能用 mainScreen
+        CGRect hostBounds = _container.superview ? _container.superview.bounds : [UIScreen mainScreen].bounds;
+        CGFloat hostW = hostBounds.size.width;
+        CGFloat hostH = hostBounds.size.height;
+        CGFloat maxW = hostW - margin * 2;
 
         // 完整测量两段文本高度（不截断，文本多长框多高）
+        // 测量宽度与实际 label 宽度一致（要避开右上角的拖动把手）
+        CGFloat handleSpace = _dragHandle ? 26.0 : 0.0;
+        CGFloat measureW = maxW - handleSpace;
         CGFloat oh = 0, th = 0;
         if (origin.length) {
-            oh = [origin boundingRectWithSize:CGSizeMake(maxW, CGFLOAT_MAX)
+            oh = [origin boundingRectWithSize:CGSizeMake(measureW, CGFLOAT_MAX)
                 options:NSStringDrawingUsesLineFragmentOrigin
                 attributes:@{NSFontAttributeName:_originLabel.font} context:nil].size.height;
         }
         if (translation.length) {
-            th = [translation boundingRectWithSize:CGSizeMake(maxW, CGFLOAT_MAX)
+            th = [translation boundingRectWithSize:CGSizeMake(measureW, CGFLOAT_MAX)
                 options:NSStringDrawingUsesLineFragmentOrigin
                 attributes:@{NSFontAttributeName:_transLabel.font} context:nil].size.height;
         }
@@ -1273,29 +1482,57 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat h = pad * 2 + oh + th + (origin.length && translation.length ? 4 : 0);
         if (h < fs + pad * 2) h = fs + pad * 2;
 
-        CGFloat sw = [UIScreen mainScreen].bounds.size.width;
-        CGFloat sh = [UIScreen mainScreen].bounds.size.height;
+        CGFloat sw = hostW;
+        CGFloat sh = hostH;
         // 安全上限：极端长文本时最多占 45% 屏高，防止霸屏
         h = MIN(h, sh * 0.45);
         [self applyBackgroundStyle:CGSizeMake(w, h)];
 
         // 按当前 App 记忆的位置（0-1 百分比）定位
+        // 注意：用户手动拖动过之后，必须沿用用户位置，
+        // 否则 showOriginal 每 5 秒（每轮 ASR）都会把位置重算回配置值，
+        // 表现为「怎么拖都弹回原处」。
         CGFloat mx = [[LCConfig shared] manualX];
         CGFloat my = [[LCConfig shared] manualY];
         CGFloat spanX = MAX(sw - w, 1);
         CGFloat spanY = MAX(sh - h, 1);
-        CGFloat x = mx * spanX;
-        CGFloat y = my * spanY;
-        _container.frame = CGRectMake(x, y, w, h);
+        if (_userMoved) {
+            _container.center = _userCenter;
+        } else {
+            CGFloat x = mx * spanX;
+            CGFloat y = my * spanY;
+            _container.frame = CGRectMake(x, y, w, h);
+        }
         CGFloat ly = pad;
+        // 文字区域避开右上角的拖动把手
+        CGFloat textW = maxW - handleSpace;
         if (origin.length) {
-            _originLabel.frame = CGRectMake(pad, ly, maxW, oh);
+            _originLabel.frame = CGRectMake(pad, ly, textW, oh);
             ly += oh + 4;
         }
         if (translation.length) {
-            _transLabel.frame = CGRectMake(pad, ly, maxW, th);
+            _transLabel.frame = CGRectMake(pad, ly, textW, th);
+        }
+        // 拖动把手：字幕框右上角内侧
+        if (_dragHandle) {
+            CGFloat hs = 26.0;
+            _dragHandle.frame = CGRectMake(w - hs - 4, 4, hs, hs);
+            _dragHandle.hidden = NO;
         }
         _container.hidden = NO;
+        LCLogF(@"overlay: layout c=(%.0f,%.0f,%.0f,%.0f) oLbl=(%.0f,%.0f,h=%.0f) tLbl=(%.0f,%.0f,h=%.0f) oh=%.1f th=%.1f super=%@",
+              _container.frame.origin.x, _container.frame.origin.y, _container.frame.size.width, _container.frame.size.height,
+              _originLabel.frame.origin.x, _originLabel.frame.origin.y, _originLabel.frame.size.height,
+              _transLabel.frame.origin.x, _transLabel.frame.origin.y, _transLabel.frame.size.height,
+              oh, th, NSStringFromCGRect(_container.superview.bounds));
+        LCLogF(@"overlay: tLbl text=[%@] hidden=%d alpha=%.2f superHidden=%d",
+              _transLabel.text, _transLabel.hidden, _transLabel.alpha, _transLabel.superview.hidden);
+        if (_dragHandle) {
+            LCLogF(@"overlay: handle frame=%@ hidden=%d superHidden=%d clips=%d containerClips=%d",
+                  NSStringFromCGRect(_dragHandle.frame), _dragHandle.hidden,
+                  _dragHandle.superview.hidden, _dragHandle.clipsToBounds,
+                  _container.clipsToBounds);
+        }
     } @catch (NSException *e) {
         LCLog("overlay: show error");
     }
@@ -1331,6 +1568,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         _blurView.hidden = NO;
         _blurView.frame = (CGRect){CGPointZero, size};
         _container.backgroundColor = [UIColor clearColor];
+        // 毛玻璃必须留在最底层，否则会盖住字幕文字和拖动把手
+        [_container sendSubviewToBack:_blurView];
     }
 }
 
@@ -1346,7 +1585,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         _transLabel.attributedText = nil;
         CGFloat fs = [LCConfig shared].fontSize;
         CGFloat margin = 24;
-        CGFloat maxW = [UIScreen mainScreen].bounds.size.width - margin * 2;
+        CGRect toastBounds = _container.superview ? _container.superview.bounds : [UIScreen mainScreen].bounds;
+        CGFloat maxW = toastBounds.size.width - margin * 2;
         CGFloat oh = [text boundingRectWithSize:CGSizeMake(maxW, CGFLOAT_MAX)
             options:NSStringDrawingUsesLineFragmentOrigin
             attributes:@{NSFontAttributeName:_originLabel.font} context:nil].size.height;
@@ -1354,8 +1594,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat w = maxW + pad * 2;
         CGFloat h = pad * 2 + oh;
         [self applyBackgroundStyle:CGSizeMake(w, h)];
-        CGFloat sw = [UIScreen mainScreen].bounds.size.width;
-        CGFloat sh = [UIScreen mainScreen].bounds.size.height;
+        CGFloat sw = toastBounds.size.width;
+        CGFloat sh = toastBounds.size.height;
         UIEdgeInsets insets = UIEdgeInsetsZero;
         if (@available(iOS 11.0, *)) {
             insets = [UIApplication sharedApplication].keyWindow.safeAreaInsets;
@@ -1532,6 +1772,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 typedef struct {
     uint8_t *data;
     size_t len;
+    size_t dataLen;          // buffer 实际字节数（越界校验用）
     AudioStreamPacketDescription *descs;
     UInt32 descCount;
     UInt32 idx;
@@ -1546,18 +1787,35 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     }
     UInt32 n = *numPackets;
     if (in->descCount - in->idx < n) n = in->descCount - in->idx;
+    // 关键：转换器的 packet description 里 mStartOffset 是【相对于 mData 指针】的偏移。
+    // 我们手上这份描述的 mStartOffset 是【相对于整个 buffer 起点】的绝对偏移，
+    // 直接交出去会被再加一次 mData 基址 -> 偏移翻倍 -> 读到垃圾 -> 解码失败(-50)。
+    //
+    // 解法：每次只交【1 个包】，并把它的 mStartOffset 归零
+    //       （mData 指向该包真实起点，偏移 0 即正确）。
+    // AAC 每包 1024 帧，多交几次不影响吞吐。
+    if (n > 1) n = 1;
     ioData->mNumberBuffers = 1;
-    // 解压(AAC->PCM)转换器按 packet 描述读取压缩包：mData 指向首个包起点，
-    // mDataByteSize 必须覆盖本回调提供的全部 n 个包的总字节跨度（含各包偏移），
-    // outPacketDesc 指向 n 个连续的 AudioStreamPacketDescription 数组。
-    SInt64 startOff = in->descs[in->idx].mStartOffset;
-    SInt64 endOff = in->descs[in->idx + n - 1].mStartOffset
-                  + in->descs[in->idx + n - 1].mDataByteSize;
-    ioData->mBuffers[0].mData = in->data + startOff;
-    ioData->mBuffers[0].mDataByteSize = (UInt32)(endOff - startOff);
-    if (outPacketDesc) *outPacketDesc = &in->descs[in->idx];
-    *numPackets = n;
-    in->idx += n;
+
+    // 该包在 buffer 内的绝对偏移
+    UInt32 absOff = in->descs[in->idx].mStartOffset;
+    UInt32 absLen = in->descs[in->idx].mDataByteSize;
+    if ((UInt64)absOff + absLen > (UInt64)in->dataLen) {
+        // 越界保护：包超出 buffer，停止喂数据
+        *numPackets = 0;
+        return noErr;
+    }
+
+    // mData 指向该包真实起点，描述里的偏移归零 —— 两者基准一致
+    static AudioStreamPacketDescription sOne;
+    sOne.mStartOffset = 0;
+    sOne.mDataByteSize = absLen;
+    sOne.mVariableFramesInPacket = in->descs[in->idx].mVariableFramesInPacket;
+    ioData->mBuffers[0].mData = in->data + absOff;
+    ioData->mBuffers[0].mDataByteSize = absLen;
+    if (outPacketDesc) *outPacketDesc = &sOne;
+    *numPackets = 1;
+    in->idx += 1;
     return noErr;
 }
 
@@ -1779,23 +2037,57 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         }
     }
 
-    // 构建 packet 描述：官方接口 -> 用 sample sizes 重建 -> ADTS 检测 -> 兜底整段
+    // 构建 packet 描述
+    //
+    // 关键（实测踩坑）：压缩格式(AAC)下
+    //   CMSampleBufferGetAudioStreamPacketDescriptions 返回的是【整个码流】的包描述数组
+    //   （实测 160 个），而不是当前 buffer 内的包（实测 10 个）。
+    //   直接用会导致：
+    //     1) 偏移/长度指向 buffer 之外的数据 -> 解码器只解出前 2 个包
+    //     2) 输出缓冲按 descCount 之外的样本数计算 -> 严重截断
+    //   最终只拿到 20% 的音频 -> 腾讯云 ASR 识别成乱码
+    //        ("Can of ts five five butatingasc zero")
+    //
+    // 正确做法：用 CMSampleBufferGetSampleSizeArray 拿到【当前 buffer 内】每个包的真实字节数，
+    // 自行重建描述；并按 descCount × 每包帧数 计算输出容量。
     AudioStreamPacketDescription *descs = NULL;
     UInt32 descCount = 0;
     CMItemCount dCnt = 0;
     st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, 0, NULL, &dCnt);
-    if (st == noErr && dCnt > 0) {
-        descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)dCnt);
-        if (descs) {
-            st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, dCnt, descs, &dCnt);
-            if (st == noErr) descCount = (UInt32)dCnt;
-            else { free(descs); descs = NULL; }
+    if (st == noErr && dCnt > 0 && dCnt <= 8192) {
+        AudioStreamPacketDescription *tmp =
+            (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)dCnt);
+        if (tmp) {
+            st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, dCnt, tmp, &dCnt);
+            // 校验：官方描述必须完全落在当前 buffer 内，否则是码流级描述，不能用。
+            // 实测 YouTube 的 AAC buffer：官方恒返回 frames×16 个包（码流级），
+            // 其中只有前 ~2 个落在本 buffer 内，其余指向 buffer 之外 —— 直接用会越界读。
+            BOOL valid = (st == noErr && dCnt > 0);
+            if (valid) {
+                for (CMItemCount i = 0; i < dCnt; i++) {
+                    SInt64 end = (SInt64)tmp[i].mStartOffset + (SInt64)tmp[i].mDataByteSize;
+                    if (tmp[i].mDataByteSize == 0 || end > (SInt64)dataLen) { valid = NO; break; }
+                }
+            }
+            if (valid) {
+                descs = tmp;
+                descCount = (UInt32)dCnt;
+            } else {
+                free(tmp);
+            }
         }
     }
 
-    // 关键修复：YouTube 的 AVSampleBufferAudioRenderer 给的 AAC sbuf 常不带 packet descriptions，
-    // 但每个 AAC 帧(=sample)的字节长度记录在 sample sizes 中。据此重建 packet 描述，
-    // 否则 AudioConverter 把整段 AAC 当一个 packet 解码 -> -50 失败。
+    // 用 sample sizes 重建【当前 buffer 内】的包描述。
+    //
+    // 实测（YouTube AAC buffer）：
+    //   frames=10, len=3670 字节 → 官方包描述 160 个（= frames×16，码流级）
+    //   frames=1,  len=431  字节 → 官方包描述 16 个
+    // 可见官方描述与本 buffer 无关，不能直接用。
+    //
+    // 正确做法：用 CMSampleBufferGetSampleSizeArray 拿到每个【sample】的字节数，
+    // 累加直到填满 dataLen 为止 —— 这样得到的包数与字节数天然自洽，
+    // 既不会越界，也不会漏解。
     if (!descs) {
         CMItemCount numSamples = CMSampleBufferGetNumSamples(sbuf);
         if (numSamples > 0 && numSamples <= 8192) {
@@ -1804,20 +2096,25 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
                 CMItemCount numSizes = 0;
                 CMSampleBufferGetSampleSizeArray(sbuf, numSamples, sizes, &numSizes);
                 if (numSizes > 0) {
-                    // CoreMedia 对统一大小的样本常只返回 1 个 size；按需展开到 numSamples 个 packet
+                    // numSizes==1：CoreMedia 只给「统一大小」，展开成 numSamples 个包
                     CMItemCount effN = (numSizes == 1 && numSamples > 1) ? numSamples : numSizes;
+                    if (effN > 8192) effN = 8192;
                     descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)effN);
                     if (descs) {
                         size_t off = 0;
                         for (CMItemCount i = 0; i < effN; i++) {
                             size_t sz = (numSizes == 1) ? sizes[0] : sizes[i];
+                            // 越界保护：包不能为空，累计偏移不能超出 buffer
+                            if (sz == 0 || off + sz > (size_t)dataLen) break;
                             descs[i].mStartOffset = (UInt32)off;
                             descs[i].mDataByteSize = (UInt32)sz;
                             descs[i].mVariableFramesInPacket = 0;
                             off += sz;
                             descCount++;
                         }
-                        LCLogF(@"audio: dec built %u pkt descs from %lld sample sizes (eff=%lld)", (unsigned)descCount, (long long)numSizes, (long long)effN);
+                        if (descCount == 0) { free(descs); descs = NULL; }
+                        LCLogF(@"audio: dec built %u pkt descs from %lld sizes (eff=%lld, dataLen=%lld)",
+                               (unsigned)descCount, (long long)numSizes, (long long)effN, (long long)dataLen);
                     }
                 }
                 free(sizes);
@@ -1861,18 +2158,50 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         AudioConverterDispose(conv);
         return;
     }
+    // 兜底 2：整段当单包解码通常会失败(-50)。
+    // 若可用字节数足够，按 AAC 典型包长(~384 字节)切分成多个等长包，
+    // 这样 AudioConverter 至少能解出大部分音频，而不是整段丢弃。
+    if (descCount == 1 && descs[0].mDataByteSize > 800) {
+        UInt32 approx = (UInt32)(dataLen / 384);
+        if (approx >= 2 && approx <= 512) {
+            AudioStreamPacketDescription *nd =
+                (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * approx);
+            if (nd) {
+                UInt32 each = (UInt32)dataLen / approx;
+                UInt32 used = 0;
+                for (UInt32 i = 0; i < approx; i++) {
+                    UInt32 sz = (i == approx - 1) ? ((UInt32)dataLen - used) : each;
+                    nd[i].mStartOffset = used;
+                    nd[i].mDataByteSize = sz;
+                    nd[i].mVariableFramesInPacket = 0;
+                    used += sz;
+                }
+                free(descs);
+                descs = nd;
+                descCount = approx;
+                LCLogF(@"audio: dec fallback split into %u pkts (%u bytes each)", (unsigned)descCount, (unsigned)each);
+            }
+        }
+    }
     LCLogF(@"audio: dec pkts=%u", (unsigned)descCount);
 
     // 计算输出缓冲大小
-    CMItemCount totalSamples = CMSampleBufferGetNumSamples(sbuf);
-    if (totalSamples <= 0) {
-        // 估算：假设每 packet 1024 帧
-        totalSamples = (CMItemCount)descCount * 1024;
-    }
-    UInt32 maxOut = 4096;
-    UInt32 propSz = sizeof(maxOut);
-    AudioConverterGetProperty(conv, kAudioConverterPropertyMaximumOutputPacketSize, &propSz, &maxOut);
-    UInt32 outCapacity = (UInt32)(totalSamples * outASBD.mBytesPerFrame + maxOut * 8);
+    // 关键：压缩格式(AAC)下 CMSampleBufferGetNumSamples 返回的是【包数】，
+    // 不是 PCM 帧数。直接用它算容量会严重偏小 -> 输出被截断（实测只解出 20% 音频）。
+    // 正确算法：输出帧数 ≈ 包数 × 每包帧数(AAC-LC = 1024)。
+    CMItemCount numPkts = (CMItemCount)descCount;
+    CMItemCount framesPerPacket = (CMItemCount)(inASBD2.mFramesPerPacket > 0 ? inASBD2.mFramesPerPacket : 1024);
+    // 防御：每包帧数异常时按 1024 算（AAC-LC 标准值），避免乘法溢出
+    if (framesPerPacket <= 0 || framesPerPacket > 4096) framesPerPacket = 1024;
+    CMItemCount totalSamples = numPkts * framesPerPacket;
+    if (totalSamples <= 0) totalSamples = (CMItemCount)CMSampleBufferGetNumSamples(sbuf);
+    if (totalSamples <= 0) totalSamples = 1024;
+    // 上限保护：单次解码最多约 30 秒音频，防止超大分配
+    if (totalSamples > 16000 * 30) totalSamples = 16000 * 30;
+    // 输出缓冲：按【实际可解出的帧数】算，不要多留余量。
+    // 多留的部分会让转换器以为还能再解出几千帧，于是再次回调输入；
+    // 而输入早已耗尽（返回 0 包）-> AudioConverter 判定输入不完整 -> -50。
+    UInt32 outCapacity = (UInt32)(totalSamples * outASBD.mBytesPerFrame);
     if (outCapacity > 4 * 1024 * 1024) outCapacity = 4 * 1024 * 1024;
     if (outCapacity < 16384) outCapacity = 16384;
 
@@ -1890,10 +2219,16 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     outList.mBuffers[0].mDataByteSize = outCapacity;
 
     // 准备输入数据
-    LCConvInput in = { (uint8_t *)dataPtr, dataLen, descs, descCount, 0 };
+    LCConvInput in = { (uint8_t *)dataPtr, dataLen, dataLen, descs, descCount, 0 };
+    // 请求的输出帧数不能超过【输入实际能解出的帧数】(包数 × 每包帧数)。
+    // 超出部分会让转换器再次回调输入，而输入已耗尽 -> -50。
+    UInt32 realFrames = (UInt32)totalSamples;
     UInt32 outNumPackets = (UInt32)(outCapacity / outASBD.mBytesPerFrame);
-    if (outNumPackets > 16384) outNumPackets = 16384;
+    if (outNumPackets > realFrames) outNumPackets = realFrames;
+    if (outNumPackets > 262144) outNumPackets = 262144;
     if (outNumPackets < 1) outNumPackets = 1;
+    LCLogF(@"audio: dec req pkts=%u realFrames=%u cap=%u", (unsigned)outNumPackets,
+           (unsigned)realFrames, (unsigned)outCapacity);
 
     st = AudioConverterFillComplexBuffer(conv, LCInputProc, &in, &outNumPackets, &outList, NULL);
     AudioConverterDispose(conv);
@@ -1906,9 +2241,22 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     }
 
     UInt32 producedFrames = outList.mBuffers[0].mDataByteSize / outASBD.mBytesPerFrame;
+    // 安全：转换器写入的字节数绝不能超过我们给的容量
+    if (outList.mBuffers[0].mDataByteSize > outCapacity) {
+        LCLogF(@"audio: dec overflow guard %lu > %lu",
+               (unsigned long)outList.mBuffers[0].mDataByteSize, (unsigned long)outCapacity);
+        free(outData);
+        return;
+    }
     if (producedFrames == 0 || producedFrames > 262144) {
         free(outData);
         return;
+    }
+    // 诊断：解出的帧数应接近 包数×1024；若明显偏小说明仍有丢包
+    if (producedFrames < (UInt32)(descCount * framesPerPacket / 2)) {
+        LCLogF(@"audio: dec TRUNCATED pkts=%u expect~%u got=%u",
+               (unsigned)descCount,
+               (unsigned)(descCount * framesPerPacket), producedFrames);
     }
 
     unsigned ch = outASBD.mChannelsPerFrame;
