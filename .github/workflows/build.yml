@@ -135,6 +135,16 @@ jobs:
           python3 verify_asr_params.py
           echo "  (5) OK ASR 请求参数符合腾讯云接口规范"
 
+      - name: Verify source safety
+        run: |
+          set -e
+          # 源码静态安全检查
+          # 曾踩坑(v1.0.69): 在 UIView.hitTest 里同步写日志文件 ->
+          #   hitTest 被 UIKit 高频调用, 主线程文件 I/O 触发 watchdog 杀进程 -> YouTube 闪退
+          # 曾踩坑: AAC 包描述越界(官方描述是码流级的, 指向 buffer 外) -> AudioConverter 越界读
+          python3 verify_source_safety.py
+          echo "  (6) OK 源码无已知闪退风险"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
