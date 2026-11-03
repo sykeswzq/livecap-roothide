@@ -358,13 +358,13 @@ static NSString *LCJBRootPath(NSString *path) {
         [order addObject:@"mymemory"]; // 永远保留兜底
 
         [self translateStep:trimmed sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                       order:order idx:0 completion:completion];
+                       order:order idx:0 maxRetries:2 completion:completion];
     });
 }
 
-// 按 order 顺序逐个厂商尝试，失败(done=NO)自动顺延下一个；全部失败则结束
+// 按 order 顺序逐个厂商尝试，失败(done=NO)自动顺延下一个；网络超时错误可重试 maxRetries 次
 - (void)translateStep:(NSString *)text sysPrompt:(NSString *)sysPrompt cacheKey:(NSString *)cacheKey
-               target:(NSString *)target order:(NSArray *)order idx:(NSInteger)idx
+               target:(NSString *)target order:(NSArray *)order idx:(NSInteger)idx maxRetries:(NSInteger)maxRetries
            completion:(void (^)(NSString *result))completion {
     if (idx >= order.count) {
         LCLogF(@"translate: all providers failed text=[%@]", text);
@@ -408,7 +408,7 @@ static NSString *LCJBRootPath(NSString *path) {
         } else {
             LCLogF(@"translate: provider '%@' failed, fallback", provider);
             [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                         order:order idx:idx+1 completion:completion];
+                         order:order idx:idx+1 maxRetries:maxRetries completion:completion];
         }
     };
     if ([provider isEqualToString:@"tencent"]) {
