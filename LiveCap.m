@@ -650,6 +650,16 @@ static NSString *LCTmtLang(NSString *lcLang) {
                              (unsigned long)data.length];
             NSString *head = raw.length > 600 ? [raw substringToIndex:600] : raw;
             LCLogF(@"translate: RAW len=%lu head=[%@]", (unsigned long)data.length, head);
+            // 额外：打印 content 字段的字节数和中文字符数
+            NSDictionary *j = json;
+            NSArray *chs = j[@"choices"];
+            if ([chs count] > 0) {
+                NSDictionary *msg = chs[0][@"message"];
+                NSString *c = msg[@"content"];
+                if ([c isKindOfClass:[NSString class]]) {
+                    LCLogF(@"translate: content len=%lu bytes=[%.*s]", (unsigned long)c.length, (int)MIN(100, c.length), [c UTF8String]);
+                }
+            }
         }
         NSArray *choices = json[@"choices"];
         if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {
