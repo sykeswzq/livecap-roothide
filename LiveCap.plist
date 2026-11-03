@@ -4,9 +4,14 @@
 <dict>
 	<key>Filter</key>
 	<dict>
+		<key>Mode</key>
+		<string>Any</string>
+		<key>Executables</key>
+		<array>
+			<string>mediaserverd</string>
+		</array>
 		<key>Bundles</key>
 		<array>
-			<!-- 主流视频 App（全部用 AVPlayer 系播放器，tap 自动挂） -->
 			<string>com.google.ios.youtube</string>
 			<string>com.bilibili.app.blue</string>
 			<string>com.bilibili.app.in</string>
@@ -27,14 +32,12 @@
 			<string>com.tencent.qqlive</string>
 			<string>com.sohu.svplayer</string>
 			<string>cn.wanshizheng.pinshipin</string>
-			<!-- 通用视频/播放类 -->
 			<string>com.apple.mobilepodcasts</string>
 			<string>com.vimeo.vimeo</string>
 			<string>com.dailymotion.dailymotion-app</string>
 			<string>com.pandora.android</string>
 			<string>com.spotify.client</string>
 			<string>com.soundcloud.android</string>
-			<!-- 游戏内嵌播放器（少数使用 AVPlayer） -->
 			<string>com.tencent.tmgp.sgame</string>
 			<string>com.miHoYo.Yuushen</string>
 		</array>

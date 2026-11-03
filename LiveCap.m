@@ -480,7 +480,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
         [NSURL URLWithString:@"https://tmt.tencentcloudapi.com"]];
     req.HTTPMethod = @"POST";
-    [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [req setValue:host forHTTPHeaderField:@"Host"];
     [req setValue:@"TextTranslate" forHTTPHeaderField:@"X-TC-Action"];
     [req setValue:@"2018-03-21" forHTTPHeaderField:@"X-TC-Version"];
@@ -634,17 +634,24 @@ static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
                                        NSData *payload, NSString *host,
                                        NSString *service, NSString *action,
                                        NSString *region) {
-    // CanonicalRequest（action 转小写进签名，与实际 header 大小写无关）
+    // CanonicalRequest
+    // Content-Type 必须与实际请求头完全一致（不能带 charset，腾讯云按原样参与哈希）
+    // SignedHeaders 只用 content-type;host（腾讯云官方示例格式；
+    // 多带 x-tc-action 会导致 Content-Type 与签名串不一致 → SignatureFailure）
     NSString *hashedPayload = LCDataToHex(LCSHA256(payload));
     NSString *canonicalHeaders = [NSString stringWithFormat:
-        @"content-type:application/json; charset=utf-8\nhost:%@\nx-tc-action:%@\n", host, action];
-    NSString *signedHeaders = @"content-type;host;x-tc-action";
+        @"content-type:application/json\nhost:%@\n", host];
+    NSString *signedHeaders = @"content-type;host";
     NSString *canonicalRequest = [NSString stringWithFormat:
         @"POST\n/\n\n%@\n%@\n%@",
         canonicalHeaders, signedHeaders, hashedPayload];
 
-    // TC3 credential scope 必须是 日期/服务/地域/tc3_request 四段，漏地域会被腾讯云判为非法签名
-    NSString *credentialScope = [NSString stringWithFormat:@"%@/%@/%@/tc3_request", date, service, region];
+    // TC3 credential scope 必须是【三段】Date/service/tc3_request，不含 region！
+    // 写成四段（含 region）腾讯云直接返回
+    //   AuthFailure.InvalidAuthorization: "Credential scope size not valid"
+    // region 只放在 X-TC-Region 请求头里，不参与签名 scope。
+    (void)region;  // 保留参数仅为兼容调用方；scope 不含 region
+    NSString *credentialScope = [NSString stringWithFormat:@"%@/%@/tc3_request", date, service];
     NSString *stringToSign = [NSString stringWithFormat:
         @"TC3-HMAC-SHA256\n%@\n%@\n%@",
         timestamp, credentialScope, LCDataToHex(LCSHA256(LCBytes(canonicalRequest)))];
@@ -884,7 +891,7 @@ static BOOL gProcessingFormatValid = NO;
                 NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
                     [NSURL URLWithString:@"https://asr.tencentcloudapi.com"]];
                 req.HTTPMethod = @"POST";
-                [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+                [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
                 [req setValue:host forHTTPHeaderField:@"Host"];
                 [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
                 [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
@@ -1054,7 +1061,7 @@ static BOOL gProcessingFormatValid = NO;
                 NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
                     [NSURL URLWithString:@"https://asr.tencentcloudapi.com"]];
                 req.HTTPMethod = @"POST";
-                [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+                [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
                 [req setValue:host forHTTPHeaderField:@"Host"];
                 [req setValue:@"SentenceRecognition" forHTTPHeaderField:@"X-TC-Action"];
                 [req setValue:@"2019-06-14" forHTTPHeaderField:@"X-TC-Version"];
