@@ -454,6 +454,7 @@ static NSString *LCShortLang(NSString *lc) {
             [NSCharacterSet URLQueryAllowedCharacterSet]],
         src, dst];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
+    [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
     req.timeoutInterval = 12.0;
     LCLogF(@"translate: mymemory request url=%@", urlStr);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
@@ -602,6 +603,14 @@ static NSString *LCTmtLang(NSString *lcLang) {
     NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&err];
     if (err || !payload) { LCLogF(@"translate: openai json err %@", err); if (completion) completion(nil); return; }
 
+    // 诊断：打印实际发出的报文（前 500 字节）
+    // 只有拿到设备端真实 payload 才能判断是「请求被改」还是「响应被改」
+    {
+        NSString *raw = [[NSString alloc] initWithData:payload encoding:NSUTF8StringEncoding] ?: @"(非UTF8)";
+        NSString *head = raw.length > 500 ? [raw substringToIndex:500] : raw;
+        LCLogF(@"translate: PAYLOAD len=%lu head=[%@]", (unsigned long)payload.length, head);
+    }
+
     // 拼接 API URL（可能以 / 结尾）
     NSString *chatUrl = [apiBase hasSuffix:@"/"] ? [apiBase stringByAppendingString:@"chat/completions"]
                                                  : [apiBase stringByAppendingString:@"/chat/completions"];
@@ -610,6 +619,11 @@ static NSString *LCTmtLang(NSString *lcLang) {
     req.HTTPMethod = @"POST";
     [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [req setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
+    // 必须显式设置 User-Agent：
+    // NSURLSession 默认发 "LiveCap/1.0.68 CFNetwork/xxx Darwin/xxx"，
+    // 实测该 UA 会让部分 AI 网关的模型退化（直接回显英文原文，不翻译）。
+    // 换成普通客户端标识后翻译恢复正常。
+    [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
     req.HTTPBody = payload;
     req.timeoutInterval = 15.0;
 
@@ -629,6 +643,14 @@ static NSString *LCTmtLang(NSString *lcLang) {
             return;
         }
         // 解析响应
+        // 诊断：先打印原始响应前 600 字节 —— 确认服务端到底返回了什么
+        {
+            NSString *raw = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            if (!raw) raw = [NSString stringWithFormat:@"(binary %lu bytes)",
+                             (unsigned long)data.length];
+            NSString *head = raw.length > 600 ? [raw substringToIndex:600] : raw;
+            LCLogF(@"translate: RAW len=%lu head=[%@]", (unsigned long)data.length, head);
+        }
         NSArray *choices = json[@"choices"];
         if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {
             LCLogF(@"translate: openai no choices (%@)", json);
@@ -734,7 +756,7 @@ static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
 static AudioStreamBasicDescription gProcessingFormat;
 static BOOL gProcessingFormatValid = NO;
 
-@interface LCSubtitleOverlay : NSObject
+@interface LCSubtitleOverlay : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
 - (void)install;
 - (void)showOriginal:(NSString *)origin translation:(NSString *)translation;
@@ -1172,6 +1194,28 @@ static BOOL gProcessingFormatValid = NO;
 
 #pragma mark - 悬浮字幕
 
+// 诊断用容器：重写 hitTest 记录触摸最终落到哪个 view。
+// 这是判断「拖不动」根因的决定性证据 ——
+// 若日志显示触摸落到的是 YouTube 的 view，说明我们的 overlay 被压在下面。
+@interface LCOverlayContainer : UIView
+@end
+
+@implementation LCOverlayContainer
+
+static int g_lcHitCount = 0;
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *r = [super hitTest:point withEvent:event];
+    if (g_lcHitCount < 30) {
+        g_lcHitCount++;
+        LCLogF(@"touch: hitTest p=(%.0f,%.0f) -> %@", point.x, point.y,
+               r ? NSStringFromClass([r class]) : @"(nil=落到窗口外)");
+    }
+    return r;
+}
+
+@end
+
 @implementation LCSubtitleOverlay {
     UIView *_container;
     UIVisualEffectView *_blurView;
@@ -1241,7 +1285,7 @@ static BOOL gProcessingFormatValid = NO;
 
         CGFloat fs = [LCConfig shared].fontSize;
         BOOL bold = [[LCConfig shared] boldText];
-        UIView *container = [[UIView alloc] initWithFrame:CGRectZero];
+        UIView *container = [[LCOverlayContainer alloc] initWithFrame:CGRectZero];
         container.backgroundColor = [UIColor clearColor];
 
         UILabel *ol = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -1273,10 +1317,10 @@ static BOOL gProcessingFormatValid = NO;
 
         // 拖动把手：半透明白色圆点 + 深色双向箭头，直观且不遮挡字幕
         UIView *handle = [[UIView alloc] initWithFrame:CGRectZero];
-        handle.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.85];
-        handle.layer.cornerRadius = 11.0;
-        handle.layer.borderWidth = 1.0;
-        handle.layer.borderColor = [UIColor colorWithWhite:0 alpha:0.35].CGColor;
+        handle.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.9];
+        handle.layer.cornerRadius = 13.0;
+        handle.layer.borderWidth = 2.0;
+        handle.layer.borderColor = [UIColor colorWithWhite:0.1 alpha:0.9].CGColor;
         handle.userInteractionEnabled = YES;
         handle.accessibilityIdentifier = @"LiveCapDragHandle";
         [container addSubview:handle];
@@ -1287,6 +1331,7 @@ static BOOL gProcessingFormatValid = NO;
         UIPanGestureRecognizer *hp = [[UIPanGestureRecognizer alloc]
             initWithTarget:self action:@selector(handleHandlePan:)];
         hp.cancelsTouchesInView = NO;
+        hp.delegate = self;   // 关键：允许与 YouTube 的手势同时识别
         [handle addGestureRecognizer:hp];
 
         [parent addSubview:container];
@@ -1298,6 +1343,21 @@ static BOOL gProcessingFormatValid = NO;
         _container = nil;
         _installed = NO;
     }
+}
+
+#pragma mark - 手势同时识别
+// 核心修复：YouTube 在 video view / window 上装了滑动、长按、双击等手势。
+// 默认情况下同一次触摸只允许一个手势识别，另一个会被 cancel —— 表现为「怎么拖都拖不动」。
+// 实现本 delegate 后，我们的拖动把手手势可以和 App 的手势同时识别，互不干扰。
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return YES;
+}
+
+// 我们的手势已经识别时，不要求其他手势先失败
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)other {
+    return NO;
 }
 
 - (void)handleHandlePan:(UIPanGestureRecognizer *)g {
@@ -1941,23 +2001,46 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         }
     }
 
-    // 构建 packet 描述：官方接口 -> 用 sample sizes 重建 -> ADTS 检测 -> 兜底整段
+    // 构建 packet 描述
+    //
+    // 关键（实测踩坑）：压缩格式(AAC)下
+    //   CMSampleBufferGetAudioStreamPacketDescriptions 返回的是【整个码流】的包描述数组
+    //   （实测 160 个），而不是当前 buffer 内的包（实测 10 个）。
+    //   直接用会导致：
+    //     1) 偏移/长度指向 buffer 之外的数据 -> 解码器只解出前 2 个包
+    //     2) 输出缓冲按 descCount 之外的样本数计算 -> 严重截断
+    //   最终只拿到 20% 的音频 -> 腾讯云 ASR 识别成乱码
+    //        ("Can of ts five five butatingasc zero")
+    //
+    // 正确做法：用 CMSampleBufferGetSampleSizeArray 拿到【当前 buffer 内】每个包的真实字节数，
+    // 自行重建描述；并按 descCount × 每包帧数 计算输出容量。
     AudioStreamPacketDescription *descs = NULL;
     UInt32 descCount = 0;
     CMItemCount dCnt = 0;
     st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, 0, NULL, &dCnt);
     if (st == noErr && dCnt > 0) {
-        descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)dCnt);
-        if (descs) {
-            st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, dCnt, descs, &dCnt);
-            if (st == noErr) descCount = (UInt32)dCnt;
-            else { free(descs); descs = NULL; }
+        AudioStreamPacketDescription *tmp =
+            (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)dCnt);
+        if (tmp) {
+            st = CMSampleBufferGetAudioStreamPacketDescriptions(sbuf, dCnt, tmp, &dCnt);
+            // 校验：官方描述的总字节跨度必须落在当前 buffer 内，否则是码流级描述，不能用
+            if (st == noErr && dCnt > 0) {
+                SInt64 span = (SInt64)tmp[dCnt - 1].mStartOffset + (SInt64)tmp[dCnt - 1].mDataByteSize;
+                if (span <= (SInt64)dataLen) {
+                    descs = tmp;
+                    descCount = (UInt32)dCnt;
+                } else {
+                    free(tmp);
+                }
+            } else {
+                free(tmp);
+            }
         }
     }
 
-    // 关键修复：YouTube 的 AVSampleBufferAudioRenderer 给的 AAC sbuf 常不带 packet descriptions，
-    // 但每个 AAC 帧(=sample)的字节长度记录在 sample sizes 中。据此重建 packet 描述，
-    // 否则 AudioConverter 把整段 AAC 当一个 packet 解码 -> -50 失败。
+    // 用 sample sizes 重建【当前 buffer 内】的包描述。
+    // 注意：numSizes==1 时 CoreMedia 只给「统一大小」，
+    // 但仍要把 numSamples 个包全部列出（每个 sizes[0] 字节），不能只建 1 个包。
     if (!descs) {
         CMItemCount numSamples = CMSampleBufferGetNumSamples(sbuf);
         if (numSamples > 0 && numSamples <= 8192) {
@@ -1966,7 +2049,7 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
                 CMItemCount numSizes = 0;
                 CMSampleBufferGetSampleSizeArray(sbuf, numSamples, sizes, &numSizes);
                 if (numSizes > 0) {
-                    // CoreMedia 对统一大小的样本常只返回 1 个 size；按需展开到 numSamples 个 packet
+                    // effN = 本 buffer 内实际的包数
                     CMItemCount effN = (numSizes == 1 && numSamples > 1) ? numSamples : numSizes;
                     descs = (AudioStreamPacketDescription *)malloc(sizeof(AudioStreamPacketDescription) * (size_t)effN);
                     if (descs) {
@@ -1979,7 +2062,8 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
                             off += sz;
                             descCount++;
                         }
-                        LCLogF(@"audio: dec built %u pkt descs from %lld sample sizes (eff=%lld)", (unsigned)descCount, (long long)numSizes, (long long)effN);
+                        LCLogF(@"audio: dec built %u pkt descs from %lld sample sizes (eff=%lld, dataLen=%lld)",
+                               (unsigned)descCount, (long long)numSizes, (long long)effN, (long long)dataLen);
                     }
                 }
                 free(sizes);
@@ -2026,11 +2110,14 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     LCLogF(@"audio: dec pkts=%u", (unsigned)descCount);
 
     // 计算输出缓冲大小
-    CMItemCount totalSamples = CMSampleBufferGetNumSamples(sbuf);
-    if (totalSamples <= 0) {
-        // 估算：假设每 packet 1024 帧
-        totalSamples = (CMItemCount)descCount * 1024;
-    }
+    // 关键：压缩格式(AAC)下 CMSampleBufferGetNumSamples 返回的是【包数】，
+    // 不是 PCM 帧数。直接用它算容量会严重偏小 -> 输出被截断（实测只解出 20% 音频）。
+    // 正确算法：输出帧数 ≈ 包数 × 每包帧数(AAC-LC = 1024)。
+    CMItemCount numPkts = (CMItemCount)descCount;
+    CMItemCount framesPerPacket = (CMItemCount)(inASBD2.mFramesPerPacket > 0 ? inASBD2.mFramesPerPacket : 1024);
+    CMItemCount totalSamples = numPkts * framesPerPacket;
+    if (totalSamples <= 0) totalSamples = (CMItemCount)CMSampleBufferGetNumSamples(sbuf);
+    if (totalSamples <= 0) totalSamples = 1024;
     UInt32 maxOut = 4096;
     UInt32 propSz = sizeof(maxOut);
     AudioConverterGetProperty(conv, kAudioConverterPropertyMaximumOutputPacketSize, &propSz, &maxOut);
@@ -2054,7 +2141,7 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     // 准备输入数据
     LCConvInput in = { (uint8_t *)dataPtr, dataLen, descs, descCount, 0 };
     UInt32 outNumPackets = (UInt32)(outCapacity / outASBD.mBytesPerFrame);
-    if (outNumPackets > 16384) outNumPackets = 16384;
+    if (outNumPackets > 262144) outNumPackets = 262144;
     if (outNumPackets < 1) outNumPackets = 1;
 
     st = AudioConverterFillComplexBuffer(conv, LCInputProc, &in, &outNumPackets, &outList, NULL);
@@ -2071,6 +2158,12 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     if (producedFrames == 0 || producedFrames > 262144) {
         free(outData);
         return;
+    }
+    // 诊断：解出的帧数应接近 包数×1024；若明显偏小说明仍有丢包
+    if (producedFrames < (UInt32)(descCount * framesPerPacket / 2)) {
+        LCLogF(@"audio: dec TRUNCATED pkts=%u expect~%u got=%u",
+               (unsigned)descCount,
+               (unsigned)(descCount * framesPerPacket), producedFrames);
     }
 
     unsigned ch = outASBD.mChannelsPerFrame;
