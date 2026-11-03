@@ -123,6 +123,18 @@ jobs:
           python3 verify_tc3_signature.py
           echo "  (4) OK TC3 签名逻辑符合腾讯云规范"
 
+      - name: Verify ASR params
+        env:
+          TC3_SECRET_ID: ${{ secrets.TC3_SECRET_ID }}
+          TC3_SECRET_KEY: ${{ secrets.TC3_SECRET_KEY }}
+        run: |
+          set -e
+          # 腾讯云一句话识别参数自检
+          # 曾踩坑: body 里带了 AppId/SecretId/VoiceId → UnknownParameter
+          #         用了 16k_zh_en 引擎 → InvalidParameter(一句话识别不支持大模型)
+          python3 verify_asr_params.py
+          echo "  (5) OK ASR 请求参数符合腾讯云接口规范"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

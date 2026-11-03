@@ -305,7 +305,9 @@ static NSString *LCJBRootPath(NSString *path) {
 
     NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [LCConfig shared].targetLang, trimmed];
     NSString *cached = _cache[cacheKey];
-    if (cached) {
+    // 注意：必须同时判 length，否则空串（模型对乱码输入常返回空）会被当成有效缓存，
+    // 导致这一句之后永远翻译不出来
+    if (cached.length > 0) {
         if (completion) completion(cached);
         return;
     }
@@ -332,7 +334,12 @@ static NSString *LCJBRootPath(NSString *path) {
             @"4. Keep abbreviations and proper nouns intact.\n"
             @"5. Output ONLY the translated text. No explanations, no quotation marks, no prefixes like '翻译：' or '译文：'.\n"
             @"6. Preserve line breaks exactly as in the original.\n"
-            @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n\n"
+            @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n"
+            @"8. The input may be an imperfect speech-to-text fragment with recognition errors.\n"
+            @"   Still translate it into Chinese: infer the intended meaning from context and output Chinese.\n"
+            @"   NEVER echo the English input back. The output MUST contain Chinese characters.\n"
+            @"9. If the input is too short or nonsensical to translate, output your best Chinese guess,\n"
+            @"   but NEVER return an empty response.\n\n"
             @"Examples:\n"
             @"Input: Hello, how are you?\n"
             @"Output: 你好，最近怎么样？\n\n"
@@ -366,7 +373,34 @@ static NSString *LCJBRootPath(NSString *path) {
     }
     NSString *provider = order[idx];
     void (^proceed)(NSString *res) = ^(NSString *res){
-        if (res.length) {
+        // 模型对识别质量差的输入（乱码/短片段）常原样返回英文 —— 这不算翻译成功。
+        // 必须与原文比对，判定失败后顺延到下一个 provider（MyMemory 免费兜底）。
+        BOOL usable = res.length > 0;
+        if (usable) {
+            NSString *norm = [res stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *orig = [text stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if ([norm isEqualToString:orig]) {
+                LCLogF(@"translate: provider '%@' returned原文未翻译, treat as failure", provider);
+                usable = NO;
+            } else {
+                // 目标语言是中文时，结果里必须含中文，否则视为没翻
+                NSString *dst = [[LCConfig shared] targetLang];
+                if ([dst hasPrefix:@"zh"]) {
+                    BOOL hasCJK = NO;
+                    for (NSUInteger i = 0; i < norm.length; i++) {
+                        unichar ch = [norm characterAtIndex:i];
+                        if (ch >= 0x4E00 && ch <= 0x9FFF) { hasCJK = YES; break; }
+                    }
+                    if (!hasCJK) {
+                        LCLogF(@"translate: provider '%@' returned no Chinese, treat as failure", provider);
+                        usable = NO;
+                    }
+                }
+            }
+        }
+        if (usable) {
             LCLogF(@"translate: provider '%@' OK len=%lu", provider, (unsigned long)res.length);
             _cache[cacheKey] = res;
             if (_cache.count > 300) [_cache removeAllObjects];
@@ -791,13 +825,13 @@ static BOOL gProcessingFormatValid = NO;
             [_pcm appendBytes:tmp length:frames * sizeof(float)];
             free(tmp);
 
-            // 每 ~5 秒切一段识别
+            // 每 ~5 秒切一段送「一句话识别」
             double secs = (double)_pcm.length / sizeof(float) / _inRate;
             if (secs >= 5.0 && !_inFlight) {
                 NSData *chunk = [_pcm copy];
                 [_pcm setLength:0];
                 [self processChunk:chunk];
-            } else if (secs >= 8.0) {
+            } else if (secs >= 10.0) {
                 // 上次请求未完成：丢弃过量累积防止内存膨胀
                 [_pcm setLength:0];
             }
@@ -873,12 +907,22 @@ static BOOL gProcessingFormatValid = NO;
                     return;
                 }
                 // 识别语言映射
+                // 实测（腾讯云一句话识别接口）：
+                //   支持: 16k_zh / 16k_en / 16k_multi_lang / 16k_ja / 16k_ko
+                //   不支持: 16k_zh_en / 16k_zh_large / 16k_en_large / bigmodel
+                //   （大模型引擎只在「实时语音识别 WebSocket」接口提供，
+                //     一句话识别 HTTP 接口不支持 —— 实测会返回
+                //      InvalidParameter: Not support [EngineModelType: xxx]）
+                // 16k_multi_lang 是大模型引擎：参数量极大、语言模型性能增强，
+                // 对「噪声大/回音大/人声小/人声远」等低质量音频识别准确率极大提升，
+                // 且支持 15 语种自动识别（句子/段落级）。
+                // 我们抓的是视频音轨（背景音乐 + 对白），正属于低质量音频场景，
+                // 用普通引擎 16k_en 会被识别成碎片。
                 NSString *lang = [[LCConfig shared] sourceLang];
-                NSString *eng = @"16k_zh";
-                if ([lang isEqualToString:@"en-US"]) eng = @"16k_en";
+                NSString *eng = @"16k_multi_lang";   // 多语言大模型引擎
+                if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
                 else if ([lang isEqualToString:@"ja-JP"]) eng = @"16k_ja";
                 else if ([lang isEqualToString:@"ko-KR"]) eng = @"16k_ko";
-                else if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
 
                 NSDictionary *body = @{
                     @"ProjectId": @0,
@@ -978,7 +1022,7 @@ static BOOL gProcessingFormatValid = NO;
             NSData *chunk = [_pcm copy];
             [_pcm setLength:0];
             [self processChunk:chunk];
-        } else if (secs >= 8.0) {
+        } else if (secs >= 10.0) {
             [_pcm setLength:0];
         }
     }
@@ -994,7 +1038,7 @@ static BOOL gProcessingFormatValid = NO;
             NSData *chunk = [_pcm16 copy];
             [_pcm16 setLength:0];
             [self processChunk16:chunk];
-        } else if (_pcm16.length >= 16000 * 2 * 8) {
+        } else if (_pcm16.length >= 16000 * 2 * 10) {
             [_pcm16 setLength:0];
         }
     }
@@ -1405,6 +1449,12 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
               oh, th, NSStringFromCGRect(_container.superview.bounds));
         LCLogF(@"overlay: tLbl text=[%@] hidden=%d alpha=%.2f superHidden=%d",
               _transLabel.text, _transLabel.hidden, _transLabel.alpha, _transLabel.superview.hidden);
+        if (_dragHandle) {
+            LCLogF(@"overlay: handle frame=%@ hidden=%d superHidden=%d clips=%d containerClips=%d",
+                  NSStringFromCGRect(_dragHandle.frame), _dragHandle.hidden,
+                  _dragHandle.superview.hidden, _dragHandle.clipsToBounds,
+                  _container.clipsToBounds);
+        }
     } @catch (NSException *e) {
         LCLog("overlay: show error");
     }
