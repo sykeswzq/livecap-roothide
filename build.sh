@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.59
+VER=1.0.60
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -59,26 +59,31 @@ cp PrefLoader.plist "$STAGE/Library/PreferenceLoader/Preferences/LiveCap.plist"
 
 echo "[3/4] verify install name + ldid + Mach-O header"
 DL="$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
-# ldid 签名后会清除 install_name，需要重新设置
-install_name_tool -id "$NEWID" "$DL" 2>/dev/null || true
-IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
-echo "  install name: $IDS"
-echo "$IDS" | grep -q "@loader_path/.jbroot" \
-  || { echo "ERROR: LC_ID_DYLIB bad: $IDS"; exit 1; }
-
-ldid -M -S "$DL"
-# ldid 清除 install_name，用 Python 脚本直接修改 Mach-O 二进制
 PY=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
 [ -n "$PY" ] || { echo "ERROR: python not found"; exit 1; }
+
+# 关键：install_name 的 patch 必须在 ldid 签名【之前】完成。
+# ldid -S 会重写 Mach-O 的 LC_CODE_SIGNATURE + __LINKEDIT，
+# 如果先签名再 patch，patch_machO.py 修改的 LC_ID_DYLIB.name offset 与
+# __LINKEDIT.filesize 落在 CodeDirectory 哈希覆盖范围内 → 签名失效，
+# 设备端加载时报 "code signature invalid (errno=85)"，tweak 静默不注入。
+echo "  patch install_name (BEFORE signing)"
 $PY "$PWD/patch_machO.py" "$DL" "$NEWID" \
   || { echo "ERROR: patch_machO.py failed"; exit 1; }
+IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
+echo "  install name after patch: $IDS"
+echo "$IDS" | grep -q "@loader_path/.jbroot" \
+  || { echo "ERROR: LC_ID_DYLIB bad after patch: $IDS"; exit 1; }
+
+echo "  ldid sign (AFTER patch)"
+ldid -M -S "$DL"
+# 签名后再次确认 install_name 未被 ldid 破坏
 IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
 echo "  install name after ldid: $IDS"
 echo "$IDS" | grep -q "@loader_path/.jbroot" \
   || { echo "ERROR: LC_ID_DYLIB bad after ldid: $IDS"; exit 1; }
+
 ldid -M -S "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"
-PY=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
-[ -n "$PY" ] || { echo "ERROR: python not found"; exit 1; }
 for f in "$DL" "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"; do
   m="$($PY -c 'import sys;d=open(sys.argv[1],"rb").read(4);print(d.hex())' "$f")"
   [ "$m" = "cafebabe" ] || [ "$m" = "cffaedfe" ] || { echo "ERROR: Mach-O bad magic=$m"; exit 1; }
