@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.60
+VER=1.0.61
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -62,28 +62,44 @@ DL="$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
 PY=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
 [ -n "$PY" ] || { echo "ERROR: python not found"; exit 1; }
 
-# 关键：install_name 的 patch 必须在 ldid 签名【之前】完成。
-# ldid -S 会重写 Mach-O 的 LC_CODE_SIGNATURE + __LINKEDIT，
-# 如果先签名再 patch，patch_machO.py 修改的 LC_ID_DYLIB.name offset 与
-# __LINKEDIT.filesize 落在 CodeDirectory 哈希覆盖范围内 → 签名失效，
-# 设备端加载时报 "code signature invalid (errno=85)"，tweak 静默不注入。
-echo "  patch install_name (BEFORE signing)"
-$PY "$PWD/patch_machO.py" "$DL" "$NEWID" \
-  || { echo "ERROR: patch_machO.py failed"; exit 1; }
+# ===== 关键：install_name 必须在 ldid 签名【之前】确定 =====
+# 原因：ldid -S 会重写 Mach-O 的 LC_CODE_SIGNATURE / __LINKEDIT 布局。
+# 如果签名后再改 header（LC_ID_DYLIB.name offset / __LINKEDIT.filesize），
+# 这些字节落在 CodeDirectory 哈希覆盖范围内 → 签名失效，
+# 设备端加载报 "code signature invalid (errno=85)"，tweak 静默不注入、无日志。
+#
+# 顺序：install_name_tool（原生工具，未签名状态下改 header 安全）→ ldid 签名 → 校验
+echo "  set install_name (BEFORE signing)"
+install_name_tool -id "$NEWID" "$DL" 2>/dev/null || true
 IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
-echo "  install name after patch: $IDS"
+echo "  install name after install_name_tool: $IDS"
 echo "$IDS" | grep -q "@loader_path/.jbroot" \
-  || { echo "ERROR: LC_ID_DYLIB bad after patch: $IDS"; exit 1; }
+  || { echo "ERROR: LC_ID_DYLIB bad: $IDS"; exit 1; }
 
-echo "  ldid sign (AFTER patch)"
+echo "  ldid sign"
 ldid -M -S "$DL"
-# 签名后再次确认 install_name 未被 ldid 破坏
+# 签名后复核 install_name：若 ldid 破坏了它，用 patch_machO.py 修复后【重新签名】
 IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
 echo "  install name after ldid: $IDS"
-echo "$IDS" | grep -q "@loader_path/.jbroot" \
-  || { echo "ERROR: LC_ID_DYLIB bad after ldid: $IDS"; exit 1; }
+if ! echo "$IDS" | grep -q "@loader_path/.jbroot"; then
+  echo "  ldid altered install_name -> patch + RE-SIGN"
+  $PY "$PWD/patch_machO.py" "$DL" "$NEWID" \
+    || { echo "ERROR: patch_machO.py failed"; exit 1; }
+  ldid -M -S "$DL"
+  IDS="$(otool -D "$DL" | grep -v 'architecture' | grep -v '^$' | sort -u)"
+  echo "  install name after re-sign: $IDS"
+  echo "$IDS" | grep -q "@loader_path/.jbroot" \
+    || { echo "ERROR: LC_ID_DYLIB bad after re-sign: $IDS"; exit 1; }
+fi
+
+# 签名有效性硬校验：重算 CodeDirectory 页哈希，与文件实际内容比对
+echo "  verify code signature (recompute CodeDirectory page hashes)"
+$PY "$PWD/verify_signature.py" "$DL" \
+  || { echo "ERROR: dylib code signature invalid"; exit 1; }
 
 ldid -M -S "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"
+$PY "$PWD/verify_signature.py" "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs" \
+  || { echo "ERROR: PrefBundle code signature invalid"; exit 1; }
 for f in "$DL" "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"; do
   m="$($PY -c 'import sys;d=open(sys.argv[1],"rb").read(4);print(d.hex())' "$f")"
   [ "$m" = "cafebabe" ] || [ "$m" = "cffaedfe" ] || { echo "ERROR: Mach-O bad magic=$m"; exit 1; }

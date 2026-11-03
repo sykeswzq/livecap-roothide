@@ -65,6 +65,7 @@ jobs:
           rm -rf /tmp/lccheck && mkdir -p /tmp/lccheck
           dpkg-deb -x "$DEB" /tmp/lccheck
           DYLIB=/tmp/lccheck/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib
+          PPLBUNDLE=/tmp/lccheck/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs
           m=$(python3 -c 'import sys;d=open(sys.argv[1],"rb").read(4);print(d.hex())' "$DYLIB")
           [ "$m" = "cafebabe" ] || [ "$m" = "cffaedfe" ] || { echo "ERROR: dylib magic=$m"; exit 1; }
           IDS="$(otool -D "$DYLIB" | grep -v 'architecture' | grep -v '^$' | sort -u)"
@@ -73,20 +74,11 @@ jobs:
 
           # 代码签名有效性校验（关键）：
           # 若打包时先 ldid 签名、后修改 Mach-O header（install_name patch），
-          # CodeDirectory 哈希会失效，设备端加载报 "code signature invalid (errno=85)"，
+          # CodeDirectory 页哈希会失效，设备端加载报 "code signature invalid (errno=85)"，
           # tweak 静默不注入且无日志。必须在 CI 阶段拦住。
-          if command -v ldid >/dev/null 2>&1; then
-            echo "  --- ldid -h ---"
-            ldid -h "$DYLIB" 2>&1 | sed 's/^/    /'
-            ldid -h "$DYLIB" 2>&1 | grep -q "CDHash=" \
-              || { echo "ERROR: dylib 无有效代码签名（ldid -h 无 CDHash）"; exit 1; }
-          fi
-          # codesign 严格校验（macOS runner 自带，能真正检出签名被破坏）
-          if codesign -v "$DYLIB" 2>/dev/null; then
-            echo "  codesign -v: OK"
-          else
-            echo "ERROR: codesign -v 校验失败 —— 代码签名已失效（install_name patch 破坏了 CodeDirectory 哈希）"; exit 1
-          fi
+          echo "  --- verify_signature.py (重算 CodeDirectory 页哈希) ---"
+          python3 verify_signature.py "$DYLIB" || { echo "ERROR: dylib 代码签名无效"; exit 1; }
+          python3 verify_signature.py "$PPLBUNDLE" || { echo "ERROR: PrefBundle 代码签名无效"; exit 1; }
           # install_name 字符串必须真实存在（patch 写入了 __LINKEDIT 尾部）
           grep -aq "@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib" "$DYLIB" \
             || { echo "ERROR: install_name 字符串缺失"; exit 1; }
