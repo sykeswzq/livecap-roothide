@@ -144,10 +144,13 @@ B4_CASES = [
      '    [proxy setObject:@NO forKey:@"SOCKSEnable"];',
      "    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesSOCKSEnable];"),
     # AudioConverterInputStatus：死符号检查是「全文件扫描」，
-    # 变异必须把符号真正插进代码里（插到 status 声明处）才有效。
+    # 变异必须把符号真正插进代码里才有效。
+    # （锚点用现存的真实代码行 —— v1.0.87 重写 AAC 编码器后，
+    #   老的 "OSStatus status = noErr;" 已不存在，直接用会导致
+    #   「锚点未命中」抛错，测不出东西。）
     ("AudioConverterInputStatus",
-     "    OSStatus status = noErr;",
-     "    AudioConverterInputStatus status = noErr;"),
+     "    UInt32 bitRate = 24000;",
+     "    AudioConverterInputStatus bitRate = 24000;"),
 ]
 for sym, anchor, repl in B4_CASES:
     bad = mutate(BASE_SRC, anchor, repl, "B4-" + sym)
@@ -197,12 +200,12 @@ for label, anchor, repl in B5_CASES:
 # ---- B6: 输出用回调而不是 AudioBufferList 缓冲区 ----
 bad = mutate(
     BASE_SRC,
-    """        status = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
-                                                 &outNumPackets, &outList,
-                                                 NULL);""",
-    """        status = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
-                                                 &outNumPackets, LCAACOutputProc,
-                                                 NULL);""",
+    """        OSStatus st = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
+                                                      &outNumPackets, &outList,
+                                                      NULL);""",
+    """        OSStatus st = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
+                                                      &outNumPackets, LCAACOutputProc,
+                                                      NULL);""",
     "B6")
 errs = run_check(bad, BASE_PLIST, BASE_POST)
 hit = [e for e in errs if "AudioBufferList" in e or "输出" in e]

@@ -113,14 +113,16 @@ def main():
         "负数"))
 
     # B4: 只在一条路径用 AAC（删掉 processChunk16: 的调用）
-    aac_call = """                if (!self->_aacBroken) {
-                    NSData *aac = LCAACEncode16kMono(pcm16);"""
+    # v1.0.87：编码器改名 LCAACEncode16kMono → LCAACEncodeADTSFramed，
+    #           且失败标记从 _aacBroken 改成可恢复的 aacUsable/markAacFailure。
+    aac_call = """                if ([self aacUsable]) {
+                    NSData *aac = LCAACEncodeADTSFramed(pcm16);"""
     # 找到第二处调用并替换为不压缩
     idx1 = base.find(aac_call)
     idx2 = base.find(aac_call, idx1 + 1)
     assert idx2 > 0, "未找到第二处 AAC 调用"
     b4 = (base[:idx2] +
-          aac_call.replace("LCAACEncode16kMono(pcm16)", "nil /* 漏改 */") +
+          aac_call.replace("LCAACEncodeADTSFramed(pcm16)", "nil /* 漏改 */") +
           base[idx2 + len(aac_call):])
     mutants.append(("B4 漏改一条路径的 AAC", b4, "AAC"))
 
@@ -142,17 +144,19 @@ def main():
         base.replace('@"VoiceFormat": voiceFormat,', '@"VoiceFormat": @"wav",'),
         "VoiceFormat"))
 
-    # B8: 去掉 _aacBroken 回退
+    # B8: 去掉 AAC 失败回退记账
+    # v1.0.87：不再是「_aacBroken 永久禁用」，而是「markAacFailure 计数 + 冷却」。
     mutants.append((
-        "B8 去掉 AAC 回退标记",
-        base.replace("_aacBroken", "_aacBrokenUnused"),
-        "_aacBroken"))
+        "B8 去掉 AAC 失败回退记账",
+        base.replace("markAacFailure", "markAacFailureUnused"),
+        "markAacFailure"))
 
-    # B9: 去掉 _directFailed 回退
+    # B9: 去掉直连失败回退
+    # v1.0.87：不再是「_directFailed 永久切代理」，而是「markDirectFailure + 冷却」。
     mutants.append((
-        "B9 去掉直连回退标记",
-        base.replace("_directFailed", "_directFailedUnused"),
-        "_directFailed"))
+        "B9 去掉直连失败回退",
+        base.replace("markDirectFailure", "markDirectFailureUnused"),
+        "markDirectFailure"))
 
     # B10: 去掉 connectionProxyDictionary
     mutants.append((

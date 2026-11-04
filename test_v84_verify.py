@@ -86,11 +86,13 @@ def main():
               else s,
              "verify_source_safety"),
 
+            # 注：v1.0.87 把这条日志加上了 fmt=%@ 字段，锚点必须跟着改，
+            #     否则「锚点不存在 → 变异未生效」会被判成失败。
             ("移除毫秒级 RTT 打点（无法再定位延迟）",
              lambda s: s.replace(
-                 '                LCLogF(@"asr: rtt=%.0fms audio=%.2fs bytes=%lu",',
-                 '                // removed')
-              if '                LCLogF(@"asr: rtt=%.0fms audio=%.2fs bytes=%lu",' in s
+                 '                    LCLogF(@"asr: rtt=%.0fms audio=%.2fs bytes=%lu fmt=%@",',
+                 '                    // removed')
+              if '                    LCLogF(@"asr: rtt=%.0fms audio=%.2fs bytes=%lu fmt=%@",' in s
               else s,
              "verify_source_safety"),
         ]

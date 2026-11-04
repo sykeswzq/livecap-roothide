@@ -7,3 +7,6 @@ verify/
 dev_cfg.xml
 dev_cfg_fixed.xml
 ci85.log
+
+# 本地备份目录（v1.0.87 补丁前的手工备份，勿入库）
+_bk/

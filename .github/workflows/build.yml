@@ -196,6 +196,26 @@ jobs:
           python3 scan_uikit_symbols.py
           echo "  (7) OK 无编译期风险"
 
+      - name: Verify checkers really catch regressions
+        run: |
+          set -e
+          # ===== 双向验证：检查脚本本身必须真的能拦住回归 =====
+          # 背景：v1.0.86 的 mediaserverd 事故说明，
+          # 「检查脚本看起来在跑」不等于「真能拦住」。
+          # 这里把每个历史 bug 重新注入源码/面板/配置，
+          # 验证静态检查会准确报出对应错误。
+          for t in test_v87_verify.py test_v86_verify.py test_v85_verify.py \
+                   test_v84_verify.py test_v83_verify.py; do
+            if [ -f "$t" ]; then
+              echo "--- $t ---"
+              python3 "$t"
+              # v1.0.83 / v1.0.84 的用例会临时改写 LiveCap.m 与面板文件，
+              # 测完必须用 git 还原，否则后面的用例会跑在被污染的源码上。
+              git checkout -- LiveCap.m PrefBundle/LiveCapPrefs.m 2>/dev/null || true
+            fi
+          done
+          echo "  (8) OK 静态检查双向验证通过（注入历史 bug 均被准确拦截）"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

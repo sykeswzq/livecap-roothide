@@ -535,7 +535,10 @@ def check_v83_fixes(src, panel_src=None):
         if "dictionaryWithContentsOfFile" not in panel_src:
             errors.append("v1.0.83 回归: 面板未使用文件直读 —— "
                           "面板用 CFPreferences、tweak 用文件直写会互相覆写")
-        if 'LCGet(@"showBilingual")' not in panel_src:
+        # v1.0.87：面板改用 LCGetBool(@"showBilingual", ...) 读取（类型安全版），
+        # 旧的 LCGet(@"showBilingual") 形式同样接受。
+        if ('LCGet(@"showBilingual")' not in panel_src and
+                'LCGetBool(@"showBilingual"' not in panel_src):
             errors.append("v1.0.83 回归: 面板开关未读写 showBilingual —— "
                           "必须与 tweak 用同一个键")
         if 'LCSet(@(sw.on), @"showBilingual")' not in panel_src:
@@ -736,9 +739,11 @@ def check_v85_fixes(src, panel_src=None):
                       "多次 DONE 会让计数变负，之后所有请求都会被判定为「槽位满」")
 
     # ---- 2) AAC 压缩（两条路径都要有）----
-    aac_calls = len(re.findall(r"LCAACEncode16kMono\s*\(", code))
+    # v1.0.87：函数名从 LCAACEncode16kMono 改为 LCAACEncodeADTSFramed
+    #（v1.0.85 编的是裸 AAC，腾讯云拒收 → 压缩白做 → 延迟反弹）
+    aac_calls = len(re.findall(r"LCAACEncodeADTSFramed\s*\(", code))
     if aac_calls < 3:   # 1 处定义 + 2 处调用
-        errors.append("v1.0.85 回归: LCAACEncode16kMono 调用只有 %d 处（需 ≥2 处调用）—— "
+        errors.append("v1.0.85 回归: LCAACEncodeADTSFramed 调用只有 %d 处（需 ≥2 处调用）—— "
                       "processChunk: 与 processChunk16: 两条路径都要压缩，"
                       "漏一条等于没修（v1.0.84 分片时长就漏过一条）" % aac_calls)
     # AAC 编码器本身必须存在且设置码率
@@ -755,14 +760,21 @@ def check_v85_fixes(src, panel_src=None):
         errors.append("v1.0.85 回归: VoiceFormat 未在两条路径都动态化 —— "
                       "必须按实际编码格式填 wav/aac")
 
-    # ---- 3) 回退机制 ----
-    # 注意用词边界 \b：否则 _aacBrokenUnused 这类改名能骗过子串检查
-    if not re.search(r"\b_aacBroken\b", code):
-        errors.append("v1.0.85 回归: 缺少 _aacBroken 标记 —— "
-                      "AAC 被腾讯云拒绝时必须能永久回退 WAV，不能整条链路挂掉")
-    if not re.search(r"\b_directFailed\b", code):
-        errors.append("v1.0.85 回归: 缺少 _directFailed 标记 —— "
-                      "直连失败时必须能永久回退走代理（用户设备开了境外代理工具）")
+    # ---- 3) 回退机制（v1.0.87 改为可恢复，不再永久拉黑）----
+    # v1.0.85 原本要求 _aacBroken / _directFailed 两个「永久禁用」标记。
+    # v1.0.87 查明这两个标记正是延迟反弹的放大器：
+    #   · AAC 被拒一次 → 永久退回 82KB WAV（压缩白做）
+    #   · 直连失败一次 → 永久走慢代理（网络恢复也回不去）
+    # 现在要求「计数 + 冷却」的可恢复机制存在。
+    for token, why in (
+            ("markAacFailure", "AAC 被拒后必须能记账并冷却，而不是永久禁用"),
+            ("markAacSuccess", "AAC 成功后必须清零失败计数"),
+            ("aacUsable", "必须能判断当前是否允许使用 AAC（冷却期判断）"),
+            ("markDirectFailure", "直连失败后必须能进入代理冷却，而不是永久回退"),
+            ("currentSession", "必须按冷却状态动态选择直连/代理 session")):
+        # 用词边界 \b：否则 markAacFailureUnused 这类改名能骗过子串检查
+        if not re.search(r"\b%s\b" % token, code):
+            errors.append("v1.0.87 回归: 缺少 %s —— %s" % (token, why))
 
     # ---- 4) 直连 session ----
     if "connectionProxyDictionary" not in code:
@@ -937,6 +949,174 @@ def check_v86_fixes(src, panel_src=None):
                     "不是输出回调，传回调会编译失败。")
 
 
+def _method_body(src, sig_pattern):
+    """按签名正则提取方法体文本。
+
+    只认以 { 开头的【实现】，自动跳过 @interface 里以 ; 结尾的声明行。
+    返回 None 表示没找到该方法。
+    """
+    m = re.search(sig_pattern + r"\s*\{", src)
+    if not m:
+        return None
+    start = m.end() - 1
+    depth = 0
+    for i in range(start, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[start:i]
+    return None
+
+
+def check_v87_fixes(src, panel_src=None):
+    """v1.0.87：ADTS 封装 + 可恢复失败 + 分片不丢音 + 字号 UI 可调。
+
+    用户反馈：「好像还是有延迟，然后字体要在UI里面可以设置大小」
+
+    延迟根因链（全部有设备日志/真实接口实测支撑）：
+      v1.0.85 编出【裸 AAC】（无 ADTS 头）
+        → 腾讯云拒收 ErrorInvalidVoicedata
+        → _aacBroken 永久置位，全程退回 82KB WAV
+        → 手机上行约 25KB/s，光上传就 3.2s
+        → ASR RTT 中位 4875ms、21% 触发 10s 硬超时
+        → 用户感知「还是慢」
+
+    本次拦截点（全部为【反向断言】：发现旧写法即失败）：
+      1. 不得再出现裸 AAC 编码器 LCAACEncode16kMono
+      2. 必须有 ADTS 头（0xFF 0xF1 syncword + frame_length 计算）
+      3. 不得再出现「一次失败即永久禁用」的 _aacBroken / _directFailed
+      4. 并发槽位满时不得整段丢弃音频（setLength:0）
+      5. 字号必须实时读盘（面板改完立即生效）
+      6. 面板必须有真正的字号 UI（滑块），且不得再用强转 NSNumber 读值
+    """
+    code = _strip_comments_strings(src)
+
+    # ---- 1) 裸 AAC 编码器不得复活 ----
+    if re.search(r"LCAACEncode16kMono", src):
+        errors.append(
+            "v1.0.87 回归: 源码里又出现了 LCAACEncode16kMono（裸 AAC）—— "
+            "腾讯云拒收无 ADTS 头的 AAC（ErrorInvalidVoicedata），"
+            "压缩会完全失效并退回 82KB WAV，延迟反弹。必须用 LCAACEncodeADTSFramed。")
+
+    # ---- 2) ADTS 头必须真的写进字节流 ----
+    if "LCAACEncodeADTSFramed" not in code:
+        errors.append(
+            "v1.0.87 回归: 缺少 LCAACEncodeADTSFramed —— "
+            "必须逐帧加 7 字节 ADTS 头，否则腾讯云拒收。")
+    else:
+        # ADTS syncword：0xFF 0xF1（MPEG-4, 无 CRC）
+        if not re.search(r"0xFF\s*,\s*0xF1", src):
+            errors.append(
+                "v1.0.87 回归: ADTS 头缺少 syncword 0xFF 0xF1 —— "
+                "腾讯云按 ADTS 解析，无 syncword 直接判定为非法音频。")
+        # frame_length 必须按「7 + payload」算
+        if not re.search(r"frameLen\s*=\s*7\s*\+\s*produced", code):
+            errors.append(
+                "v1.0.87 回归: ADTS 头没有按 frame_length = 7 + payload 计算 —— "
+                "长度算错会导致解码器读错帧边界。")
+        # 采样率索引 8 = 16kHz
+        if not re.search(r"\(8\s*&\s*0x0F\)", code):
+            errors.append(
+                "v1.0.87 回归: ADTS 头缺少 sampling_frequency_index = 8（16kHz）—— "
+                "与实际编码采样率不一致会让解码器错位。")
+
+    # ---- 3) 一次性永久禁用不得复活 ----
+    for dead in ("_aacBroken", "_directFailed"):
+        # 只在【代码】里查（注释里作为历史说明可以出现）
+        if re.search(r"\b%s\b" % dead, code):
+            errors.append(
+                "v1.0.87 回归: 代码里又出现了 %s —— "
+                "「一次失败即永久禁用」正是延迟反弹的放大器："
+                "AAC 被拒一次就永久退回 WAV，直连失败一次就永久走慢代理。"
+                "必须改成「连续失败计数 + 冷却窗口」。" % dead)
+
+    # ---- 4) 并发槽位满时不得整段丢音频 ----
+    for fn in ("trimPCMKeepingSeconds", "trimPCM16KeepingSeconds"):
+        # 至少要有【定义 + 1 处调用】；两条音频入口都要改
+        # 注意：ObjC 方法名后面跟的是 : 而不是 (，所以不能用 \bNAME\s*\( 来数
+        n = len(re.findall(r"\b%s\b" % fn, code))
+        if n < 2:
+            errors.append(
+                "v1.0.87 回归: %s 只有 %d 处（需 ≥2：定义 + 调用）—— "
+                "并发槽位满时必须【裁掉最旧的音频、保留最新的一段】，"
+                "整段清空会让分片越来越长（实测出现 4.41s 长尾）。" % (fn, n))
+    # 旧写法：并发分支里直接 setLength:0
+    for m in re.finditer(r"else\s+if\s*\([^)]*\)\s*\{\s*\[_pcm(?:16)?\s+setLength:\s*0\]",
+                         code, re.DOTALL):
+        errors.append(
+            "v1.0.87 回归: 并发分支里出现整段清空音频 —— "
+            "必须改为裁剪保留最新音频，否则分片越滚越长、延迟持续恶化。")
+
+    # ---- 5) 字号必须实时读盘 + 面板改完立刻重绘 ----
+    body = _method_body(src, r"-\s*\(id\)\s*freshValueForKey\s*:\s*\(\s*NSString\s*\*\s*\)\s*key")
+    if body is None:
+        errors.append(
+            "v1.0.87 回归: 缺少 freshValueForKey（实时读盘）—— "
+            "字号读的是启动时缓存的 _d，面板改完必须重启 App 才生效。")
+    elif "dictionaryWithContentsOfFile" not in body:
+        errors.append(
+            "v1.0.87 回归: freshValueForKey 没有真的读文件 —— "
+            "字号必须每次从 plist 现读，否则改了不生效。")
+
+    body = _method_body(src, r"-\s*\(void\)\s*startConfigWatcher")
+    if body is None:
+        errors.append(
+            "v1.0.87 回归: 缺少配置监听 startConfigWatcher —— "
+            "改完字号后若没有新句子就没有重绘时机，字幕大小不会当场变化。")
+    elif "dispatch_source_set_timer" not in body:
+        errors.append(
+            "v1.0.87 回归: startConfigWatcher 没有起定时器 —— "
+            "字号变化无法被感知。")
+
+    body = _method_body(src, r"-\s*\(void\)\s*checkConfigChange")
+    if body is None:
+        errors.append(
+            "v1.0.87 回归: 缺少 checkConfigChange —— "
+            "字号变化后必须触发重排重绘。")
+    elif "renderCurrent" not in body:
+        errors.append(
+            "v1.0.87 回归: checkConfigChange 没有调用 renderCurrent —— "
+            "字号变了但画面不重绘，等于没生效。")
+
+    # ---- 6) 面板必须提供真正的字号 UI ----
+    if panel_src is None:
+        warnings.append("v1.0.87: 未读取面板源码，跳过字号 UI 检查")
+    else:
+        if "UISlider" not in panel_src:
+            errors.append(
+                "v1.0.87 回归: 面板没有字号滑块 —— "
+                "用户要求「字体要在 UI 里面可以设置大小」，"
+                "数字键盘输入框不算合格的 UI。")
+        elif not re.search(r"addTarget\s*:\s*self[\s\S]{0,120}?@selector\(lc_sliderChanged:\)",
+                           panel_src):
+            errors.append(
+                "v1.0.87 回归: 字号滑块没有绑定 lc_sliderChanged: 回调 —— "
+                "拖动滑块必须能实时写入 fontSize 配置。")
+        if "LCFontSizeController" not in panel_src:
+            errors.append(
+                "v1.0.87 回归: 面板缺少 LCFontSizeController（字号选择页）—— "
+                "字号必须是一个可视化的调节界面。")
+        # 旧写法：把可能是 NSString 的值强转成 NSNumber
+        # （必须先剥掉 // 注释，否则注释里举的反例会误判）
+        panel_code = re.sub(r"//[^\n]*", "", panel_src)
+        if re.search(r"\[\s*\(NSNumber\s*\*\)\s*LCGet\(", panel_code):
+            errors.append(
+                "v1.0.87 回归: 面板仍在用 [(NSNumber *)LCGet(...)] 强转读配置 —— "
+                "postinst 写入的是 <string>16</string>，强转后取值行为未定义，"
+                "必须改用 LCGetNum / LCGetBool（兼容 NSNumber 与 NSString）。")
+        # 面板默认值必须与 tweak 一致（16，不是 28）
+        if re.search(r"fontSize\"?\s*,\s*28", panel_src):
+            errors.append(
+                "v1.0.87 回归: 面板字号默认值仍是 28 —— "
+                "tweak 侧默认是 16，两边对不上会让用户以为「改了没生效」。")
+        if 'LCSet(@((NSInteger)v), @"fontSize")' not in panel_src:
+            errors.append(
+                "v1.0.87 回归: 面板字号滑块没有写回 fontSize 键 —— "
+                "拖动必须真正写入配置才能生效。")
+
+
 def main():
     try:
         src = read_src()
@@ -963,6 +1143,7 @@ def main():
     check_v84_fixes(src, panel_src)
     check_v85_fixes(src, panel_src)
     check_v86_fixes(src, panel_src)
+    check_v87_fixes(src, panel_src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -983,6 +1164,7 @@ def main():
     print("  OK: v1.0.82 修复在位（默认只显示中文/英文标签收起/保留上一句/FIFO 队列）")
     print("  OK: v1.0.83 修复在位（showBilingual 语义/统一配置通道/容器尺寸不再冻结/测量扣内边距）")
     print("  OK: v1.0.84 修复在位（分片时长可配置/毫秒RTT打点/提到最上层/跟随新window/位置钳制）")
+    print("  OK: v1.0.87 修复在位（ADTS 封装/失败可恢复/分片不丢音/字号滑块+实时生效）")
     return 0
 
 

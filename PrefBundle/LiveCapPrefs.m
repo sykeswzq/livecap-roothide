@@ -11,6 +11,9 @@
 
 static NSString *LCAppID = @"com.sykes.livecap";
 
+// v1.0.87：字号选择器（滑块 + 实时预览），见下方 LCFontSizeController
+@class LCFontSizeController;
+
 // v1.0.83：配置读写统一走【plist 文件】。
 // 背景：面板原来用 CFPreferences 写、tweak 用文件直写同一个 plist，
 //       两套机制互相覆盖 → 实测 showEnglish 写好的 false 被覆写成 true。
@@ -48,6 +51,25 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
     id v = LCGet(key);
     return ([v isKindOfClass:[NSString class]] && ((NSString *)v).length > 0)
         ? (NSString *)v : fallback;
+}
+
+// ===== v1.0.87：安全的数值/布尔读取 =====
+// 背景：postinst 写入的是 <string>16</string>（字符串），
+// 面板却用 [(NSNumber *)LCGet(@"fontSize") doubleValue] 强转 —— 类型不匹配，
+// 遇到字符串时是「未定义行为」（运气好能跑，运气不好直接崩）。
+// 现在统一兼容 NSNumber / NSString 两种存法，和 tweak 侧读取逻辑保持一致。
+static double LCGetNum(NSString *key, double fallback) {
+    id v = LCGet(key);
+    if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v doubleValue];
+    if ([v isKindOfClass:[NSString class]]) return [(NSString *)v doubleValue];
+    return fallback;
+}
+
+static BOOL LCGetBool(NSString *key, BOOL fallback) {
+    id v = LCGet(key);
+    if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v boolValue];
+    if ([v isKindOfClass:[NSString class]]) return [(NSString *)v boolValue];
+    return fallback;
 }
 
 #pragma mark - 主控制器
@@ -169,7 +191,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
     if (section == 1)
         return @"在线语音识别无需 iOS 授权，任何 App 通用。腾讯云一句话识别每月免费 5000 次，密钥在控制台→访问管理→API 密钥管理获取。翻译使用内置 AI 服务。";
     if (section == 2)
-        return @"字幕可长按拖动，位置按 App 记忆（重开 App 回到上次位置）。背景样式：无背景描边 / 半透明黑 / 实黑 / 半透明白 / 毛玻璃。\n默认只显示中文译文一行；打开「显示英文原文」可恢复上下两行（英文在上、中文在下）。";
+        return @"字幕可长按拖动，位置按 App 记忆（重开 App 回到上次位置）。背景样式：无背景描边 / 半透明黑 / 实黑 / 半透明白 / 毛玻璃。\n点「字幕字号」可用滑块调整大小，改完立即生效，无需重启 App。\n默认只显示中文译文一行；打开「显示英文原文」可恢复上下两行（英文在上、中文在下）。";
     if (section == 3)
         return @"目标 App 需在 Dopamine Inject Manager 白名单勾选；完全退出目标 App 再打开生效。长按桌面 App 图标可快捷开关实时字幕翻译。";
     return nil;
@@ -194,7 +216,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
         if (indexPath.row == 0) {
             cell.textLabel.text = @"实时字幕翻译";
             UISwitch *sw = [[UISwitch alloc] init];
-            sw.on = [(NSNumber *)LCGet(@"enabled") boolValue];
+            sw.on = LCGetBool(@"enabled", YES);
             [sw addTarget:self action:@selector(lc_enabledChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -227,15 +249,18 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
     }
     else {
         if (indexPath.row == 0) {
-            cell.textLabel.text = @"字号";
-            CGFloat fs = [(NSNumber *)LCGet(@"fontSize") doubleValue];
-            if (fs < 10) fs = 28;
+            // v1.0.87：字号行 → 点开滑块选择器（不再是数字键盘输入）
+            cell.textLabel.text = @"字幕字号";
+            // 默认值与 tweak 保持一致（16）。原来这里写 28，
+            // 与 tweak 实际的默认 16 不一致 → 用户看到「28」但画面是 16，误以为没生效。
+            CGFloat fs = LCGetNum(@"fontSize", 16.0);
+            if (fs < 10 || fs > 40) fs = 16.0;
             cell.detailTextLabel.text = [NSString stringWithFormat:@"%.0f", fs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 1) {
             cell.textLabel.text = @"粗体";
             UISwitch *sw = [[UISwitch alloc] init];
-            sw.on = [(NSNumber *)LCGet(@"boldText") boolValue];
+            sw.on = LCGetBool(@"boldText", NO);
             [sw addTarget:self action:@selector(lc_boldChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -250,7 +275,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
         } else if (indexPath.row == 4) {
             // v1.0.84：ASR 分片时长（秒）—— 直接影响字幕延迟
             cell.textLabel.text = @"识别分片";
-            double cs = [(NSNumber *)LCGet(@"asrChunkSeconds") doubleValue];
+            double cs = LCGetNum(@"asrChunkSeconds", 2.5);
             if (cs < 1.0 || cs > 8.0) cs = 2.5;
             cell.detailTextLabel.text = [NSString stringWithFormat:@"%.1f 秒", cs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
@@ -261,7 +286,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
             UISwitch *sw = [[UISwitch alloc] init];
             // v1.0.83：只认 showBilingual（默认 NO = 只显示中文一行）。
             // 老键 showEnglish 语义相反且会被覆写，已废弃不用。
-            sw.on = [(NSNumber *)LCGet(@"showBilingual") boolValue];
+            sw.on = LCGetBool(@"showBilingual", NO);
             [sw addTarget:self action:@selector(lc_showEnglishChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -341,24 +366,20 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 2 && indexPath.row == 0) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"字号"
-                                                                       message:@"输入 10 - 32"
-                                                                preferredStyle:UIAlertControllerStyleAlert];
-        [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-            tf.keyboardType = UIKeyboardTypeNumberPad;
-            CGFloat fs = [(NSNumber *)LCGet(@"fontSize") doubleValue];
-            if (fs < 10) fs = 28;
-            tf.text = [NSString stringWithFormat:@"%.0f", fs];
-        }];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            CGFloat v = alert.textFields.firstObject.text.doubleValue;
-            if (v < 10) v = 10;
-            if (v > 32) v = 32;
-            LCSet(@(v), @"fontSize");
-            [self.lc_tv reloadData];
-        }]];
-        [self presentViewController:alert animated:YES completion:nil];
+        // ===== v1.0.87：字号选择器（滑块 + 实时预览）=====
+        // 原来是一个数字键盘输入框：要先点「字号」→ 弹键盘 → 输入 → 确定，
+        // 步骤多、而且看不到效果，改完还要退出 App 才生效（tweak 侧读的是启动时缓存）。
+        // 现在：独立的滑块页面，拖动即改、即时预览、即时写入，
+        // tweak 侧改为实时读盘 + 0.4s 监听 → 字幕大小当场变化，不用重启 App。
+        @try {
+            LCFontSizeController *vc = [[LCFontSizeController alloc] init];
+            UINavigationController *nav =
+                [[UINavigationController alloc] initWithRootViewController:vc];
+            nav.modalPresentationStyle = UIModalPresentationPageSheet;
+            [self presentViewController:nav animated:YES completion:nil];
+        } @catch (NSException *e) {
+            NSLog(@"[LiveCapPrefs] font size picker failed: %@", e);
+        }
     }
     else if (indexPath.section == 2 && indexPath.row == 4) {
         // v1.0.84：ASR 分片时长选择
@@ -448,6 +469,172 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 
 - (void)colorPickerViewController:(UIColorPickerViewController *)picker didSelectColor:(UIColor *)color continuously:(BOOL)continuously {
     LCSet([self lc_hexFromColor:color], self.colorKey);
+}
+
+@end
+
+
+#pragma mark - v1.0.87：字幕字号选择器（滑块 + 实时预览）
+
+// 设计要点：
+//   ① 滑块 10~40，与 tweak 侧 fontSize 的取值范围完全一致
+//   ② 拖动时实时改预览文字（所见即所得）
+//   ③ 数值变化即写入配置（tweak 实时读盘 + 0.4s 监听）→ 字幕当场变大/变小
+//   ④ 快捷档位按钮（小/标准/大/特大），单手可点
+//   ⑤ 默认值 16，与 tweak 实际默认一致（原来面板显示 28、实际 16，两边对不上）
+@interface LCFontSizeController : UIViewController
+@end
+
+@implementation LCFontSizeController {
+    UISlider *_slider;
+    UILabel *_valueLabel;
+    UILabel *_preview;
+    double _value;
+    double _lastWritten;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"字幕字号";
+    self.view.backgroundColor = [UIColor systemBackgroundColor];
+
+    _value = [self lc_currentFontSize];
+    _lastWritten = _value;
+
+    self.navigationItem.rightBarButtonItem =
+        [[UIBarButtonItem alloc] initWithTitle:@"完成"
+                                         style:UIBarButtonItemStyleDone
+                                        target:self
+                                        action:@selector(lc_done)];
+
+    // 说明文字
+    UILabel *desc = [[UILabel alloc] init];
+    desc.text = @"拖动滑块调整字幕字号，设置后立即生效，无需重启 App";
+    desc.font = [UIFont systemFontOfSize:13];
+    desc.textColor = [UIColor secondaryLabelColor];
+    desc.numberOfLines = 0;
+    desc.textAlignment = NSTextAlignmentCenter;
+    desc.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:desc];
+
+    // 当前数值
+    _valueLabel = [[UILabel alloc] init];
+    _valueLabel.text = [NSString stringWithFormat:@"%.0f", _value];
+    _valueLabel.font = [UIFont systemFontOfSize:36 weight:UIFontWeightBold];
+    _valueLabel.textAlignment = NSTextAlignmentCenter;
+    _valueLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_valueLabel];
+
+    // 滑块
+    _slider = [[UISlider alloc] init];
+    _slider.minimumValue = 10.0;
+    _slider.maximumValue = 40.0;
+    _slider.value = (float)_value;
+    _slider.minimumTrackTintColor = [UIColor systemBlueColor];
+    [_slider addTarget:self
+                action:@selector(lc_sliderChanged:)
+      forControlEvents:UIControlEventValueChanged];
+    _slider.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_slider];
+
+    // 预览（模拟字幕样式：白字深色底）
+    _preview = [[UILabel alloc] init];
+    _preview.text = @"这是字幕预览效果 Example 123";
+    _preview.numberOfLines = 0;
+    _preview.textAlignment = NSTextAlignmentCenter;
+    _preview.textColor = [UIColor whiteColor];
+    _preview.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.65];
+    _preview.layer.cornerRadius = 8.0;
+    _preview.layer.masksToBounds = YES;
+    _preview.font = [UIFont systemFontOfSize:(CGFloat)_value];
+    _preview.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_preview];
+
+    // 快捷档位
+    UIStackView *presets = [[UIStackView alloc] init];
+    presets.axis = UILayoutConstraintAxisHorizontal;
+    presets.distribution = UIStackViewDistributionFillEqually;
+    presets.spacing = 8.0;
+    NSArray *names = @[@"小 14", @"标准 18", @"大 24", @"特大 30"];
+    NSArray *vals = @[@14, @18, @24, @30];
+    for (NSUInteger i = 0; i < names.count; i++) {
+        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+        [b setTitle:names[i] forState:UIControlStateNormal];
+        b.titleLabel.font = [UIFont systemFontOfSize:14];
+        b.titleLabel.adjustsFontSizeToFitWidth = YES;
+        b.backgroundColor = [UIColor secondarySystemBackgroundColor];
+        b.layer.cornerRadius = 8.0;
+        b.tag = [vals[i] integerValue];
+        [b addTarget:self
+                action:@selector(lc_presetTapped:)
+      forControlEvents:UIControlEventTouchUpInside];
+        [presets addArrangedSubview:b];
+    }
+    presets.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:presets];
+
+    // 布局
+    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [desc.topAnchor constraintEqualToAnchor:safe.topAnchor constant:18],
+        [desc.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:20],
+        [desc.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-20],
+
+        [_valueLabel.topAnchor constraintEqualToAnchor:desc.bottomAnchor constant:10],
+        [_valueLabel.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:20],
+        [_valueLabel.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-20],
+
+        [_slider.topAnchor constraintEqualToAnchor:_valueLabel.bottomAnchor constant:6],
+        [_slider.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:20],
+        [_slider.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-20],
+
+        [_preview.topAnchor constraintEqualToAnchor:_slider.bottomAnchor constant:22],
+        [_preview.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:20],
+        [_preview.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-20],
+        [_preview.heightAnchor constraintGreaterThanOrEqualToConstant:90],
+
+        [presets.topAnchor constraintEqualToAnchor:_preview.bottomAnchor constant:18],
+        [presets.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:20],
+        [presets.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-20],
+        [presets.heightAnchor constraintEqualToConstant:42],
+    ]];
+}
+
+// 当前字号（与 tweak 侧范围一致：10~40，默认 16）
+- (double)lc_currentFontSize {
+    double fs = LCGetNum(@"fontSize", 16.0);
+    if (fs < 10.0 || fs > 40.0) fs = 16.0;
+    return fs;
+}
+
+- (void)lc_sliderChanged:(UISlider *)slider {
+    double v = (double)slider.value;
+    // 取整（字号没必要有小数）
+    v = (double)(long long)(v + 0.5);
+    if (v < 10.0) v = 10.0;
+    if (v > 40.0) v = 40.0;
+    _value = v;
+    _valueLabel.text = [NSString stringWithFormat:@"%.0f", v];
+    _preview.font = [UIFont systemFontOfSize:(CGFloat)v];
+    [self applyValue:v];
+}
+
+- (void)lc_presetTapped:(UIButton *)btn {
+    _slider.value = (float)btn.tag;
+    [self lc_sliderChanged:_slider];
+}
+
+// 写入配置：字号是整数，值没变就不写盘（拖动时不做无意义的文件写入）
+- (void)applyValue:(double)v {
+    if ((v - _lastWritten) < 0.5 && (_lastWritten - v) < 0.5) return;
+    _lastWritten = v;
+    LCSet(@((NSInteger)v), @"fontSize");
+}
+
+- (void)lc_done {
+    @try {
+        [self dismissViewControllerAnimated:YES completion:nil];
+    } @catch (NSException *e) {}
 }
 
 @end

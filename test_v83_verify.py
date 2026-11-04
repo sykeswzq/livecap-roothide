@@ -68,12 +68,13 @@ def main():
               "（v1.0.82「中文没显示全」根因）")
         with io.open(SRC, "r", encoding="utf-8") as f:
             s = f.read()
+        # 注：v1.0.84 在 f.origin 之后插入了「钳制在宿主 bounds 内」的代码块，
+        #     所以锚点只取到 f.origin 这一段（检查项只看 _userMoved 分支里有没有
+        #     更新 f.size，不关心后面的钳制逻辑）。
         bug1_old = """            CGRect f = _container.frame;
             f.size = CGSizeMake(w, h);
             // 保持中心点不变（用户拖到的位置），只改尺寸
-            f.origin = CGPointMake(_userCenter.x - w / 2.0, _userCenter.y - h / 2.0);
-            _container.frame = f;
-            _userCenter = _container.center;"""
+            f.origin = CGPointMake(_userCenter.x - w / 2.0, _userCenter.y - h / 2.0);"""
         bug1_new = """            _container.center = _userCenter;"""
         if bug1_old in s:
             with io.open(SRC, "w", encoding="utf-8") as f:
@@ -117,8 +118,9 @@ def main():
               "（配置互相覆写根因）")
         with io.open(PANEL, "r", encoding="utf-8") as f:
             p = f.read()
-        bug3_old = """    sw.on = [(NSNumber *)LCGet(@"showBilingual") boolValue];"""
-        bug3_new = """    sw.on = [(NSNumber *)LCGet(@"showEnglish") boolValue];"""
+        # v1.0.87：面板改用类型安全的 LCGetBool 读配置（兼容 NSNumber/NSString）
+        bug3_old = """            sw.on = LCGetBool(@"showBilingual", NO);"""
+        bug3_new = """            sw.on = LCGetBool(@"showEnglish", YES);"""
         if bug3_old in p:
             with io.open(PANEL, "w", encoding="utf-8") as f:
                 f.write(p.replace(bug3_old, bug3_new, 1))
