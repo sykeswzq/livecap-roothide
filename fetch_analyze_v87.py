@@ -33,10 +33,16 @@ def find_log():
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def ssh(cmd, timeout=60):
-    p = subprocess.run(['ssh'] + SSH_OPTS + [HOST, cmd],
-                       capture_output=True, timeout=timeout)
-    return p.returncode, p.stdout.decode('utf-8', 'replace'), p.stderr.decode('utf-8', 'replace')
+def ssh(cmd, timeout=45):
+    """设备可能休眠/掉线，超时要兜住，不能让脚本崩掉。"""
+    try:
+        p = subprocess.run(['ssh'] + SSH_OPTS + [HOST, cmd],
+                           capture_output=True, timeout=timeout)
+        return p.returncode, p.stdout.decode('utf-8', 'replace'), p.stderr.decode('utf-8', 'replace')
+    except subprocess.TimeoutExpired:
+        return 255, '', 'ssh timeout'
+    except Exception as e:
+        return 255, '', str(e)
 
 
 def log_size():
@@ -62,21 +68,37 @@ def asr_hits():
         return 0
 
 
+def device_alive():
+    """设备是否还能连上（手机息屏/换网会让 SSH 暂时不可达）。"""
+    rc, out, _ = ssh("echo ALIVE", timeout=25)
+    return rc == 0 and "ALIVE" in out
+
+
 def main():
     start_wait = int(sys.argv[1]) if len(sys.argv) > 1 else 25
     timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 600
-    print("[1] 日志路径: %s" % (find_log() or "未找到（YouTube 可能还没启动过）"))
-    print("[2] 基线日志大小: %d bytes" % log_size())
-    print("[2] 等待 %ds 让设备产生新日志（最长 %ds）" % (start_wait, timeout))
+    print("[1] 设备连通性: %s" % ("在线" if device_alive() else "❌ 不可达（手机息屏/离线？）"))
+    print("[2] 日志路径: %s" % (find_log() or "未找到（YouTube 可能还没启动过）"))
+    print("[3] 基线日志大小: %d bytes" % log_size())
+    print("[4] 等待 %ds 让设备产生新日志（最长 %ds）" % (start_wait, timeout))
     print("    提示：请完全退出 YouTube 后重新打开并播放视频")
     time.sleep(start_wait)
 
     deadline = time.time() + timeout
     last, stable = -1, 0
+    offline_notice = False
     while time.time() < deadline:
         sz = log_size()
         hits = asr_hits()
-        print("    日志 %d bytes，ASR 记录 %d 条" % (sz, hits))
+        if sz == 0 and hits == 0:
+            # 设备不可达时 log_size/asr_hits 都拿不到数 —— 提示一次，别刷屏
+            if not offline_notice:
+                print("    ⚠️ 设备当前不可达，继续等待它恢复…")
+                offline_notice = True
+            time.sleep(10)
+            continue
+        offline_notice = False
+        print("    日志 %d bytes，ASR 记录 %d 条" % (sz, hits), flush=True)
         # 已经有足够的 ASR 记录 → 直接收工分析，不等日志写完
         if hits >= 8:
             print("    ASR 记录已够用，提前结束等待")
@@ -90,7 +112,7 @@ def main():
         last = sz
         time.sleep(5)
 
-    print("[3] 拉取日志并分析 ...")
+    print("[5] 拉取日志并分析 ...")
     if not find_log():
         print("找不到 livecap.log —— 请完全退出 YouTube 后重新打开并播放视频")
         return 1
