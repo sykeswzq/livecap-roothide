@@ -216,6 +216,28 @@ jobs:
           done
           echo "  (8) OK 静态检查双向验证通过（注入历史 bug 均被准确拦截）"
 
+      - name: Verify ADTS header against FFmpeg reference
+        run: |
+          set -e
+          # ===== v1.0.87：ADTS 头必须与 FFmpeg 官方实现逐字节一致 =====
+          # 背景：v1.0.85 把音频压成 AAC 想减延迟，但腾讯云拒收裸 AAC
+          #      （ErrorInvalidVoicedata: Audio decoding failed）。
+          #      v1.0.87 改用 ADTS 封装 —— 可【万一 7 字节头的位运算写错，
+          #      接口依然会拒收】，而本机无 iOS SDK 编不了 dylib，
+          #      只能靠离线字节级校验提前拦住。
+          # 做法：verify_adts.py 从 LiveCap.m【真源码】里提取位运算并按 C 语义求值，
+          #      与 FFmpeg 官方 ADTS muxer 的输出逐字节对拍，
+          #      再按 ISO/IEC 13818-7 独立复核一遍，最后回灌解复用器验证 16000Hz/mono。
+          # PyAV 装不上就让本步失败 —— 静默跳过等于防回归失效。
+          if ! python3 -c "import av" 2>/dev/null; then
+            python3 -m pip install --quiet av \
+              || python3 -m pip install --quiet --break-system-packages av
+          fi
+          python3 -c "import av" || { echo "ERROR: PyAV 不可用，ADTS 校验无法执行"; exit 1; }
+          python3 verify_adts.py
+          python3 test_verify_adts.py
+          echo "  (9) OK ADTS 头与 FFmpeg 官方实现逐字节一致（且双向变异测试通过）"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
