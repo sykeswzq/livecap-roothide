@@ -77,10 +77,24 @@ def device_alive():
 def main():
     start_wait = int(sys.argv[1]) if len(sys.argv) > 1 else 25
     timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 600
-    print("[1] 设备连通性: %s" % ("在线" if device_alive() else "❌ 不可达（手机息屏/离线？）"))
-    print("[2] 日志路径: %s" % (find_log() or "未找到（YouTube 可能还没启动过）"))
-    print("[3] 基线日志大小: %d bytes" % log_size())
-    print("[4] 等待 %ds 让设备产生新日志（最长 %ds）" % (start_wait, timeout))
+    device_wait = int(sys.argv[3]) if len(sys.argv) > 3 else 7200
+
+    # 阶段 0：等设备恢复（手机息屏/换网/关机都会让 SSH 暂时不可达）
+    if not device_alive():
+        print("[0] 设备不可达，等待恢复（最多 %ds）…" % device_wait, flush=True)
+        deadline0 = time.time() + device_wait
+        while time.time() < deadline0:
+            time.sleep(15)
+            if device_alive():
+                print("[0] ✅ 设备已恢复连接", flush=True)
+                break
+        else:
+            print("[0] ❌ 等待超时，设备始终没回来")
+            return 2
+
+    print("[1] 日志路径: %s" % (find_log() or "未找到（YouTube 可能还没启动过）"))
+    print("[2] 基线日志大小: %d bytes" % log_size())
+    print("[3] 等待 %ds 让设备产生新日志（最长 %ds）" % (start_wait, timeout))
     print("    提示：请完全退出 YouTube 后重新打开并播放视频")
     time.sleep(start_wait)
 
@@ -112,7 +126,7 @@ def main():
         last = sz
         time.sleep(5)
 
-    print("[5] 拉取日志并分析 ...")
+    print("[4] 拉取日志并分析 ...")
     if not find_log():
         print("找不到 livecap.log —— 请完全退出 YouTube 后重新打开并播放视频")
         return 1
