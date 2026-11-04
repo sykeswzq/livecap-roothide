@@ -768,9 +768,21 @@ def check_v85_fixes(src, panel_src=None):
     if "connectionProxyDictionary" not in code:
         errors.append("v1.0.85 回归: 缺少 connectionProxyDictionary —— "
                       "ASR 请求仍会走系统代理，多出 2 个跨洋 RTT（约 1.5s 固定开销）")
-    if "kCFNetworkProxiesHTTPSEnable" not in code:
-        errors.append("v1.0.85 回归: 缺少 kCFNetworkProxiesHTTPSEnable —— "
-                      "HTTPS 代理没被禁用，ASR 仍走代理")
+    # v1.0.86 修正：kCFNetworkProxiesHTTPSEnable / kCFNetworkProxiesSOCKSEnable
+    # 在 iOS SDK 里标记为 "unavailable: not available on iOS"，用了会编译失败。
+    # iOS 上唯一可用的代理开关是 kCFNetworkProxiesHTTPEnable。
+    if "kCFNetworkProxiesHTTPEnable" not in code:
+        errors.append("v1.0.85 回归: 缺少 kCFNetworkProxiesHTTPEnable —— "
+                      "HTTP 代理没被禁用，ASR 仍走代理")
+    # 禁用 HTTPS/SOCKS 代理改用字面量 key（"HTTPSEnable" / "SOCKSEnable"），
+    # 运行时效果等价于 CF 常量，但不受 iOS 可用性标注限制。
+    # 注意：必须在【原始源码 src】里匹配 —— _strip_comments_strings 会把
+    # 字符串字面量一起剥掉，在 code 里查永远查不到（会误报）。
+    for lit in ('"HTTPSEnable"', '"SOCKSEnable"'):
+        if lit not in src:
+            errors.append("v1.0.85 回归: 缺少代理开关字面量 %s —— "
+                          "iOS 上 kCFNetworkProxiesHTTPSEnable 不可用，"
+                          "必须用字面量 key 关闭 HTTPS/SOCKS 代理" % lit)
 
     # ---- 5) 字幕框宽度上限 ----
     if not re.search(r"MIN\(\s*hostW\s*-\s*margin\s*\*\s*2\s*,\s*[0-9.]+\s*\)", code):
@@ -790,6 +802,100 @@ def check_v85_fixes(src, panel_src=None):
     elif "_pcm16.length" not in m.group(1):
         errors.append("v1.0.85 回归: secs16 被写死为 %s —— "
                       "必须由 _pcm16.length 实际算出秒数" % m.group(1).strip())
+
+
+def check_v86_fixes(src, panel_src=None):
+    """v1.0.86：防止 mediaserverd 注入复发 + 防 C++ 语法残留。
+
+    背景（真实事故）：
+    LiveCap.plist 的 Filter 里带 <key>Executables</key><string>mediaserverd</string>，
+    把 tweak 注入进了 iOS 系统媒体服务守护进程 → mediaserverd 崩溃循环
+    （launchctl 状态 -11 = SIGSEGV）→ 微信语音 / 通话全部无声。
+    这个坑 v1.0.30 修过一次（commit 7431db0），v1.0.74 改 plist 时又加了回来
+    （commit ba3ac6d）→ 复发。
+    所以必须在 CI 里硬性拦截，不能靠人记得。
+    """
+    # ---- 1) plist 里不得出现 mediaserverd ----
+    plist_path = os.path.join(os.path.dirname(SRC), "LiveCap.plist")
+    try:
+        with io.open(plist_path, "r", encoding="utf-8") as pf:
+            plist_txt = pf.read()
+    except Exception as e:
+        errors.append("v1.0.86 回归: 读不到 LiveCap.plist: %s" % e)
+        plist_txt = None
+
+    if plist_txt is not None:
+        # 只看真实的 plist 节点，忽略注释（注释里可以写「不要再加 mediaserverd」）
+        plist_body = re.sub(r"<!--.*?-->", "", plist_txt, flags=re.DOTALL)
+        if "mediaserverd" in plist_body:
+            errors.append(
+                "v1.0.86 回归: LiveCap.plist 里出现了 mediaserverd —— "
+                "注入系统媒体服务会导致 mediaserverd 崩溃（-11），"
+                "微信语音/通话会无声。v1.0.30 修过一次，v1.0.74 又挖回来了。")
+        # Executables 节点整体都不该有（mediaserverd 之外也一样危险）
+        if "<key>Executables</key>" in plist_body:
+            errors.append(
+                "v1.0.86 回归: LiveCap.plist 出现了 Executables 过滤节点 —— "
+                "只允许用 Bundles 白名单限定目标 App。")
+
+    # ---- 2) postinst 不得再杀 mediaserverd ----
+    postinst_path = os.path.join(os.path.dirname(SRC), "postinst")
+    try:
+        with io.open(postinst_path, "r", encoding="utf-8") as pf:
+            post_txt = pf.read()
+    except Exception:
+        post_txt = None
+
+    if post_txt is not None:
+        post_code = re.sub(r"^\s*#.*$", "", post_txt, flags=re.MULTILINE)
+        if re.search(r"killall[^\n]*mediaserverd", post_code):
+            errors.append(
+                "v1.0.86 回归: postinst 里还在 killall mediaserverd —— "
+                "杀系统音频服务会中断所有 App 的音频会话（微信语音瞬断）。")
+
+    # ---- 3) Objective-C 不支持 C++ 引用声明 ----
+    # AudioBuffer &b = ... 是 C++ 语法，CI 会报
+    # "expected identifier or '('" + "use of undeclared identifier 'b'"。
+    code = _strip_comments_strings(src)
+    cpp_ref = re.findall(r"(?<![\w&])[A-Za-z_][A-Za-z0-9_]*\s*&\s*[a-zA-Z_]\w*\s*=", code)
+    if cpp_ref:
+        errors.append(
+            "v1.0.86 回归: 检测到 C++ 引用声明 %s —— "
+            "Objective-C 不支持，必须改成指针（const AudioBuffer *b = ...）。"
+            % cpp_ref[:3])
+
+    # ---- 4) 已删除/不存在的常量不得复活 ----
+    dead_symbols = [
+        "kAudioFormatFlagIsEncoded",
+        "kAudioConverterEncodeQuality",
+        "AudioConverterInputStatus",
+        "kCFNetworkProxiesHTTPSEnable",
+        "kCFNetworkProxiesSOCKSEnable",
+    ]
+    # 在原始源码里找（字符串/注释剥离会把符号删掉，但这里要连注释一起检查，
+    # 因为注释里提到的名字说明作者还想着这个 API，容易顺手写回去）
+    for sym in dead_symbols:
+        # 允许出现在【注释】里作为「不要用」的说明，但不允许出现在代码里
+        for line in src.splitlines():
+            code_only = line.split("//", 1)[0]
+            if sym in code_only:
+                errors.append(
+                    "v1.0.86 回归: 代码中使用了不存在的符号 %s —— "
+                    "该常量在 iOS SDK 里不存在，CI 会编译失败。" % sym)
+                break
+
+    # ---- 5) AudioConverter 回调签名必须正确 ----
+    if "LCAACInputProc" in code:
+        if not re.search(r"static\s+UInt32\s+LCAACInputProc\s*\(", code):
+            errors.append(
+                "v1.0.86 回归: LCAACInputProc 返回类型不是 UInt32 —— "
+                "AudioConverterInputDataProc 要求 UInt32 返回值，"
+                "用 size_t 会报 incompatible function pointer types。")
+    if "LCAACOutputProc" in code:
+        if not re.search(r"static\s+UInt32\s+LCAACOutputProc\s*\(", code):
+            errors.append(
+                "v1.0.86 回归: LCAACOutputProc 返回类型不是 UInt32 —— "
+                "AudioConverterOutputDataProc 要求 UInt32 返回值。")
 
 
 def main():
@@ -817,6 +923,7 @@ def main():
 
     check_v84_fixes(src, panel_src)
     check_v85_fixes(src, panel_src)
+    check_v86_fixes(src, panel_src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")

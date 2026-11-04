@@ -65,7 +65,11 @@ typedef struct {
 } LCPcmCursor;
 
 // AudioConverter 输入回调：把 PCM16 分片喂给编码器
-static size_t LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **ioData) {
+// 签名必须是 AudioConverterInputDataProc：
+//   UInt32 (*)(void *inRefCon, UInt32 *ioNumberDataPackets, void **outData)
+// 注意返回类型是 UInt32 而不是 size_t —— 用错会在 CI 报
+// "incompatible function pointer types"。
+static UInt32 LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **ioData) {
     LCPcmCursor *cur = (LCPcmCursor *)inRefCon;
     size_t remain = cur->len - cur->pos;
     size_t want = (size_t)(*ioNumDataPackets) * 2;   // 每包 2 字节（16bit mono）
@@ -78,14 +82,17 @@ static size_t LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **io
 }
 
 // AudioConverter 输出回调：把编码好的 AAC 帧收集起来
-static size_t LCAACOutputProc(void *inRefCon, UInt32 *ioNumDataPackets,
+static UInt32 LCAACOutputProc(void *inRefCon, UInt32 *ioNumDataPackets,
                              const AudioBufferList **ioData) {
     NSMutableData *out = (__bridge NSMutableData *)inRefCon;
     const AudioBufferList *abl = *ioData;
     if (abl && abl->mNumberBuffers > 0) {
-        const AudioBuffer &b = abl->mBuffers[0];
-        if (b.mDataByteSize > 0 && b.mData) {
-            [out appendBytes:b.mData length:b.mDataByteSize];
+        // 注意：这里必须用 C 指针，不能用 C++ 引用语法 `AudioBuffer &b`。
+        // Objective-C 不支持引用声明，CI 会报
+        // "expected identifier or '('" + "use of undeclared identifier 'b'"。
+        const AudioBuffer *b = &abl->mBuffers[0];
+        if (b->mDataByteSize > 0 && b->mData) {
+            [out appendBytes:b->mData length:b->mDataByteSize];
         }
     }
     *ioNumDataPackets = 0;   // 已取走
@@ -113,7 +120,8 @@ static NSData *LCAACEncode16kMono(NSData *pcm16) {
     memset(&outFmt, 0, sizeof(outFmt));
     outFmt.mSampleRate       = 16000;
     outFmt.mFormatID         = kAudioFormatMPEG4AAC;
-    outFmt.mFormatFlags      = kAudioFormatFlagIsEncoded;
+    // AAC-LC 对象类型。不能用 kAudioFormatFlagIsEncoded（该常量不存在）。
+    outFmt.mFormatFlags      = kMPEG4Object_AAC_LC;
     outFmt.mFramesPerPacket  = 1024;
     outFmt.mChannelsPerFrame = 1;
 
@@ -129,7 +137,7 @@ static NSData *LCAACEncode16kMono(NSData *pcm16) {
         return nil;
     }
     UInt32 quality = kAudioConverterQuality_Medium;
-    AudioConverterSetProperty(conv, kAudioConverterEncodeQuality,
+    AudioConverterSetProperty(conv, kAudioConverterCodecQuality,
                               sizeof(quality), &quality);
 
     LCPcmCursor cur;
@@ -139,16 +147,14 @@ static NSData *LCAACEncode16kMono(NSData *pcm16) {
 
     NSMutableData *out = [NSMutableData dataWithCapacity:pcm16.length / 8];
     UInt32 outCount = 0;
-    AudioConverterInputStatus status =
+    OSStatus status =
         AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur, &outCount,
                                         LCAACOutputProc, (__bridge void *)out);
     AudioConverterDispose(conv);
 
     // 编码失败或输出过短 → 返回 nil 让调用方回退 WAV
-    if (status != kAudioConverterErr_InvalidInputSize && out.length < 512) {
-        return nil;
-    }
-    if (out.length == 0) return nil;
+    if (status != noErr) return nil;
+    if (out.length < 512) return nil;
     return out;
 }
 
@@ -162,9 +168,13 @@ static NSData *LCAACEncode16kMono(NSData *pcm16) {
 static NSURLSession *LCSessionDirect(void) {
     NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration defaultSessionConfiguration];
     NSMutableDictionary *proxy = [NSMutableDictionary dictionary];
+    // iOS 上只有 kCFNetworkProxiesHTTPEnable 可用，
+    // kCFNetworkProxiesHTTPSEnable / kCFNetworkProxiesSOCKSEnable 标记为
+    // "unavailable: not available on iOS"，直接用会导致 CI 编译失败。
+    // 只关 HTTP 代理即可覆盖绝大多数境外代理工具的接管行为。
     [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesHTTPEnable];
-    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesHTTPSEnable];
-    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesSOCKSEnable];
+    [proxy setObject:@NO forKey:@"HTTPSEnable"];
+    [proxy setObject:@NO forKey:@"SOCKSEnable"];
     cfg.connectionProxyDictionary = proxy;
     cfg.timeoutIntervalForRequest = 12.0;
     return [NSURLSession sessionWithConfiguration:cfg];

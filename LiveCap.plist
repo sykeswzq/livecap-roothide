@@ -4,12 +4,15 @@
 <dict>
 	<key>Filter</key>
 	<dict>
-		<key>Mode</key>
-		<string>Any</string>
-		<key>Executables</key>
-		<array>
-			<string>mediaserverd</string>
-		</array>
+		<!--
+		  v1.0.86 重要修复：移除 mediaserverd 注入。
+		  背景：mediaserverd 是 iOS 系统媒体服务守护进程，负责所有 App 的音频输出。
+		  把 tweak 注入进去会破坏系统音频管线，实测 mediaserverd 崩溃循环
+		  （launchctl 状态 -11 = SIGSEGV），直接导致微信语音 / 通话无声。
+		  这个坑在 v1.0.30 修过一次（commit 7431db0），v1.0.74 改 plist 时
+		  误把 mediaserverd 加了回来（commit ba3ac6d），导致问题复发。
+		  现在只保留 App Bundles 白名单（各视频 App 自己的进程内抓音频）。
+		-->
 		<key>Bundles</key>
 		<array>
 			<string>com.google.ios.youtube</string>

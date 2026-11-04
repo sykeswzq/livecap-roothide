@@ -38,6 +38,13 @@ def run_check(src_text, tag):
             io.open(os.path.join(tmp, "PrefBundle", "LiveCapPrefs.m"),
                     "w", encoding="utf-8").write(
                         io.open(real_panel, encoding="utf-8").read())
+        # v1.0.86 新增的检查项要读 LiveCap.plist 和 postinst，
+        # 缺了会产生「读不到文件」这种与本用例无关的误报。
+        for extra in ("LiveCap.plist", "postinst"):
+            src_extra = os.path.join(HERE, extra)
+            if os.path.exists(src_extra):
+                io.open(os.path.join(tmp, extra), "w", encoding="utf-8").write(
+                    io.open(src_extra, encoding="utf-8").read())
         p = subprocess.run([sys.executable, chk_p], cwd=tmp,
                            capture_output=True, text=True, encoding="utf-8",
                            errors="replace")
@@ -154,10 +161,12 @@ def main():
         "代理"))
 
     # B11: 去掉 HTTPS 代理禁用
+    # 注意：v1.0.86 起 HTTPS/SOCKS 代理开关改用字面量 key
+    # （iOS 上 kCFNetworkProxiesHTTPSEnable 不可用），锚点必须跟着改。
     mutants.append((
         "B11 不禁 HTTPS 代理",
         base.replace(
-            "    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesHTTPSEnable];\n",
+            '    [proxy setObject:@NO forKey:@"HTTPSEnable"];\n',
             ""),
         "代理"))
 

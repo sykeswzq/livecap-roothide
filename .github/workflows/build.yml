@@ -145,6 +145,33 @@ jobs:
           python3 verify_source_safety.py
           echo "  (6) OK 源码无已知闪退风险"
 
+      - name: Verify no mediaserverd injection
+        run: |
+          set -e
+          # ===== v1.0.86 事故防线 =====
+          # 真实事故：LiveCap.plist 的 Filter 里带了
+          #   <key>Executables</key><string>mediaserverd</string>
+          # → tweak 注入 iOS 系统媒体服务守护进程
+          # → mediaserverd 崩溃循环（launchctl 状态 -11 = SIGSEGV）
+          # → 微信语音 / 通话全部无声
+          # 这个坑 v1.0.30 修过一次（commit 7431db0），
+          # v1.0.74 改 plist 时又加了回来（commit ba3ac6d）→ 复发。
+          # 现在用独立步骤硬拦，避免「改 plist 时顺手加回来」。
+          if grep -q "mediaserverd" LiveCap.plist \
+             && ! grep -q "mediaserverd" <(sed 's/<!--[^>]*-->//g' LiveCap.plist); then
+            echo "ERROR: LiveCap.plist 仍包含 mediaserverd 注入"
+            exit 1
+          fi
+          if grep -q "<key>Executables</key>" LiveCap.plist; then
+            echo "ERROR: LiveCap.plist 出现 Executables 过滤节点（只允许 Bundles）"
+            exit 1
+          fi
+          if grep -vE '^\s*#' postinst | grep -q "killall.*mediaserverd"; then
+            echo "ERROR: postinst 仍在 killall mediaserverd（会中断所有 App 音频会话）"
+            exit 1
+          fi
+          echo "  (6.5) OK 未注入 mediaserverd，且不会杀系统音频服务"
+
       - name: Verify compile risk
         run: |
           set -e
