@@ -139,6 +139,7 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) BOOL boldText;
 @property (readonly) UIColor *textColor;
 @property (readonly) NSString *backgroundStyle;
+@property (readonly) BOOL showEnglish;   // 是否同时显示英文原文（默认 NO：只显示中文一行）
 @property (readonly) CGFloat manualX;
 @property (readonly) CGFloat manualY;
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y;
@@ -255,6 +256,25 @@ static NSString *LCJBRootPath(NSString *path) {
     return (s && s.length) ? s : @"frost";  // 默认毛玻璃
 }
 
+// v1.0.82：字幕只显示中文一行。
+// 用户实测反馈「有时候是两行 一行英文 一行中文，我只要一行中文就行了」。
+// 默认 NO（只中文）；用户可在设置面板切回「同时显示英文原文」。
+//
+// 【实时读盘】面板拨动开关后无需重启 App 立即生效：
+// LCConfig 启动时把 plist 读进 _d 缓存，若继续读缓存则要重启才变。
+// 这里每次直接读文件（renderCurrent 每句调用一次，开销可忽略）。
+// 文件读不到时回退到缓存值。
+- (BOOL)showEnglish {
+    NSString *p = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+    NSDictionary *fresh = [NSDictionary dictionaryWithContentsOfFile:p];
+    if (fresh) {
+        NSNumber *v = fresh[@"showEnglish"];
+        return v ? [v boolValue] : NO;
+    }
+    NSNumber *v = _d[@"showEnglish"];
+    return v ? [v boolValue] : NO;
+}
+
 - (NSDictionary *)manualPositions {
     NSDictionary *d = _d[@"manualPositions"];
     return [d isKindOfClass:[NSDictionary class]] ? d : @{};
@@ -340,8 +360,11 @@ static NSString *LCJBRootPath(NSString *path) {
     // 实测：并发 3 条请求时单条延迟从 2s 恶化到 10s（互相抢带宽），
     // 而 ASR 每 4~5s 就换一句 → 译文永远追不上，表现为「字幕框一直是英文」。
     // 现在同一时刻只允许一条在飞，新文本覆盖排队中的旧文本。
-    NSString *_pendingText;
-    void (^_pendingCompletion)(NSString *);
+    // v1.0.82：单槽「只保留最新」会丢 completion
+    //   —— 双语模式无感（画面靠 showPending 刷英文），
+    //   —— 但中文单行模式下 completion 丢失 = 那句话的中文整句不显示。
+    // 改为 FIFO 队列（有限长，超长时丢【最旧】的，因为它已经过时）。
+    NSMutableArray *_pendingItems;   // 每项 = @{@"text": NSString, @"comp": block}
     BOOL _inflight;
     BOOL _tencentDisabled;   // 腾讯云机器翻译服务未开通时，本次会话内跳过
 }
@@ -356,6 +379,7 @@ static NSString *LCJBRootPath(NSString *path) {
         s->_cache = [NSMutableDictionary dictionary];
         s->_lastSentText = [NSMutableDictionary dictionary];
         s->_lastSentTime = [NSMutableDictionary dictionary];
+        s->_pendingItems = [NSMutableArray array];
     });
     return s;
 }
@@ -381,19 +405,45 @@ static NSString *LCJBRootPath(NSString *path) {
     NSNumber *lastTime = _lastSentTime[cacheKey];
     if (lastText && [lastText isEqualToString:trimmed] && lastTime &&
         ([nowN doubleValue] - [lastTime doubleValue]) < 1.0) {
+        // 1 秒内的重复句：命中缓存就回缓存，否则回调 nil（保持状态一致，
+        // 不能静默 return —— 否则这句的 completion 永远不执行，中文会整句丢失）
+        NSString *dupCached = nil;
+        @synchronized(self) { dupCached = _cache[cacheKey]; }
+        if (dupCached.length > 0) {
+            if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(dupCached); });
+        } else if (completion) {
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); });
+        }
         return;
     }
     _lastSentText[cacheKey] = trimmed;
     _lastSentTime[cacheKey] = nowN;
 
-    // ===== 入队（串行化 + 只保留最新）=====
+    // ===== 入队（串行化 FIFO）=====
     // 翻译是异步的，比 ASR 慢。若允许多条请求并发：
     //   ① 互相抢带宽，单条延迟从 <1s 恶化到 10s，译文永远追不上字幕；
     //   ② 回调乱序，英文与中文错配。
-    // 现在同一时刻只有一条请求在飞，新文本覆盖排队中的旧文本（字幕只关心最新一句）。
+    // 因此同一时刻只允许一条在飞，其余排队。
+    //
+    // v1.0.82 修正：原来排队是「单槽 + 新文本覆盖旧文本」，
+    // 被覆盖那条的 completion 永远不会执行 →
+    // 双语模式看不出（画面已由 showPending 刷了英文），
+    // 中文单行模式下那句话的中文会整句消失。
+    // 现在改为 FIFO 队列，每句都保证有回调；队列过长时丢【最旧】的
+    // （它已经落后于语音太多，显示出来反而是错的）。
     dispatch_async(_queue, ^{
-        self->_pendingText = trimmed;
-        self->_pendingCompletion = completion;
+        [self->_pendingItems addObject:@{@"text": trimmed, @"comp": completion ?: [NSNull null]}];
+        const NSUInteger kMaxQueue = 3;
+        while (self->_pendingItems.count > kMaxQueue) {
+            NSDictionary *dropped = self->_pendingItems.firstObject;
+            [self->_pendingItems removeObjectAtIndex:0];
+            id dc = dropped[@"comp"];
+            LCLogF(@"translate: queue overflow, drop oldest text=[%@]", dropped[@"text"]);
+            if (dc != [NSNull null]) {
+                void (^dcomp)(NSString *) = dc;
+                dispatch_async(dispatch_get_main_queue(), ^{ dcomp(nil); });
+            }
+        }
         [self pumpQueue];
     });
 }
@@ -402,11 +452,13 @@ static NSString *LCJBRootPath(NSString *path) {
 // 保证回调顺序与 ASR 顺序一致，字幕框里英文/中文永远成对。
 - (void)pumpQueue {
     if (_inflight) return;
-    NSString *text = _pendingText;
-    if (!text.length) return;
-    void (^comp)(NSString *) = _pendingCompletion;
-    _pendingText = nil;
-    _pendingCompletion = nil;
+    if (_pendingItems.count == 0) return;
+    NSDictionary *item = _pendingItems.firstObject;
+    [_pendingItems removeObjectAtIndex:0];
+    NSString *text = item[@"text"];
+    if (!text.length) { [self pumpQueue]; return; }
+    id rawComp = item[@"comp"];
+    void (^comp)(NSString *) = (rawComp != [NSNull null]) ? rawComp : nil;
 
     NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [[LCConfig shared] targetLang], text];
     NSString *cached = nil;
@@ -1433,8 +1485,14 @@ static BOOL gProcessingFormatValid = NO;
     NSString *_displayedTranslation;
     NSString *_pendingOrigin;      // 最新一句英文，翻译还在路上
     NSUInteger _seqCounter;        // 单调递增的句子序号分配器
-    NSUInteger _displayedSeq;      // 当前画面对应的 seq
+    NSUInteger _displayedSeq;      // 双语模式：当前画面对应的 seq
     NSUInteger _pendingSeq;        // 最新一句待翻译的 seq
+    // ===== v1.0.82：只显示中文一行 =====
+    // _transSeq  = 当前显示的译文对应的 seq（只中文模式的对账基准）
+    // _placeholder = 尚无可显示译文时的占位文字（翻译中… / 翻译失败）
+    NSUInteger _transSeq;
+    NSString *_placeholder;
+    BOOL _toastActive;         // toast 展示中：不要覆盖/隐藏 origin 标签
     BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
     CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
 }
@@ -1676,7 +1734,22 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         NSUInteger seq = ++_seqCounter;
         _pendingOrigin = origin;
         _pendingSeq = seq;
-        // 【关键】立即刷新画面：新英文立刻上屏，字幕框随语音轮动。
+
+        if (![[LCConfig shared] showEnglish]) {
+            // ===== 只显示中文一行 =====
+            // 【不】清空当前译文、也不重刷画面：保留上一句中文直到新译文到达。
+            // 这是标准字幕行为（Netflix / YouTube 都是上一句保持到下一句出现），
+            // 若在这里清空，翻译的 1~2s 延迟会让字幕框反复闪「翻译中…」非常刺眼。
+            if (_displayedTranslation.length == 0) {
+                _placeholder = @"翻译中…";
+                [self renderCurrent];
+            }
+            LCLogF(@"overlay: pending seq=%lu origin=[%@] (zh-only, keeping last)", (unsigned long)seq, origin);
+            return seq;
+        }
+
+        // ===== 双语模式 =====
+        // 立即刷新画面：新英文立刻上屏，字幕框随语音轮动。
         // 译文暂时清空，等 showPair 回来再补上 —— 宁可短暂缺中文，也不能卡住不动。
         _displayedOrigin = origin;
         _displayedTranslation = nil;
@@ -1707,6 +1780,23 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     @try {
         if (origin.length == 0) return;
         if (translation.length == 0) { [self showFailed:origin seq:seq]; return; }
+        if (![[LCConfig shared] showEnglish]) {
+            // 只中文模式：对账基准是 _transSeq（当前显示的译文）
+            if (seq != 0 && seq < _transSeq) {
+                LCLogF(@"overlay: drop stale pair seq=%lu (transSeq=%lu) origin=[%@]",
+                       (unsigned long)seq, (unsigned long)_transSeq, origin);
+                return;
+            }
+            _displayedTranslation = translation;
+            _displayedOrigin = origin;
+            _transSeq = seq ? seq : _transSeq;
+            _placeholder = nil;
+            if (seq && seq == _pendingSeq) _pendingOrigin = nil;
+            LCLogF(@"overlay: showPair seq=%lu origin=[%@] trans=[%@] transLen=%lu (zh-only)",
+                   (unsigned long)seq, origin, translation, (unsigned long)translation.length);
+            [self renderCurrent];
+            return;
+        }
         if (seq != 0 && seq < _displayedSeq) {
             LCLogF(@"overlay: drop stale pair seq=%lu (displayed=%lu) origin=[%@]",
                    (unsigned long)seq, (unsigned long)_displayedSeq, origin);
@@ -1729,6 +1819,17 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     if (!_container || !_installed) return;
     @try {
         if (origin.length == 0) return;
+        if (![[LCConfig shared] showEnglish]) {
+            // 只中文模式：翻译失败时【保留】上一句中文（不要清空字幕框）。
+            // 若从来没成功译过一句，则显示「翻译失败」占位，而不是留一个空框。
+            if (_displayedTranslation.length == 0) {
+                _placeholder = @"翻译失败";
+                [self renderCurrent];
+            }
+            if (seq && seq == _pendingSeq) _pendingOrigin = nil;
+            LCLogF(@"overlay: showFailed seq=%lu origin=[%@] (zh-only)", (unsigned long)seq, origin);
+            return;
+        }
         if (seq != 0 && seq < _displayedSeq) {
             LCLogF(@"overlay: drop stale fail seq=%lu (displayed=%lu)",
                    (unsigned long)seq, (unsigned long)_displayedSeq);
@@ -1745,13 +1846,48 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 }
 
 // 渲染当前成对内容（_displayedOrigin + _displayedTranslation）
+//
+// v1.0.82：字幕只显示中文一行。
+// 用户实测反馈「有时候是两行 一行英文 一行中文，我只要一行中文就行了」。
+// showEnglish = NO（默认）：
+//   - 英文行完全不画（标签 hidden，frame 归零，不参与高度计算）
+//   - 中文独占整行，字号升到与英文同级（fs 而非 fs-1），颜色跟随用户设置
+//   - 还没有任何译文时显示「翻译中…」，避免出现一个空框
+// showEnglish = YES（用户在设置面板切回）：
+//   - 保持 v1.0.81 的双语布局
 - (void)renderCurrent {
     @try {
-        NSString *origin = _displayedOrigin ?: @"";
+        // toast 展示期间不重排画面：toast 自己管布局，
+        // 否则容器的居中位置会被字幕位置覆盖、且字幕文字会叠在 toast 上。
+        // toast 结束后会再调一次 renderCurrent 恢复正常字幕。
+        if (_toastActive) return;
+
+        BOOL showEn = [[LCConfig shared] showEnglish];
+        NSString *origin = showEn ? (_displayedOrigin ?: @"") : @"";
         NSString *translation = _displayedTranslation ?: @"";
         UIColor *tc = [[LCConfig shared] textColor];
-        _originLabel.attributedText = LCStrokedText(origin, tc, _originLabel.font);
-        _transLabel.attributedText = LCStrokedText(translation, tc, _transLabel.font);
+
+        // 只显示中文时，中文升为「主字幕」：用主字号 + 用户设定颜色
+        // 双语模式时维持原样：英文主字号(tc)，中文次字号(浅蓝)
+        if (showEn) {
+            _transLabel.font = [UIFont systemFontOfSize:[[LCConfig shared] fontSize] - 1
+                                                  weight:([[LCConfig shared] boldText] ? UIFontWeightSemibold : UIFontWeightRegular)];
+            _transLabel.textColor = [UIColor colorWithRed:0.62 green:0.92 blue:1.0 alpha:1.0];
+        } else {
+            _transLabel.font = [UIFont systemFontOfSize:[[LCConfig shared] fontSize]
+                                                  weight:([[LCConfig shared] boldText] ? UIFontWeightBold : UIFontWeightMedium)];
+            _transLabel.textColor = tc;
+        }
+
+        // 只显示中文且还没有任何译文 → 显示占位提示，不要空框
+        if (!showEn && translation.length == 0) {
+            translation = _placeholder ?: @"";
+        }
+
+        if (!_toastActive) {
+            _originLabel.attributedText = LCStrokedText(origin, tc, _originLabel.font);
+            _transLabel.attributedText = LCStrokedText(translation, tc, _transLabel.font);
+        }
 
         CGFloat fs = [LCConfig shared].fontSize;
         CGFloat margin = 16;
@@ -1809,7 +1945,13 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat textW = maxW - handleSpace;
         if (origin.length) {
             _originLabel.frame = CGRectMake(pad, ly, textW, oh);
+            _originLabel.hidden = NO;
             ly += oh + 4;
+        } else if (!_toastActive) {
+            // 只显示中文时英文行必须彻底收起（frame 归零 + hidden），
+            // 否则会残留上一句英文，表现为「两行：上面英文下面中文」
+            _originLabel.frame = CGRectZero;
+            _originLabel.hidden = YES;
         }
         if (translation.length) {
             _transLabel.frame = CGRectMake(pad, ly, textW, th);
@@ -1826,7 +1968,9 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             _dragHandle.frame = CGRectMake(w - hs - 4, 4, hs, hs);
             _dragHandle.hidden = NO;
         }
-        _container.hidden = NO;
+        // 没有任何文字时隐藏容器，避免出现一个只有背景的空框
+        BOOL hasContent = (origin.length > 0) || (translation.length > 0);
+        _container.hidden = !hasContent;
         LCLogF(@"overlay: layout c=(%.0f,%.0f,%.0f,%.0f) oLbl=(%.0f,%.0f,h=%.0f) tLbl=(%.0f,%.0f,h=%.0f) oh=%.1f th=%.1f super=%@",
               _container.frame.origin.x, _container.frame.origin.y, _container.frame.size.width, _container.frame.size.height,
               _originLabel.frame.origin.x, _originLabel.frame.origin.y, _originLabel.frame.size.height,
@@ -1885,6 +2029,9 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     _pendingOrigin = nil;
     _displayedOrigin = nil;
     _displayedTranslation = nil;
+    _placeholder = nil;
+    // _transSeq 【不】重置：保持单调递增，这样 hide 之前发出的译文回来时
+    // 会因 seq < _transSeq 被丢弃，不会把已隐藏的字幕又画回来。
     // seq 计数器【不】重置：保持单调递增，这样 hide 之前发出的译文回来时
     // 会因 seq < _displayedSeq 被丢弃，不会把已隐藏的字幕又画回来。
 }
@@ -1914,12 +2061,21 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         }
         _container.frame = CGRectMake((sw - w) / 2, sh - insets.bottom - h - 120, w, h);
         _originLabel.frame = CGRectMake(pad, pad, maxW, oh);
+        // toast 用英文标签承载（内容是中文提示语，字号/描边逻辑一致）
+        _originLabel.hidden = NO;
+        _transLabel.hidden = YES;
+        _transLabel.frame = CGRectZero;
         _container.hidden = NO;
+        _toastActive = YES;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            _container.hidden = YES;
+            // 不能直接清空 attributedText：那会把 toast 期间新到字幕的文字也抹掉。
+            // 正确做法是重新渲染当前成对内容。
+            _toastActive = NO;
             _originLabel.attributedText = nil;
             _transLabel.attributedText = nil;
+            _originLabel.hidden = YES;
+            [self renderCurrent];
         });
     } @catch (NSException *e) {}
 }
@@ -3560,7 +3716,7 @@ static void LCInit(void) {
         for (int mi = 0; mpaths[mi]; mi++) {
             FILE *mf = fopen(mpaths[mi], "a");
             if (mf) {
-                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.81) ===\n");
+                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.82) ===\n");
                 fprintf(mf, "[%lld] ctor ran: prog=%s path=%s\n", (long long)time(NULL), exe, mpaths[mi]);
                 fflush(mf);
                 fclose(mf);

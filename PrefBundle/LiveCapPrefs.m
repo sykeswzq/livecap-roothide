@@ -158,7 +158,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
     if (section == 1)
         return @"在线语音识别无需 iOS 授权，任何 App 通用。腾讯云一句话识别每月免费 5000 次，密钥在控制台→访问管理→API 密钥管理获取。翻译使用内置 AI 服务。";
     if (section == 2)
-        return @"字幕可长按拖动，位置按 App 记忆（重开 App 回到上次位置）。背景样式：无背景描边 / 半透明黑 / 实黑 / 半透明白 / 毛玻璃。";
+        return @"字幕可长按拖动，位置按 App 记忆（重开 App 回到上次位置）。背景样式：无背景描边 / 半透明黑 / 实黑 / 半透明白 / 毛玻璃。\n默认只显示中文译文一行；打开「显示英文原文」可恢复上下两行（英文在上、中文在下）。";
     if (section == 3)
         return @"目标 App 需在 Dopamine Inject Manager 白名单勾选；完全退出目标 App 再打开生效。长按桌面 App 图标可快捷开关实时字幕翻译。";
     return nil;
@@ -167,7 +167,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) return 4;
     if (section == 1) return 2;  // 腾讯云 SecretId / SecretKey
-    if (section == 2) return 4;
+    if (section == 2) return 5;  // 字号 / 粗体 / 文字颜色 / 背景样式 / 显示英文原文
     return 0;
 }
 
@@ -232,10 +232,18 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
             cell.textLabel.text = @"文字颜色";
             cell.detailTextLabel.text = [self lc_colorTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        } else {
+        } else if (indexPath.row == 3) {
             cell.textLabel.text = @"背景样式";
             cell.detailTextLabel.text = [self lc_bgStyleTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        } else {
+            // v1.0.82：默认只显示中文一行；打开后恢复「英文原文 + 中文翻译」两行
+            cell.textLabel.text = @"显示英文原文";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = [(NSNumber *)LCGet(@"showEnglish") boolValue];
+            [sw addTarget:self action:@selector(lc_showEnglishChanged:) forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = sw;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
         }
     }
     return cell;
@@ -370,6 +378,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 
 - (void)lc_enabledChanged:(UISwitch *)sw { LCSet(@(sw.on), @"enabled"); }
 - (void)lc_boldChanged:(UISwitch *)sw { LCSet(@(sw.on), @"boldText"); }
+- (void)lc_showEnglishChanged:(UISwitch *)sw { LCSet(@(sw.on), @"showEnglish"); }
 
 #pragma mark - 颜色
 
