@@ -1792,8 +1792,20 @@ static BOOL gProcessingFormatValid = NO;
                    NSStringFromCGRect(_container.superview.bounds));
         });
     }];
-    // 尺寸变化：旋转 / 全屏切换都会触发
-    [nc addObserverForName:UIWindowDidChangeFrameNotification
+    // 尺寸变化：旋转 / 全屏切换都会触发。
+    // 注意：UIKit 没有「window frame 变化」这种通知
+    //（UIKit 根本没有「window frame 变化」通知，CI 编译会报 undeclared identifier）。
+    // 旋转用下面这两个通知覆盖：
+    //   UIDeviceOrientationDidChangeNotification —— 设备物理旋转
+    //   UIApplicationDidChangeStatusBarOrientationNotification —— 状态栏方向变化
+    [nc addObserverForName:UIDeviceOrientationDidChangeNotification
+                    object:nil queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self renderCurrent];
+        });
+    }];
+    [nc addObserverForName:UIApplicationDidChangeStatusBarOrientationNotification
                     object:nil queue:[NSOperationQueue mainQueue]
                 usingBlock:^(NSNotification *n) {
         dispatch_async(dispatch_get_main_queue(), ^{

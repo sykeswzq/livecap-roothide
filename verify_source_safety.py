@@ -607,6 +607,15 @@ def _strip_comments_strings(src):
             i += 1; continue
     return "".join(out)
 
+# 不存在的 UIKit 通知名 —— 用了会直接编译失败
+# （v1.0.84 就在这上面栽了一轮：CI 报 undeclared identifier）
+INVALID_UIKIT_NOTIFICATIONS = [
+    "UIWindowDidChangeFrameNotification",
+    "UIWindowDidChangeBoundsNotification",
+    "UIWindowWillChangeFrameNotification",
+]
+
+
 def check_v84_fixes(src, panel_src=None):
     """v1.0.84 关键修复的回归拦截
 
@@ -673,6 +682,14 @@ def check_v84_fixes(src, panel_src=None):
     if not re.search(r"f\.origin\.y\s*=\s*MIN\(\s*MAX\(", code):
         errors.append("v1.0.84 回归: 缺少位置钳制 —— "
                       "竖屏拖动位置转横屏后字幕会跑出屏幕外（全屏时看不见）")
+
+    # ---- 6) 不得使用不存在的 UIKit 通知名 ----
+    for bad in INVALID_UIKIT_NOTIFICATIONS:
+        if bad in src:
+            line = src[:src.index(bad)].count("\n") + 1
+            errors.append("v1.0.84 回归 行%d: 用了不存在的通知名 %s —— "
+                          "UIKit 没有这个通知，编译会报 undeclared identifier"
+                          % (line, bad))
 
 
 def main():

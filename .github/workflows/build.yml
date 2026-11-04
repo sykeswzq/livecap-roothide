@@ -154,6 +154,8 @@ jobs:
           # 曾踩坑(v1.0.82): `pad` 先用后定义 -> use of undeclared identifier 'pad'
           #   这两类都只能靠 CI 试错发现，白跑一轮 CI 往返约 5 分钟
           python3 scan_compile_risk.py
+          echo "  (7) OK UIKit 符号白名单检查通过"
+          python3 scan_uikit_symbols.py
           echo "  (7) OK 无编译期风险"
 
       - name: Upload artifact
