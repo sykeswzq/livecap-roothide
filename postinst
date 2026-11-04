@@ -33,7 +33,7 @@ if [ ! -f "$CFG" ]; then
 	<string>#FFFFFFFF</string>
 	<key>backgroundStyle</key>
 	<string>frost</string>
-	<key>showEnglish</key>
+	<key>showBilingual</key>
 	<false/>
 	<key>manualPositions</key>
 	<dict/>
@@ -64,6 +64,36 @@ if [ -f "$CFG" ]; then
       || sed -i '' 's|agnes-3.0-flash|agnes-2.5-flash|g' "$CFG" 2>/dev/null
     rm -f "$CFG.bak"
     echo "model migrated: agnes-3.0-flash -> agnes-2.5-flash" >> "$LOG"
+  fi
+fi
+
+# ===== v1.0.83：配置键迁移（showEnglish → showBilingual）=====
+# 背景：v1.0.82 用 showEnglish 键控制「是否同时显示英文原文」。
+# 实测该键会被面板/tweak 两套写入机制互相覆盖，出现
+# 「明明写了 false 却变成 true」→ 英文行莫名出现。
+# v1.0.83 语义反转：showBilingual（默认 NO = 只显示中文一行），
+# 老键 showEnglish 一律废弃并删除。
+#
+# 设备上的 plutil 是老版本，实测能力：
+#   -convert xml1 / binary1  ✅
+#   -type bool -value false -key K <file>  ✅（能正确写出 <false/>）
+#   -remove <key> <file>     ❌（把第一个参数当文件路径，直接失败）
+#   -replace                 ❌（把参数当键名，会误写进配置）
+# 因此删除老键用【转 XML → sed 删块 → 转回 binary】的方式。
+if [ -f "$CFG" ]; then
+  if grep -q "showEnglish" "$CFG" 2>/dev/null; then
+    if plutil -convert xml1 "$CFG" 2>>"$LOG"; then
+      # 删除 <key>showEnglish</key> 及其后一行值
+      sed -i.bak '/<key>showEnglish<\/key>/,+1d' "$CFG" 2>>"$LOG"
+      rm -f "$CFG.bak"
+      # 写入新键，默认 NO（只显示中文一行）
+      plutil -type bool -value false -key showBilingual "$CFG" 2>>"$LOG"
+      # 转回二进制（与 cfprefsd 习惯一致）
+      plutil -convert binary1 "$CFG" 2>>"$LOG"
+      echo "config migrated: showEnglish -> showBilingual" >> "$LOG"
+    else
+      echo "WARNING: plutil convert failed, showEnglish key left as-is" >> "$LOG"
+    fi
   fi
 fi
 

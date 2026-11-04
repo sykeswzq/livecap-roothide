@@ -145,6 +145,17 @@ jobs:
           python3 verify_source_safety.py
           echo "  (6) OK 源码无已知闪退风险"
 
+      - name: Verify compile risk
+        run: |
+          set -e
+          # 编译期风险静态扫描（本地 Windows 无 xcrun，无法本地编译 dylib）
+          # 曾踩坑(v1.0.82): `completion ?: [NSNull null]` ->
+          #   incompatible operand types: 'void (^)(NSString *)' and 'NSNull *'
+          # 曾踩坑(v1.0.82): `pad` 先用后定义 -> use of undeclared identifier 'pad'
+          #   这两类都只能靠 CI 试错发现，白跑一轮 CI 往返约 5 分钟
+          python3 scan_compile_risk.py
+          echo "  (7) OK 无编译期风险"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

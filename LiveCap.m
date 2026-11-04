@@ -143,6 +143,7 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) CGFloat manualX;
 @property (readonly) CGFloat manualY;
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y;
+- (void)writeConfig:(NSMutableDictionary *)d;
 - (void)setSourceLang:(NSString *)lang forBundle:(NSString *)bid;
 - (void)reload;
 @end
@@ -182,7 +183,7 @@ static NSString *LCJBRootPath(NSString *path) {
     NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:path];
     if (!d) d = [NSMutableDictionary dictionary];
     d[[NSString stringWithFormat:@"sourceLang_%@", bid]] = lang;
-    [d writeToFile:path atomically:YES];
+    [self writeConfig:d];
     _d = d;
 }
 
@@ -265,13 +266,18 @@ static NSString *LCJBRootPath(NSString *path) {
 // 这里每次直接读文件（renderCurrent 每句调用一次，开销可忽略）。
 // 文件读不到时回退到缓存值。
 - (BOOL)showEnglish {
+    // v1.0.83：语义反转为 showBilingual（默认 NO = 只显示中文一行）。
+    // 老版本用的 showEnglish 键语义相反（true=显示英文），且实测会被
+    // 面板/tweak 竞争写覆写 → 曾经出现「明明写了 false 却变成 true」。
+    // 现在只认 showBilingual，showEnglish 一律忽略，
+    // 彻底消除「英文行莫名其妙出现」的可能。
     NSString *p = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
     NSDictionary *fresh = [NSDictionary dictionaryWithContentsOfFile:p];
     if (fresh) {
-        NSNumber *v = fresh[@"showEnglish"];
+        NSNumber *v = fresh[@"showBilingual"];
         return v ? [v boolValue] : NO;
     }
-    NSNumber *v = _d[@"showEnglish"];
+    NSNumber *v = _d[@"showBilingual"];
     return v ? [v boolValue] : NO;
 }
 
@@ -304,6 +310,24 @@ static NSString *LCJBRootPath(NSString *path) {
     return 0.35;
 }
 
+// v1.0.83：统一的配置写回通道。
+// 背景：面板用 CFPreferences 写、tweak 用文件直写，两套机制竞争同一个
+// plist → 互相覆盖（实测 showEnglish 写好的 false 被覆写成 true）。
+// 现在 tweak 侧统一走这个方法：
+//   1. 每次都【重新读文件】拿最新快照（不���用可能过期的 _d）
+//   2. 改完写回
+//   3. 通知 cfprefsd 同步，保证 CFPreferences 视图与文件一致
+- (void)writeConfig:(NSMutableDictionary *)d {
+    @try {
+        NSString *p = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+        [d writeToFile:p atomically:YES];
+        // 让 cfprefsd 重新加载磁盘内容，避免它用内存里的旧值覆盖回去
+        CFPreferencesAppSynchronize((__bridge CFStringRef)@"com.sykes.livecap");
+    } @catch (NSException *e) {
+        LCLog(@"config: write failed");
+    }
+}
+
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y {
     NSString *path = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
     NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:path];
@@ -313,6 +337,10 @@ static NSString *LCJBRootPath(NSString *path) {
     pos[self.bundleId] = @{@"x": @(x), @"y": @(y)};
     d[@"manualPositions"] = pos;
     BOOL ok = [d writeToFile:path atomically:YES];
+    if (ok) {
+        // 与面板的 CFPreferences 视图保持一致，防止两边互相覆盖
+        CFPreferencesAppSynchronize((__bridge CFStringRef)@"com.sykes.livecap");
+    }
     if (!ok) {
         // App 沙盒可能无法写全局 Preferences（roothide 路径映射 + 沙盒权限），
         // 退而求其次写自己的沙盒 Documents（至少本次会话内位置能保留）
@@ -1906,10 +1934,15 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat hostH = hostBounds.size.height;
         CGFloat maxW = hostW - margin * 2;
 
+        CGFloat pad = 10;
         // 完整测量两段文本高度（不截断，文本多长框多高）
         // 测量宽度与实际 label 宽度一致（要避开右上角的拖动把手）
         CGFloat handleSpace = _dragHandle ? 26.0 : 0.0;
-        CGFloat measureW = maxW - handleSpace;
+        // v1.0.83：测量宽度必须【扣掉左右内边距】。
+        // 旧实现 measureW = maxW - handleSpace，但 label 实际放在 x=pad 处、宽 textW，
+        // 文字真正能用的宽度 = textW - 2*pad 的量级；
+        // 测量宽度算多了 → 换行数比实际少 → th 偏小 → 标签高度不够 → 末行被裁。
+        CGFloat measureW = maxW - handleSpace - pad * 2;
         CGFloat oh = 0, th = 0;
         if (origin.length) {
             oh = [origin boundingRectWithSize:CGSizeMake(measureW, CGFLOAT_MAX)
@@ -1922,7 +1955,6 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
                 attributes:@{NSFontAttributeName:_transLabel.font} context:nil].size.height;
         }
 
-        CGFloat pad = 10;
         CGFloat w = maxW + pad * 2;
         CGFloat h = pad * 2 + oh + th + (origin.length && translation.length ? 4 : 0);
         if (h < fs + pad * 2) h = fs + pad * 2;
@@ -1942,7 +1974,17 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGFloat spanX = MAX(sw - w, 1);
         CGFloat spanY = MAX(sh - h, 1);
         if (_userMoved) {
-            _container.center = _userCenter;
+            // v1.0.83 修复：用户拖动过之后【必须仍然更新容器尺寸】。
+            // 旧实现只改 center 不改 size → 容器高度被永久冻结在拖动那一刻的高度
+            // （实测 58pt），而中文字幕被排到 y=71（高 36），底边 107 超出容器 58，
+            // 被 masksToBounds=YES 直接裁掉 → 用户看到「中文没显示全」。
+            // 正确做法：保留用户拖到的中心点，但尺寸照常按当前文本高度重算。
+            CGRect f = _container.frame;
+            f.size = CGSizeMake(w, h);
+            // 保持中心点不变（用户拖到的位置），只改尺寸
+            f.origin = CGPointMake(_userCenter.x - w / 2.0, _userCenter.y - h / 2.0);
+            _container.frame = f;
+            _userCenter = _container.center;
         } else {
             CGFloat x = mx * spanX;
             CGFloat y = my * spanY;
@@ -1956,10 +1998,15 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             _originLabel.hidden = NO;
             ly += oh + 4;
         } else if (!_toastActive) {
+            // v1.0.83：只中文模式下英文标签必须彻底收起。
+            // 除了 frame 归零，还要清空 attributedText —— 否则 label 仍持有上一句英文，
+            // 若后续任何分支漏了 hidden=YES，英文会再次闪现。
             // 只显示中文时英文行必须彻底收起（frame 归零 + hidden），
             // 否则会残留上一句英文，表现为「两行：上面英文下面中文」
             _originLabel.frame = CGRectZero;
             _originLabel.hidden = YES;
+            // 清空文本，彻底杜绝英文残留（只中文模式下的最后一道保险）
+            _originLabel.attributedText = nil;
         }
         if (translation.length) {
             _transLabel.frame = CGRectMake(pad, ly, textW, th);
@@ -3466,7 +3513,8 @@ static void LCToggleEnabled(void) {
     if (!d) d = [NSMutableDictionary dictionary];
     BOOL now = ![[LCConfig shared] enabled];
     d[@"enabled"] = @(now);
-    [d writeToFile:path atomically:YES];
+    // v1.0.83：走统一写入通道（写完同步 cfprefsd，避免与面板互相覆盖）
+    [[LCConfig shared] writeConfig:d];
     [[LCConfig shared] reload];
     LCLogF(@"toggle: now=%d", now);
     if (now) {
@@ -3724,7 +3772,7 @@ static void LCInit(void) {
         for (int mi = 0; mpaths[mi]; mi++) {
             FILE *mf = fopen(mpaths[mi], "a");
             if (mf) {
-                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.82) ===\n");
+                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.83) ===\n");
                 fprintf(mf, "[%lld] ctor ran: prog=%s path=%s\n", (long long)time(NULL), exe, mpaths[mi]);
                 fflush(mf);
                 fclose(mf);

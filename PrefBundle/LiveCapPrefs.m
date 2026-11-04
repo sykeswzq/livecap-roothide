@@ -11,24 +11,35 @@
 
 static NSString *LCAppID = @"com.sykes.livecap";
 
+// v1.0.83：配置读写统一走【plist 文件】。
+// 背景：面板原来用 CFPreferences 写、tweak 用文件直写同一个 plist，
+//       两套机制互相覆盖 → 实测 showEnglish 写好的 false 被覆写成 true。
+// 现在面板与 tweak 用完全相同的通道读写同一个文件，状态永远一致。
+static NSString *LCConfigPath(void) {
+    // 与 tweak 的 LCJBRootPath 保持一致：roothide 下需经 jbroot 解析
+    return LCJbRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+}
+
 static id LCGet(NSString *key) {
     @try {
-        id v = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key,
-                                                           (__bridge CFStringRef)LCAppID));
-        return v;
+        NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:LCConfigPath()];
+        if (!d) return nil;
+        return d[key];
     } @catch (NSException *e) { return nil; }
 }
 
 static void LCSet(id value, NSString *key) {
     @try {
+        NSMutableDictionary *d =
+            [NSMutableDictionary dictionaryWithContentsOfFile:LCConfigPath()];
+        if (!d) d = [NSMutableDictionary dictionary];
         if (value == nil) {
-            CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL,
-                                      (__bridge CFStringRef)LCAppID);
+            [d removeObjectForKey:key];
         } else {
-            CFPreferencesSetAppValue((__bridge CFStringRef)key,
-                                     (__bridge CFPropertyListRef)value,
-                                     (__bridge CFStringRef)LCAppID);
+            d[key] = value;
         }
+        [d writeToFile:LCConfigPath() atomically:YES];
+        // 同步 cfprefsd，避免它用内存里的旧值把文件覆盖回去
         CFPreferencesAppSynchronize((__bridge CFStringRef)LCAppID);
     } @catch (NSException *e) {}
 }
@@ -240,7 +251,9 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
             // v1.0.82：默认只显示中文一行；打开后恢复「英文原文 + 中文翻译」两行
             cell.textLabel.text = @"显示英文原文";
             UISwitch *sw = [[UISwitch alloc] init];
-            sw.on = [(NSNumber *)LCGet(@"showEnglish") boolValue];
+            // v1.0.83：只认 showBilingual（默认 NO = 只显示中文一行）。
+            // 老键 showEnglish 语义相反且会被覆写，已废弃不用。
+            sw.on = [(NSNumber *)LCGet(@"showBilingual") boolValue];
             [sw addTarget:self action:@selector(lc_showEnglishChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -378,7 +391,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 
 - (void)lc_enabledChanged:(UISwitch *)sw { LCSet(@(sw.on), @"enabled"); }
 - (void)lc_boldChanged:(UISwitch *)sw { LCSet(@(sw.on), @"boldText"); }
-- (void)lc_showEnglishChanged:(UISwitch *)sw { LCSet(@(sw.on), @"showEnglish"); }
+- (void)lc_showEnglishChanged:(UISwitch *)sw { LCSet(@(sw.on), @"showBilingual"); }
 
 #pragma mark - 颜色
 
