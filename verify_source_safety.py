@@ -1112,6 +1112,18 @@ def check_v87_fixes(src, panel_src=None):
             errors.append(
                 "v1.0.87 回归: 面板缺少 LCFontSizeController（字号选择页）—— "
                 "字号必须是一个可视化的调节界面。")
+        else:
+            # 类的完整 @interface 必须出现在【使用点之前】。
+            # CI 实证（v1.0.87 第二次构建失败）：
+            #   error: receiver 'LCFontSizeController' for class message is a forward declaration
+            # 原因：只有 @class 前向声明时不能发 alloc/init 这类【类消息】。
+            m_if = panel_src.find("@interface LCFontSizeController")
+            m_use = panel_src.find("[[LCFontSizeController alloc]")
+            if m_use >= 0 and (m_if < 0 or m_use < m_if):
+                errors.append(
+                    "v1.0.87 回归: LCFontSizeController 只有前向声明却被 alloc —— "
+                    "CI 会报 'receiver for class message is a forward declaration'。"
+                    "必须把完整的 @interface/@implementation 放在使用点之前。")
         # 旧写法：把可能是 NSString 的值强转成 NSNumber
         # （必须先剥掉 // 注释，否则注释里举的反例会误判）
         panel_code = re.sub(r"//[^\n]*", "", panel_src)

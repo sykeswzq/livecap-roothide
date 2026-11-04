@@ -262,7 +262,27 @@ print("  [B12] 在 LCLogF 定义之前调用它 -> %s"
 if not hit:
     sys.exit(1)
 
+# ---- B13: 字号选择器只剩前向声明（CI 第二次构建失败的根因）----
+# 模拟：把 @interface/@implementation 整块删掉，只留 @class 前向声明，
+#       此时 [[LCFontSizeController alloc] 会报
+#       "receiver for class message is a forward declaration"。
+bad_panel = BASE_PANEL
+_i = bad_panel.find("#pragma mark - v1.0.87：字幕字号选择器（滑块 + 实时预览）")
+_j = bad_panel.find("@interface LCRootListController : PSViewController")
+assert _i > 0 and _j > _i
+bad_panel = (bad_panel[:_i]
+             + "@class LCFontSizeController;\n\n"
+             + bad_panel[_j:])
+errs = run_check(BASE_SRC, bad_panel)
+hit = [e for e in errs if "forward declaration" in e or "LCFontSizeController" in e]
+print("  [B13] 字号选择器只剩前向声明 -> %s"
+      % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
+if not hit:
+    sys.exit(1)
+
 print("")
+print("=" * 70)
+print("C. 反向：合法写法不得误报")
 print("=" * 70)
 errs = run_check(BASE_SRC, BASE_PANEL)
 if errs:
