@@ -64,38 +64,43 @@ typedef struct {
     size_t pos;
 } LCPcmCursor;
 
-// AudioConverter 输入回调：把 PCM16 分片喂给编码器
-// 签名必须严格等于 AudioConverterComplexInputDataProc：
-//   OSStatus (*)(void *inRefCon, UInt32 *ioNumberDataPackets, void **outData)
-// 返回类型是 OSStatus(int)，不是 UInt32 / size_t —— 用错 CI 会报
-// "incompatible function pointer types"。
-static OSStatus LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **ioData) {
-    LCPcmCursor *cur = (LCPcmCursor *)inRefCon;
+// ===== AudioConverter 输入回调（按 SDK 真实签名）=====
+// AudioConverter.h 权威原型：
+//   typedef OSStatus (*AudioConverterComplexInputDataProc)(
+//       AudioConverterRef               inAudioConverter,
+//       UInt32 *                        ioNumberDataPackets,
+//       AudioBufferList *               ioData,
+//       AudioStreamPacketDescription ** outDataPacketDescription,
+//       void *                          inUserData);
+//
+// 注意：第 3 参是 AudioBufferList*（不是 void**），
+// 而且整个回调是 5 个参数、返回 OSStatus。
+// 写成 3 参数版本会连着两轮 CI 报
+// "incompatible function pointer types passing
+//  'OSStatus (void *, UInt32 *, void **)'"。
+static OSStatus LCAACInputProc(AudioConverterRef inConverter,
+                               UInt32 *ioNumberDataPackets,
+                               AudioBufferList *ioData,
+                               AudioStreamPacketDescription **outDataPacketDescription,
+                               void *inUserData) {
+    LCPcmCursor *cur = (LCPcmCursor *)inUserData;
     size_t remain = cur->len - cur->pos;
-    size_t want = (size_t)(*ioNumDataPackets) * 2;   // 每包 2 字节（16bit mono）
-    size_t give = (remain < want) ? remain : want;
-    if (give == 0) { *ioNumDataPackets = 0; return noErr; }
-    *ioData = (void *)(cur->data + cur->pos);
-    cur->pos += give;
-    *ioNumDataPackets = (UInt32)(give / 2);
-    return noErr;
-}
+    if (remain == 0) { *ioNumberDataPackets = 0; return noErr; }
 
-// AudioConverter 输出回调：把编码好的 AAC 帧收集起来
-static OSStatus LCAACOutputProc(void *inRefCon, UInt32 *ioNumDataPackets,
-                               const AudioBufferList **ioData) {
-    NSMutableData *out = (__bridge NSMutableData *)inRefCon;
-    const AudioBufferList *abl = *ioData;
-    if (abl && abl->mNumberBuffers > 0) {
-        // 注意：这里必须用 C 指针，不能用 C++ 引用语法 `AudioBuffer &b`。
-        // Objective-C 不支持引用声明，CI 会报
-        // "expected identifier or '('" + "use of undeclared identifier 'b'"。
-        const AudioBuffer *b = &abl->mBuffers[0];
-        if (b->mDataByteSize > 0 && b->mData) {
-            [out appendBytes:b->mData length:b->mDataByteSize];
-        }
-    }
-    *ioNumDataPackets = 0;   // 已取走
+    // ioNumberDataPackets 是「需要的最小包数」，16bit mono 每包 2 字节
+    size_t want = (size_t)(*ioNumberDataPackets) * 2;
+    size_t give = (remain < want) ? remain : want;
+
+    // 必须把 ioData 的成员指向我们提供的 PCM 数据
+    ioData->mNumberBuffers = 1;
+    ioData->mBuffers[0].mNumberChannels = 1;
+    ioData->mBuffers[0].mDataByteSize = (UInt32)give;
+    ioData->mBuffers[0].mData = (void *)(cur->data + cur->pos);
+
+    cur->pos += give;
+    *ioNumberDataPackets = (UInt32)(give / 2);
+    // 输入是线性 PCM，没有包描述
+    if (outDataPacketDescription) *outDataPacketDescription = NULL;
     return noErr;
 }
 
@@ -146,10 +151,64 @@ static NSData *LCAACEncode16kMono(NSData *pcm16) {
     cur.pos  = 0;
 
     NSMutableData *out = [NSMutableData dataWithCapacity:pcm16.length / 8];
-    UInt32 outCount = 0;
-    OSStatus status =
-        AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur, &outCount,
-                                        LCAACOutputProc, (__bridge void *)out);
+
+    // ===== 输出缓冲区 =====
+    // AudioConverterFillComplexBuffer 的【输出不是回调】，
+    // 而是调用者提供的 AudioBufferList*，转换器把数据写进去，
+    // 写完用 mBuffers[0].mDataByteSize 取回实际字节数。
+    // 这套用法在同文件的 AAC 解码实现（LCInputProc / LCConvert）
+    // 里已经编译通过、CI 验证过，这里严格照抄，避免再踩 API 签名的坑。
+    const UInt32 kOutCap = 64 * 1024;
+    UInt8 *outBuf = (UInt8 *)malloc(kOutCap);
+    if (!outBuf) {
+        AudioConverterDispose(conv);
+        return nil;
+    }
+
+    AudioBufferList outList;
+    outList.mNumberBuffers = 1;
+    outList.mBuffers[0].mNumberChannels = 1;
+    outList.mBuffers[0].mData = outBuf;
+
+    OSStatus status = noErr;
+    int loops = 0;
+    const int kMaxLoops = 64;   // 防死循环
+    while (loops++ < kMaxLoops) {
+        // 输出缓冲能装的包数（AAC 每包 1024 帧 @16k = 64ms）
+        UInt32 outNumPackets = kOutCap / 1024;
+        if (outNumPackets == 0) outNumPackets = 1;
+        outList.mBuffers[0].mDataByteSize = kOutCap;
+
+        status = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
+                                                 &outNumPackets, &outList,
+                                                 NULL);
+        if (status != noErr) break;
+
+        // 转换器实际写入的字节数
+        UInt32 produced = outList.mBuffers[0].mDataByteSize;
+        if (produced > kOutCap) produced = kOutCap;   // 溢出保护
+        if (produced > 0) {
+            [out appendBytes:outBuf length:produced];
+        }
+        // 输入已喂完 → 再跑一次把尾巴取干净，然后收工
+        if (cur.pos >= cur.len) {
+            UInt32 tailPackets = 1;
+            outList.mBuffers[0].mDataByteSize = kOutCap;
+            OSStatus s2 = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
+                                                          &tailPackets, &outList,
+                                                          NULL);
+            if (s2 == noErr && tailPackets > 0) {
+                UInt32 p2 = outList.mBuffers[0].mDataByteSize;
+                if (p2 > kOutCap) p2 = kOutCap;
+                if (p2 > 0) [out appendBytes:outBuf length:p2];
+            }
+            break;
+        }
+        // 本轮没有任何输出且输入也没进展 → 避免死循环
+        if (produced == 0 && outNumPackets == 0) break;
+    }
+
+    free(outBuf);
     AudioConverterDispose(conv);
 
     // 编码失败或输出过短 → 返回 nil 让调用方回退 WAV

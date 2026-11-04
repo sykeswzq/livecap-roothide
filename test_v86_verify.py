@@ -112,15 +112,18 @@ if not hit:
     sys.exit(1)
 
 # ---- B3: C++ 引用语法复活 ----
+# 锚点用文件里现存的正确指针写法（appendBufferList 里的 AudioBuffer *buf）。
+# 注意：不能拿已删除的旧代码当锚点 —— 那个块在编码器重写后已经不存在了，
+# 变异会「锚点未命中」直接抛错（这正是 mutate() 的保护作用）。
 bad_src = mutate(
     BASE_SRC,
-    "        const AudioBuffer *b = &abl->mBuffers[0];",
-    "        const AudioBuffer &b = abl->mBuffers[0];",
+    "                AudioBuffer *buf = &abl.mBuffers[0];",
+    "                AudioBuffer &buf = abl.mBuffers[0];",
     "B3")
 errs = run_check(bad_src, BASE_PLIST, BASE_POST)
 hit = [e for e in errs if "引用声明" in e or "C++" in e]
-print("  [B3] AudioBuffer &b 引用语法  -> %s"
-      % ("拦截 ✅" if hit else "❌ 没拦住！"))
+print("  [B3] AudioBuffer &buf 引用语法  -> %s"
+      % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
 if not hit:
     sys.exit(1)
 
@@ -140,9 +143,11 @@ B4_CASES = [
     ("kCFNetworkProxiesSOCKSEnable",
      '    [proxy setObject:@NO forKey:@"SOCKSEnable"];',
      "    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesSOCKSEnable];"),
+    # AudioConverterInputStatus：死符号检查是「全文件扫描」，
+    # 变异必须把符号真正插进代码里（插到 status 声明处）才有效。
     ("AudioConverterInputStatus",
-     "    OSStatus status =\n        AudioConverterFillComplexBuffer(",
-     "    AudioConverterInputStatus status =\n        AudioConverterFillComplexBuffer("),
+     "    OSStatus status = noErr;",
+     "    AudioConverterInputStatus status = noErr;"),
 ]
 for sym, anchor, repl in B4_CASES:
     bad = mutate(BASE_SRC, anchor, repl, "B4-" + sym)
@@ -153,21 +158,58 @@ for sym, anchor, repl in B4_CASES:
     if not hit:
         sys.exit(1)
 
-# ---- B5: AudioConverter 回调签名改回错误类型 ----
-# CI 实证：SDK 头文件 AudioConverter.h:866 要求的是 OSStatus(int)，
-# 用 UInt32 / size_t 都会报 incompatible function pointer types。
-for wrong in ["size_t", "UInt32"]:
-    bad = mutate(
-        BASE_SRC,
-        "static OSStatus LCAACInputProc(void *inRefCon",
-        "static %s LCAACInputProc(void *inRefCon" % wrong,
-        "B5-" + wrong)
+# ---- B5: AudioConverter 回调签名改回错误形态 ----
+# CI 实证（两轮）：
+#   轮1: 'size_t (void *, UInt32 *, void **)' 不兼容
+#   轮2: 'OSStatus (void *, UInt32 *, void **)' 仍不兼容
+#   真相: SDK 原型是 5 参数
+#     OSStatus (*)(AudioConverterRef, UInt32*, AudioBufferList*,
+#                  AudioStreamPacketDescription**, void*)
+# 所以要同时测：返回类型错、参数个数错、参数类型错。
+B5_CASES = [
+    ("返回 size_t",
+     "static OSStatus LCAACInputProc(AudioConverterRef inConverter,",
+     "static size_t LCAACInputProc(AudioConverterRef inConverter,"),
+    ("返回 UInt32",
+     "static OSStatus LCAACInputProc(AudioConverterRef inConverter,",
+     "static UInt32 LCAACInputProc(AudioConverterRef inConverter,"),
+    ("参数个数 3（历史错误写法）",
+     """static OSStatus LCAACInputProc(AudioConverterRef inConverter,
+                               UInt32 *ioNumberDataPackets,
+                               AudioBufferList *ioData,
+                               AudioStreamPacketDescription **outDataPacketDescription,
+                               void *inUserData) {""",
+     """static OSStatus LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets,
+                               void **ioData) {"""),
+    ("第3参用 void** 而非 AudioBufferList*",
+     "                               AudioBufferList *ioData,",
+     "                               void **ioData,"),
+]
+for label, anchor, repl in B5_CASES:
+    bad = mutate(BASE_SRC, anchor, repl, "B5-" + label)
     errs = run_check(bad, BASE_PLIST, BASE_POST)
-    hit = [e for e in errs if "LCAACInputProc" in e]
-    print("  [B5] LCAACInputProc 返回 %s -> %s"
-          % (wrong, "拦截 ✅" if hit else "❌ 没拦住！"))
+    hit = [e for e in errs if "LCAACInputProc" in e or "参数" in e]
+    print("  [B5] %s -> %s"
+          % (label, "拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
     if not hit:
         sys.exit(1)
+
+# ---- B6: 输出用回调而不是 AudioBufferList 缓冲区 ----
+bad = mutate(
+    BASE_SRC,
+    """        status = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
+                                                 &outNumPackets, &outList,
+                                                 NULL);""",
+    """        status = AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur,
+                                                 &outNumPackets, LCAACOutputProc,
+                                                 NULL);""",
+    "B6")
+errs = run_check(bad, BASE_PLIST, BASE_POST)
+hit = [e for e in errs if "AudioBufferList" in e or "输出" in e]
+print("  [B6] 输出改用回调 -> %s"
+      % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
+if not hit:
+    sys.exit(1)
 
 print("")
 print("=" * 68)

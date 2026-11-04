@@ -884,22 +884,52 @@ def check_v86_fixes(src, panel_src=None):
                     "该常量在 iOS SDK 里不存在，CI 会编译失败。" % sym)
                 break
 
-    # ---- 5) AudioConverter 回调签名必须正确 ----
-    # SDK 里 AudioConverterComplexInputDataProc / ...OutputDataProc 的签名是：
-    #   OSStatus (*)(void *inRefCon, UInt32 *ioNumberDataPackets, ...)
-    # 返回类型必须是 OSStatus(int)。用 UInt32 / size_t 都会报
+    # ---- 5) AudioConverter 回调签名必须与 SDK 一致 ----
+    # SDK 权威原型（AudioConverter.h）：
+    #   typedef OSStatus (*AudioConverterComplexInputDataProc)(
+    #       AudioConverterRef               inAudioConverter,
+    #       UInt32 *                        ioNumberDataPackets,
+    #       AudioBufferList *               ioData,
+    #       AudioStreamPacketDescription ** outDataPacketDescription,
+    #       void *                          inUserData);
+    # 必须【5 个参数】。写成 3 参数版本会连续两轮 CI 报
     # "incompatible function pointer types"。
     if "LCAACInputProc" in code:
-        if not re.search(r"static\s+OSStatus\s+LCAACInputProc\s*\(", code):
+        m = re.search(r"static\s+OSStatus\s+LCAACInputProc\s*\(([^)]*)\)",
+                      code, re.DOTALL)
+        if not m:
             errors.append(
-                "v1.0.86 回归: LCAACInputProc 返回类型不是 OSStatus —— "
-                "AudioConverterComplexInputDataProc 要求 OSStatus 返回值，"
-                "用 UInt32/size_t 会报 incompatible function pointer types。")
-    if "LCAACOutputProc" in code:
-        if not re.search(r"static\s+OSStatus\s+LCAACOutputProc\s*\(", code):
-            errors.append(
-                "v1.0.86 回归: LCAACOutputProc 返回类型不是 OSStatus —— "
-                "AudioConverterComplexOutputDataProc 要求 OSStatus 返回值。")
+                "v1.0.86 回归: LCAACInputProc 签名不匹配 —— "
+                "必须是 OSStatus (*)(AudioConverterRef, UInt32*, "
+                "AudioBufferList*, AudioStreamPacketDescription**, void*)。")
+        else:
+            params = m.group(1)
+            nparams = params.count(",") + 1
+            if nparams != 5:
+                errors.append(
+                    "v1.0.86 回归: LCAACInputProc 有 %d 个参数（应为 5）—— "
+                    "SDK 的 AudioConverterComplexInputDataProc 是 5 参数，"
+                    "少写会报 incompatible function pointer types。" % nparams)
+            for need in ("AudioBufferList *", "AudioStreamPacketDescription **"):
+                if need.replace(" ", "") not in params.replace(" ", ""):
+                    errors.append(
+                        "v1.0.86 回归: LCAACInputProc 缺少参数类型 %s —— "
+                        "必须与 AudioConverterComplexInputDataProc 严格一致。" % need)
+
+    # ---- 5b) 输出必须是 AudioBufferList*，不能是输出回调 ----
+    # AudioConverterFillComplexBuffer 的【输出不是回调】，
+    # 而是调用者提供的 AudioBufferList*。用输出回调会编译失败。
+    if "AudioConverterFillComplexBuffer" in code:
+        for m in re.finditer(
+                r"AudioConverterFillComplexBuffer\s*\(([^;]*?)\);",
+                code, re.DOTALL):
+            args = m.group(1)
+            if "outList" not in args and "outABL" not in args:
+                errors.append(
+                    "v1.0.86 回归: AudioConverterFillComplexBuffer 的输出参数"
+                    "不是 AudioBufferList 缓冲区 —— "
+                    "该 API 的输出是调用者提供的缓冲区（outList），"
+                    "不是输出回调，传回调会编译失败。")
 
 
 def main():
