@@ -51,6 +51,17 @@ def log_size():
         return 0
 
 
+def asr_hits():
+    """日志尾部已有多少条 ASR 记录（够分析就收工，不必等日志停止增长）。"""
+    if not LOG:
+        return 0
+    rc, out, _ = ssh("tail -c 40000 '%s' 2>/dev/null | grep -c 'asr' || true" % LOG)
+    try:
+        return int(out.strip().split()[0])
+    except Exception:
+        return 0
+
+
 def main():
     start_wait = int(sys.argv[1]) if len(sys.argv) > 1 else 25
     timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 600
@@ -64,6 +75,12 @@ def main():
     last, stable = -1, 0
     while time.time() < deadline:
         sz = log_size()
+        hits = asr_hits()
+        print("    日志 %d bytes，ASR 记录 %d 条" % (sz, hits))
+        # 已经有足够的 ASR 记录 → 直接收工分析，不等日志写完
+        if hits >= 8:
+            print("    ASR 记录已够用，提前结束等待")
+            break
         if sz > 0 and sz == last:
             stable += 1
             if stable >= 2:
@@ -71,7 +88,6 @@ def main():
         else:
             stable = 0
         last = sz
-        print("    日志 %d bytes" % sz)
         time.sleep(5)
 
     print("[3] 拉取日志并分析 ...")
