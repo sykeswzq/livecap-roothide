@@ -274,6 +274,8 @@ static NSString *LCJBRootPath(NSString *path) {
 @interface LCTranslator : NSObject
 + (instancetype)shared;
 - (void)translate:(NSString *)text completion:(void (^)(NSString *result))completion;
+// 串行翻译队列：同一时刻只有一条请求在飞，新文本覆盖排队中的旧文本
+- (void)pumpQueue;
 // 带重试的 OpenAI 兼容翻译（网络超时自动重试，最多 3 次）
 - (void)openaiTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
                cacheKey:(NSString *)cacheKey
@@ -288,6 +290,14 @@ static NSString *LCJBRootPath(NSString *path) {
     NSMutableDictionary *_cache;
     NSMutableDictionary *_lastSentText;
     NSMutableDictionary *_lastSentTime;
+    // ===== 串行化翻译请求 =====
+    // 实测：并发 3 条请求时单条延迟从 2s 恶化到 10s（互相抢带宽），
+    // 而 ASR 每 4~5s 就换一句 → 译文永远追不上，表现为「字幕框一直是英文」。
+    // 现在同一时刻只允许一条在飞，新文本覆盖排队中的旧文本。
+    NSString *_pendingText;
+    void (^_pendingCompletion)(NSString *);
+    BOOL _inflight;
+    BOOL _tencentDisabled;   // 腾讯云机器翻译服务未开通时，本次会话内跳过
 }
 
 + (instancetype)shared {
@@ -310,11 +320,12 @@ static NSString *LCJBRootPath(NSString *path) {
     if (trimmed.length == 0) return;
 
     NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [LCConfig shared].targetLang, trimmed];
-    NSString *cached = _cache[cacheKey];
+    NSString *cached = nil;
+    @synchronized(self) { cached = _cache[cacheKey]; }
     // 注意：必须同时判 length，否则空串（模型对乱码输入常返回空）会被当成有效缓存，
     // 导致这一句之后永远翻译不出来
     if (cached.length > 0) {
-        if (completion) completion(cached);
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(cached); });
         return;
     }
 
@@ -329,43 +340,86 @@ static NSString *LCJBRootPath(NSString *path) {
     _lastSentText[cacheKey] = trimmed;
     _lastSentTime[cacheKey] = nowN;
 
+    // ===== 入队（串行化 + 只保留最新）=====
+    // 翻译是异步的，比 ASR 慢。若允许多条请求并发：
+    //   ① 互相抢带宽，单条延迟从 <1s 恶化到 10s，译文永远追不上字幕；
+    //   ② 回调乱序，英文与中文错配。
+    // 现在同一时刻只有一条请求在飞，新文本覆盖排队中的旧文本（字幕只关心最新一句）。
     dispatch_async(_queue, ^{
-        NSString *target = [[LCConfig shared] targetLang];
-        NSString *sysPrompt = [NSString stringWithFormat:
-            @"You are a professional subtitle translator. Your task is to translate video subtitles accurately and naturally.\n\n"
-            @"Translation Rules:\n"
-            @"1. Translate into %@ (简体中文 if unspecified). Maintain the original tone and style.\n"
-            @"2. For dialogue: use colloquial, natural language appropriate for the context.\n"
-            @"3. For narration: use formal, clear language.\n"
-            @"4. Keep abbreviations and proper nouns intact.\n"
-            @"5. Output ONLY the translated text. No explanations, no quotation marks, no prefixes like '翻译：' or '译文：'.\n"
-            @"6. Preserve line breaks exactly as in the original.\n"
-            @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n"
-            @"8. The input may be an imperfect speech-to-text fragment with recognition errors.\n"
-            @"   Still translate it into Chinese: infer the intended meaning from context and output Chinese.\n"
-            @"   NEVER echo the English input back. The output MUST contain Chinese characters.\n"
-            @"9. If the input is too short or nonsensical to translate, output your best Chinese guess,\n"
-            @"   but NEVER return an empty response.\n\n"
-            @"Examples:\n"
-            @"Input: Hello, how are you?\n"
-            @"Output: 你好，最近怎么样？\n\n"
-            @"Input: I'm doing great, thanks!\n"
-            @"Output: 我很好，谢谢！", target];
-
-        // 厂商优先级：腾讯云(用户主选) → Agnes(OpenAI兼容) → MyMemory(免费兜底)
-        // 任一失败自动顺延下一个，尽量保证翻得出来
-        NSMutableArray *order = [NSMutableArray array];
-        NSString *secretId = [[LCConfig shared] tencentSecretId];
-        NSString *secretKey = [[LCConfig shared] tencentSecretKey];
-        if (secretId.length && secretKey.length) [order addObject:@"tencent"];
-        NSString *openaiKey = [[LCConfig shared] apiKey];
-        NSString *openaiBase = [[LCConfig shared] apiBase];
-        if (openaiKey.length && openaiBase.length) [order addObject:@"agnes"];
-        [order addObject:@"mymemory"]; // 永远保留兜底
-
-        [self translateStep:trimmed sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                       order:order idx:0 maxRetries:2 completion:completion];
+        self->_pendingText = trimmed;
+        self->_pendingCompletion = completion;
+        [self pumpQueue];
     });
+}
+
+// 串行翻译队列：同一时刻只允许一条请求在飞。
+// 保证回调顺序与 ASR 顺序一致，字幕框里英文/中文永远成对。
+- (void)pumpQueue {
+    if (_inflight) return;
+    NSString *text = _pendingText;
+    if (!text.length) return;
+    void (^comp)(NSString *) = _pendingCompletion;
+    _pendingText = nil;
+    _pendingCompletion = nil;
+
+    NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [[LCConfig shared] targetLang], text];
+    NSString *cached = nil;
+    @synchronized(self) { cached = _cache[cacheKey]; }
+    if (cached.length > 0) {
+        if (comp) dispatch_async(dispatch_get_main_queue(), ^{ comp(cached); });
+        [self pumpQueue];
+        return;
+    }
+
+    _inflight = YES;
+    NSString *target = [[LCConfig shared] targetLang];
+    NSString *sysPrompt = [NSString stringWithFormat:
+        @"You are a professional subtitle translator. Your task is to translate video subtitles accurately and naturally.\n\n"
+        @"Translation Rules:\n"
+        @"1. Translate into %@ (简体中文 if unspecified). Maintain the original tone and style.\n"
+        @"2. For dialogue: use colloquial, natural language appropriate for the context.\n"
+        @"3. For narration: use formal, clear language.\n"
+        @"4. Keep abbreviations and proper nouns intact.\n"
+        @"5. Output ONLY the translated text. No explanations, no quotation marks, no prefixes like '翻译：' or '译文：'.\n"
+        @"6. Preserve line breaks exactly as in the original.\n"
+        @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n"
+        @"8. The input may be an imperfect speech-to-text fragment with recognition errors.\n"
+        @"   Still translate it into Chinese: infer the intended meaning from context and output Chinese.\n"
+        @"   NEVER echo the English input back. The output MUST contain Chinese characters.\n"
+        @"9. If the input is too short or nonsensical to translate, output your best Chinese guess,\n"
+        @"   but NEVER return an empty response.\n\n"
+        @"Examples:\n"
+        @"Input: Hello, how are you?\n"
+        @"Output: 你好，最近怎么样？\n\n"
+        @"Input: I'm doing great, thanks!\n"
+        @"Output: 我很好，谢谢！", target];
+
+    // 厂商优先级：Agnes(OpenAI兼容，用户当前主力，实测 <1s 返回)
+    //              → MyMemory(免费兜底，已修好 URL 编码)
+    //              → 腾讯云(排最后：实测返回 UserNotRegistered「服务未开通」，
+    //                排在前面每次都要白费一次往返)
+    NSMutableArray *order = [NSMutableArray array];
+    NSString *openaiKey = [[LCConfig shared] apiKey];
+    NSString *openaiBase = [[LCConfig shared] apiBase];
+    if (openaiKey.length && openaiBase.length) [order addObject:@"agnes"];
+    [order addObject:@"mymemory"]; // 永远保留兜底
+    BOOL tencentDisabled = NO;
+    @synchronized(self) { tencentDisabled = _tencentDisabled; }
+    NSString *secretId = [[LCConfig shared] tencentSecretId];
+    NSString *secretKey = [[LCConfig shared] tencentSecretKey];
+    if (!tencentDisabled && secretId.length && secretKey.length) [order addObject:@"tencent"];
+
+    __weak typeof(self) weakSelf = self;
+    [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
+                   order:order idx:0 maxRetries:2 completion:^(NSString *result) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        dispatch_async(strongSelf->_queue, ^{
+            strongSelf->_inflight = NO;
+            if (comp) dispatch_async(dispatch_get_main_queue(), ^{ comp(result); });
+            [strongSelf pumpQueue];
+        });
+    }];
 }
 
 // 按 order 顺序逐个厂商尝试，失败(done=NO)自动顺延下一个；网络超时错误可重试 maxRetries 次
@@ -408,8 +462,10 @@ static NSString *LCJBRootPath(NSString *path) {
         }
         if (usable) {
             LCLogF(@"translate: provider '%@' OK len=%lu", provider, (unsigned long)res.length);
-            _cache[cacheKey] = res;
-            if (_cache.count > 300) [_cache removeAllObjects];
+            @synchronized(self) {
+                _cache[cacheKey] = res;
+                if (_cache.count > 300) [_cache removeAllObjects];
+            }
             if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(res); });
         } else {
             LCLogF(@"translate: provider '%@' failed, fallback", provider);
@@ -488,8 +544,10 @@ static NSString *LCShortLang(NSString *lc) {
         if ([content hasPrefix:@"NO QUERY SPECIFIED"] || [content hasPrefix:@"MY MEMORY WARNING"]) { if (completion) completion(nil); return; }
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        _cache[cacheKey] = result;
-        if (_cache.count > 300) [_cache removeAllObjects];
+        @synchronized(self) {
+            _cache[cacheKey] = result;
+            if (_cache.count > 300) [_cache removeAllObjects];
+        }
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
         }
@@ -565,6 +623,16 @@ static NSString *LCTmtLang(NSString *lcLang) {
         NSDictionary *respD = json[@"Response"];
         if (respD[@"Error"]) {
             LCLogF(@"translate: tencent api err %@", respD[@"Error"]);
+            // 「服务未开通」是账号级永久错误，重试无意义。
+            // 一旦遇到，本次会话内直接把腾讯云翻译拉黑，
+            // 避免每一句都先白跑一次注定失败的往返（实测拖慢约 1s/句）。
+            NSString *code = respD[@"Error"][@"Code"];
+            NSString *msg = respD[@"Error"][@"Message"];
+            if ([code isEqualToString:@"FailedOperation.UserNotRegistered"] ||
+                [msg containsString:@"has not been opened"]) {
+                @synchronized(self) { self->_tencentDisabled = YES; }
+                LCLogF(@"translate: tencent disabled for this session (service not opened)");
+            }
             if (completion) completion(nil);
             return;
         }
@@ -576,8 +644,10 @@ static NSString *LCTmtLang(NSString *lcLang) {
         }
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        _cache[cacheKey] = result;
-        if (_cache.count > 300) [_cache removeAllObjects];
+        @synchronized(self) {
+            _cache[cacheKey] = result;
+            if (_cache.count > 300) [_cache removeAllObjects];
+        }
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
         }
@@ -717,8 +787,10 @@ static NSString *LCTmtLang(NSString *lcLang) {
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
         LCLogF(@"translate: openai response len=%lu text=[%@]", (unsigned long)result.length, result);
-        _cache[cacheKey] = result;
-        if (_cache.count > 300) [_cache removeAllObjects];
+        @synchronized(self) {
+            _cache[cacheKey] = result;
+            if (_cache.count > 300) [_cache removeAllObjects];
+        }
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
         }
@@ -808,9 +880,13 @@ static BOOL gProcessingFormatValid = NO;
 @interface LCSubtitleOverlay : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
 - (void)install;
-- (void)showOriginal:(NSString *)origin translation:(NSString *)translation;
-// 判断「发起翻译时的英文」与「当前英文」是否算同一句（防翻译错配）
-- (BOOL)origin:(NSString *)req matchesCurrent:(NSString *)cur;
+// 原子配对显示：新英文先到 → showPending（不动画面）
+//           译文回来   → showPair（英文+中文整对切换）
+//           翻译失败   → showFailed（只显示英文）
+- (void)showPending:(NSString *)origin;
+- (void)showPair:(NSString *)origin translation:(NSString *)translation;
+- (void)showFailed:(NSString *)origin;
+- (void)renderCurrent;
 - (void)hide;
 - (void)showToast:(NSString *)text;
 @end
@@ -1058,10 +1134,12 @@ static BOOL gProcessingFormatValid = NO;
                     if (text.length == 0) return;
                     LCLogF(@"asr: text [%@]", text);
                     dispatch_async(dispatch_get_main_queue(), ^{
-                        [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
+                        // 原子配对：英文先到只登记，译文回来才整对显示
+                        [[LCSubtitleOverlay shared] showPending:text];
                         [[LCTranslator shared] translate:text
                             completion:^(NSString *tr) {
-                                if (tr.length) [[LCSubtitleOverlay shared] showOriginal:text translation:tr];
+                                if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr];
+                                else [[LCSubtitleOverlay shared] showFailed:text];
                             }];
                     });
                 }];
@@ -1225,10 +1303,12 @@ static BOOL gProcessingFormatValid = NO;
                     if (text.length == 0) return;
                     LCLogF(@"asr16: text [%@]", text);
                     dispatch_async(dispatch_get_main_queue(), ^{
-                        [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
+                        // 原子配对：英文先到只登记，译文回来才整对显示
+                        [[LCSubtitleOverlay shared] showPending:text];
                         [[LCTranslator shared] translate:text
                             completion:^(NSString *tr) {
-                                if (tr.length) [[LCSubtitleOverlay shared] showOriginal:text translation:tr];
+                                if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr];
+                                else [[LCSubtitleOverlay shared] showFailed:text];
                             }];
                     });
                 }];
@@ -1254,10 +1334,12 @@ static BOOL gProcessingFormatValid = NO;
     BOOL _installed;
     BOOL _dragging;
     CGPoint _dragStartCenter;
-    NSString *_lastTranslation;   // 保留最近一次翻译，避免被下一轮 ASR 的 nil 覆盖
-    NSString *_lastOrigin;
-    NSString *_lastRequestedOrigin; // 最近一次【发起翻译】时的英文，用于回填配对校验
-    CFAbsoluteTime _lastTranslationTime; // 记录翻译完成时间，用于超时清除
+    // ===== 原子配对状态 =====
+    // _displayedOrigin / _displayedTranslation 是当前【同时显示】的一对内容，
+    // 两者永远来自同一句英文（成对渲染，避免半英半中）
+    NSString *_displayedOrigin;
+    NSString *_displayedTranslation;
+    NSString *_pendingOrigin;      // 最新一句英文，翻译还在路上
     BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
     CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
 }
@@ -1478,64 +1560,75 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     return as;
 }
 
-// 判断「发起翻译时的英文」与「当前显示的英文」是否算同一句
-// ASR 是增量累积的：同一句话的后续片段会以原句为前缀，
-// 因此只要一方是另一方的前缀，或前 40 字符高度重合，就认为是同一句。
-- (BOOL)origin:(NSString *)req matchesCurrent:(NSString *)cur {
-    if (!req.length || !cur.length) return YES;
-    if ([req isEqualToString:cur]) return YES;
-    if ([cur hasPrefix:req]) return YES;
-    if ([req hasPrefix:cur]) return YES;
-    // 取较短者的前 40 字符比较（覆盖识别微调的情况）
-    NSUInteger n = MIN(40, MIN(req.length, cur.length));
-    if (n < 10) return NO;
-    return [[req substringToIndex:n] isEqualToString:[cur substringToIndex:n]];
-}
-
-- (void)showOriginal:(NSString *)origin translation:(NSString *)translation {
+// ===== 原子配对显示 =====
+// 背景：翻译是异步的（网络往返 0.5~2s），而 ASR 每 4~5s 就换一句。
+// 旧实现把「显示英文」和「回填中文」当成两个独立事件：
+//   t=0  ASR 给出 A → 画面显示英文 A
+//   t=1  ASR 给出 B → 画面显示英文 B（中文还没回来）
+//   t=2  A 的译文回来 → 中文 A 贴到英文 B 上（半英半中）
+// 若再对「请求文本」和「当前文本」做相等校验，则译文又会被全部丢弃（一直全英文）。
+// 正确做法：英文与中文【成对】渲染 —— 译文没到就不动画面，
+// 译文到了整对切换。这样画面里英文和中文永远属于同一句。
+- (void)showPending:(NSString *)origin {
     if (!_container || !_installed) {
         LCLogF(@"overlay: show skipped (container=%d installed=%d)", _container != nil, _installed);
         return;
     }
     @try {
-        if (origin.length == 0 && translation.length == 0) return;
-
-        // ===== 翻译回填前的配对校验 =====
-        // 翻译往返 1-3 秒，期间 ASR 可能已经产出新句子。
-        // 若直接回填，A 句的中文会贴到 B 句的英文上（半英半中）。
-        // 判定：只有当【当前英文】与【发起翻译时的英文】是同一句
-        // （互为前缀 / 高度重合）时才允许回填，否则丢弃这次翻译。
-        if (translation.length && _lastRequestedOrigin.length && origin.length) {
-            BOOL same = [self origin:_lastRequestedOrigin matchesCurrent:origin];
-            if (!same) {
-                LCLogF(@"overlay: drop mismatched translation req=[%@] cur=[%@]",
-                       _lastRequestedOrigin, origin);
-                return;
-            }
+        if (origin.length == 0) return;
+        _pendingOrigin = origin;
+        // 还没有任何成对内容时（例如所有翻译都失败），至少把英文显示出来
+        if (_displayedOrigin.length == 0) {
+            _displayedOrigin = origin;
+            _displayedTranslation = nil;
+            [self renderCurrent];
         }
+        LCLogF(@"overlay: pending origin=[%@]", origin);
+    } @catch (NSException *e) {
+        LCLog(@"overlay: pending error");
+    }
+}
 
-        // 竞态修复：ASR 每轮先调 showOriginal(text, nil) 显示英文原文，
-        // 翻译要几秒后才回填。若这期间又来新一轮 ASR，翻译会被 nil 覆盖，
-        // 导致字幕框永远只显示英文。
-        // 关键：origin 变化【不能】清空 _lastTranslation —— 必须保留上一句的中文，
-        // 直到新翻译回填为止，否则英文会一直霸屏。
-        if (translation.length) {
-            _lastTranslation = translation;
-            _lastOrigin = origin;
-            _lastTranslationTime = CFAbsoluteTimeGetCurrent();
-        } else if (origin.length) {
-            // 超时清除：缓存翻译超过 3 秒未更新则丢弃，避免"半英半中"（新旧句错配）
-            CFAbsoluteTime elapsed = CFAbsoluteTimeGetCurrent() - _lastTranslationTime;
-            if (elapsed > 3.0) {
-                LCLogF(@"overlay: stale translation cleared (elapsed=%.1fs)", elapsed);
-                _lastTranslation = nil;
-            }
-            translation = _lastTranslation;
-            _lastOrigin = origin;
-        }
-        _lastRequestedOrigin = origin;
+// 翻译成功：英文 + 中文整对显示
+- (void)showPair:(NSString *)origin translation:(NSString *)translation {
+    if (!_container || !_installed) {
+        LCLogF(@"overlay: show skipped (container=%d installed=%d)", _container != nil, _installed);
+        return;
+    }
+    @try {
+        if (origin.length == 0) return;
+        if (translation.length == 0) { [self showFailed:origin]; return; }
+        _displayedOrigin = origin;
+        _displayedTranslation = translation;
+        if ([_pendingOrigin isEqualToString:origin]) _pendingOrigin = nil;
+        LCLogF(@"overlay: showPair origin=[%@] trans=[%@] transLen=%lu",
+               origin, translation, (unsigned long)translation.length);
+        [self renderCurrent];
+    } @catch (NSException *e) {
+        LCLog(@"overlay: showPair error");
+    }
+}
 
-        LCLogF(@"overlay: show origin=[%@] trans=[%@] transLen=%lu", origin, translation, (unsigned long)translation.length);
+// 翻译彻底失败：只显示英文，避免画面卡在上一句
+- (void)showFailed:(NSString *)origin {
+    if (!_container || !_installed) return;
+    @try {
+        if (origin.length == 0) return;
+        _displayedOrigin = origin;
+        _displayedTranslation = nil;
+        if ([_pendingOrigin isEqualToString:origin]) _pendingOrigin = nil;
+        LCLogF(@"overlay: showFailed origin=[%@]", origin);
+        [self renderCurrent];
+    } @catch (NSException *e) {
+        LCLog(@"overlay: showFailed error");
+    }
+}
+
+// 渲染当前成对内容（_displayedOrigin + _displayedTranslation）
+- (void)renderCurrent {
+    @try {
+        NSString *origin = _displayedOrigin ?: @"";
+        NSString *translation = _displayedTranslation ?: @"";
         UIColor *tc = [[LCConfig shared] textColor];
         _originLabel.attributedText = LCStrokedText(origin, tc, _originLabel.font);
         _transLabel.attributedText = LCStrokedText(translation, tc, _transLabel.font);
@@ -1600,6 +1693,12 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         }
         if (translation.length) {
             _transLabel.frame = CGRectMake(pad, ly, textW, th);
+            _transLabel.hidden = NO;
+        } else {
+            // 没有译文时必须把中文标签收起，否则会残留上一句的中文
+            // （表现为「新英文 + 旧中文」的半英半中）
+            _transLabel.frame = CGRectZero;
+            _transLabel.hidden = YES;
         }
         // 拖动把手：字幕框右上角内侧
         if (_dragHandle) {
@@ -1663,9 +1762,9 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 
 - (void)hide {
     _container.hidden = YES;
-    _lastTranslation = nil;  // 隐藏时清除缓存翻译
-    _lastTranslationTime = 0;
-    _lastRequestedOrigin = nil;
+    _pendingOrigin = nil;
+    _displayedOrigin = nil;
+    _displayedTranslation = nil;
 }
 
 // 快速开关提示（复用字幕条，2 秒后自动消失）
@@ -1799,12 +1898,13 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
                 [self->_accum setString:@""];
                 NSString *captureText = self->_pendingFinal;  // 捕获当前文本，防止被下一句覆盖
                 LCLogF(@"speech: final [%@] -> sending for translation", captureText);
-                [[LCSubtitleOverlay shared] showOriginal:captureText translation:nil];
+                [[LCSubtitleOverlay shared] showPending:captureText];
                 // 合并开关：翻译跟随总开关
                 [[LCTranslator shared] translate:captureText
                     completion:^(NSString *tr) {
                         LCLogF(@"speech: translation result len=%lu text=[%@]", (unsigned long)tr.length, tr);
-                        if (tr.length) [[LCSubtitleOverlay shared] showOriginal:captureText translation:tr];
+                        if (tr.length) [[LCSubtitleOverlay shared] showPair:captureText translation:tr];
+                        else [[LCSubtitleOverlay shared] showFailed:captureText];
                     }];
             }
         } else {
@@ -1813,13 +1913,12 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
             if (now - self->_lastPartialAt < 1.0) return;
             self->_lastPartialAt = now;
-            [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
-            // 合并开关：翻译跟随总开关
-            NSString *captureText = text;  // 捕获当前文本，防止被下一句覆盖
-            [[LCTranslator shared] translate:captureText
-                completion:^(NSString *tr) {
-                    if (tr.length) [[LCSubtitleOverlay shared] showOriginal:captureText translation:tr];
-                }];
+            // partial 只是「正在说的半句」，会不断被更长的内容取代。
+            // 若也去请求翻译，会同时产生两个问题：
+            //   ① 浪费请求（每 1s 一条），把串行队列塞满，真正的 final 排不上
+            //   ② partial 的译文回来时，画面上的英文已经是另一段 → 错配
+            // 所以 partial 只登记不翻译，等 final 到了再整段翻译。
+            [[LCSubtitleOverlay shared] showPending:text];
         }
     }];
 }
@@ -3329,7 +3428,7 @@ static void LCInit(void) {
         for (int mi = 0; mpaths[mi]; mi++) {
             FILE *mf = fopen(mpaths[mi], "a");
             if (mf) {
-                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.79) ===\n");
+                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.80) ===\n");
                 fprintf(mf, "[%lld] ctor ran: prog=%s path=%s\n", (long long)time(NULL), exe, mpaths[mi]);
                 fflush(mf);
                 fclose(mf);
