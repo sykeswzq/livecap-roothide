@@ -20,6 +20,11 @@ SSH_OPTS = ['-i', SSH_KEY, '-o', 'StrictHostKeyChecking=no',
 LOG_CANDIDATES = ("/var/mobile/Containers/Data/Application/*/Documents/livecap.log",)
 LOG = None  # 运行时动态解析
 
+# 设备 IP 可能因 DHCP 变化而改变 —— 固定 IP 不通时全网段扫 22 端口自动找回
+SUBNET = '10.10.201'
+_last_scan_at = 0.0
+SCAN_INTERVAL = 300          # 限频：5 分钟扫一次，避免频繁打扰网络
+
 
 def find_log():
     """YouTube 容器 UUID 重装后会变，动态找最新的 livecap.log。"""
@@ -33,16 +38,54 @@ def find_log():
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def ssh(cmd, timeout=45):
+def ssh(cmd, timeout=45, host=None):
     """设备可能休眠/掉线，超时要兜住，不能让脚本崩掉。"""
+    h = host or HOST
     try:
-        p = subprocess.run(['ssh'] + SSH_OPTS + [HOST, cmd],
+        p = subprocess.run(['ssh'] + SSH_OPTS + [h, cmd],
                            capture_output=True, timeout=timeout)
         return p.returncode, p.stdout.decode('utf-8', 'replace'), p.stderr.decode('utf-8', 'replace')
     except subprocess.TimeoutExpired:
         return 255, '', 'ssh timeout'
     except Exception as e:
         return 255, '', str(e)
+
+
+def _port_open(ip, port=22, timeout=0.6):
+    import socket
+    try:
+        s = socket.create_connection((ip, port), timeout=timeout)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
+def scan_for_device():
+    """全网段扫 22 端口，找出能用密钥登录的越狱设备（应对 DHCP 换 IP）。"""
+    global HOST, _last_scan_at
+    now = time.time()
+    if now - _last_scan_at < SCAN_INTERVAL:
+        return False
+    _last_scan_at = now
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        results = list(ex.map(lambda i: _port_open("%s.%d" % (SUBNET, i)),
+                              range(1, 255)))
+    candidates = ["%s.%d" % (SUBNET, i) for i, ok in enumerate(results, 1) if ok]
+    if not candidates:
+        print("    扫描 %s.0/24：没有开放 22 端口的设备" % SUBNET, flush=True)
+        return False
+    print("    扫描到 22 端口开放: %s" % ", ".join(candidates), flush=True)
+    for ip in candidates:
+        rc, out, _ = ssh("echo ALIVE", host='root@' + ip, timeout=12)
+        if rc == 0 and "ALIVE" in out:
+            if ip != HOST.split('@')[-1]:
+                print("    ✅ 设备地址变了: %s → %s" % (HOST, ip), flush=True)
+                HOST = 'root@' + ip
+            return True
+    return False
 
 
 def log_size():
@@ -71,7 +114,10 @@ def asr_hits():
 def device_alive():
     """设备是否还能连上（手机息屏/换网会让 SSH 暂时不可达）。"""
     rc, out, _ = ssh("echo ALIVE", timeout=25)
-    return rc == 0 and "ALIVE" in out
+    if rc == 0 and "ALIVE" in out:
+        return True
+    # 固定 IP 不通 → 扫全网段找找（限频），应对 DHCP 换了地址
+    return scan_for_device()
 
 
 def main():
