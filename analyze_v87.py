@@ -11,9 +11,16 @@
 
 v1.0.87 期望：
     格式分布      send_aac 占绝大多数
-    单请求体积    中位 ≈ 6KB（ADTS-AAC 24kbps，2.5s 音频）
+    单请求体积    中位 ≈ 8KB（离线实测：PyAV 编 2.5s @24kbps ADTS = 8230 字节）
     RTT           中位应显著低于 4875ms
     硬超时        应接近 0
+    压缩比        8KB vs 79KB ≈ 9.6 倍；纯上传 0.33s vs 3.2s
+
+离线已验证（verify_adts.py，不用上真机）：
+    - ADTS 头与 FFmpeg 官方 muxer 输出 41/41 帧逐字节一致
+    - ISO/IEC 13818-7 独立解析同样一致
+    - 回灌 FFmpeg 解复用器读出 16000Hz / mono / 帧数一致
+    → 剩下唯一未验证环节：Apple AudioConverter 产出的 AAC 是否被腾讯云接受
 """
 import re
 import sys
@@ -88,11 +95,15 @@ if tot_send:
     print("  → 判定: %s" % ("✅ 压缩已生效" if aac_send >= wav_send else
                             "❌ 压缩仍未生效（AAC 被拒/编码器不可用）"))
 if send_bytes:
-    kb = sorted(b // 1024 for b in send_bytes)
-    print("  单请求体积: min=%dKB 中位=%dKB max=%dKB" % (kb[0], kb[len(kb) // 2], kb[-1]))
-    med = kb[len(kb) // 2]
-    print("  → 按手机实测 ~25KB/s 上行，纯上传约 %.2fs（v1.0.86 中位 79KB ≈ 3.2s）"
-          % (med / 25.0))
+    sizes = sorted(b / 1024.0 for b in send_bytes)
+    med = sizes[len(sizes) // 2]
+    print("  单请求体积: min=%.1fKB 中位=%.1fKB max=%.1fKB" % (sizes[0], med, sizes[-1]))
+    print("  → 按手机实测 ~25KB/s 上行，纯上传约 %.2fs（v1.0.86 中位 79KB ≈ 3.2s，压缩 %.1fx）"
+          % (med / 25.0, (79.0 / med) if med else 0))
+    if med <= 12:
+        print("  → 判定: ✅ 体积符合 ADTS-AAC 预期（离线实测 2.5s@24kbps = 8.2KB）")
+    else:
+        print("  → 判定: ⚠️ 体积偏大，可能仍在发 WAV，或 AAC 编码器未生效")
 print("  AAC 失败次数: %d   AAC 冷却恢复: %d" % (aac_fail, aac_cooldown))
 print("  直连失败次数: %d   直连冷却恢复: %d" % (direct_fail, direct_cooldown))
 print("  分片裁剪次数(trim): %d" % trimmed)
