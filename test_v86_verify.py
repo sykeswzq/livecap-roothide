@@ -215,12 +215,22 @@ print("")
 print("=" * 68)
 print("C. 反向：合法写法不得误报")
 print("=" * 68)
-# 注释里提到 mediaserverd 不该被误判（plist 里已经用注释说明了原因）
 errs = run_check(BASE_SRC, BASE_PLIST, BASE_POST)
 if errs:
     print("  [FAIL] 修复版被误报：%s" % errs[0])
     sys.exit(1)
-print("  [PASS] 注释中提及 mediaserverd 不误报")
+print("  [PASS] 修复版零误报")
+
+# plist 里含 XML 注释也必须被拦（ElleKit 解析失败 → 静默不注入）
+bad = BASE_PLIST.replace(
+    "\t\t<key>Bundles</key>",
+    "\t\t<!-- 注释 -->\n\t\t<key>Bundles</key>")
+errs = run_check(BASE_SRC, bad, BASE_POST)
+hit = [e for e in errs if "XML 注释" in e]
+print("  [C2] plist 含 XML 注释 -> %s"
+      % ("拦截 ✅" if hit else "❌ 没拦住！"))
+if not hit:
+    sys.exit(1)
 
 print("")
 print("=" * 68)

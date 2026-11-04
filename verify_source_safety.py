@@ -825,15 +825,20 @@ def check_v86_fixes(src, panel_src=None):
         plist_txt = None
 
     if plist_txt is not None:
-        # 只看真实的 plist 节点，忽略注释（注释里可以写「不要再加 mediaserverd」）
-        plist_body = re.sub(r"<!--.*?-->", "", plist_txt, flags=re.DOTALL)
-        if "mediaserverd" in plist_body:
+        # plist 里【不能有 XML 注释】（ElleKit 用 CFPropertyList 解析，
+        # 遇到 <!-- --> 整个 Filter 解析失败 → tweak 静默不注入）。
+        # 所以这里不剥离注释，直接全文查。
+        if "<!--" in plist_txt:
+            errors.append(
+                "v1.0.86 回归: LiveCap.plist 含 XML 注释 —— "
+                "ElleKit 解析 Filter 会失败，tweak 静默不注入且无任何日志。")
+        if "mediaserverd" in plist_txt:
             errors.append(
                 "v1.0.86 回归: LiveCap.plist 里出现了 mediaserverd —— "
                 "注入系统媒体服务会导致 mediaserverd 崩溃（-11），"
                 "微信语音/通话会无声。v1.0.30 修过一次，v1.0.74 又挖回来了。")
         # Executables 节点整体都不该有（mediaserverd 之外也一样危险）
-        if "<key>Executables</key>" in plist_body:
+        if "<key>Executables</key>" in plist_txt:
             errors.append(
                 "v1.0.86 回归: LiveCap.plist 出现了 Executables 过滤节点 —— "
                 "只允许用 Bundles 白名单限定目标 App。")

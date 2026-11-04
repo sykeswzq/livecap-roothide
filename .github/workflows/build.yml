@@ -94,13 +94,19 @@ jobs:
           if grep -q '<!--' "$TPLIST"; then
             echo "ERROR: LiveCap.plist 含 XML 注释，ElleKit 无法解析 Filter"; exit 1
           fi
-          # 必须有 Mode=Any，否则 ElleKit 只按 Bundles 匹配，Executables 完全不生效
-          MODE="$(/usr/libexec/PlistBuddy -c "Print :Filter:Mode" "$TPLIST" 2>/dev/null || true)"
-          [ "$MODE" = "Any" ] || { echo "ERROR: Filter 缺 Mode=Any（Executables 会失效）"; exit 1; }
-          # mediaserverd 是系统进程，必须在 Executables 里才能注入（音频抓取靠它）
-          /usr/libexec/PlistBuddy -c "Print :Filter:Executables" "$TPLIST" 2>/dev/null | grep -q "mediaserverd" \
-            || { echo "ERROR: Filter 缺 Executables=mediaserverd（抓音频依赖它）"; exit 1; }
-          echo "  (2.1) OK plist 无注释 + Mode=Any + 含 mediaserverd"
+          # ===== v1.0.86：mediaserverd 注入是错的，必须反向断言 =====
+          # 历史：v1.0.30 修过一次（微信语音无声），v1.0.74 又加回来。
+          # 注入 mediaserverd 会让系统媒体服务崩溃循环（-11），
+          # 所有 App 的音频输出都受影响（微信语音/通话无声）。
+          # 下面的正向断言曾经【强制要求】mediaserverd，
+          # 等于在 CI 里保护这个 bug —— 现在反过来硬拦。
+          if /usr/libexec/PlistBuddy -c "Print :Filter:Executables" "$TPLIST" 2>/dev/null | grep -q "mediaserverd"; then
+            echo "ERROR: Filter 含 Executables=mediaserverd（会导致系统音频服务崩溃、微信语音无声）"; exit 1
+          fi
+          if /usr/libexec/PlistBuddy -c "Print :Filter:Executables" "$TPLIST" 2>/dev/null | grep -q .; then
+            echo "ERROR: Filter 不应有 Executables 节点（只允许 Bundles 白名单）"; exit 1
+          fi
+          echo "  (2.1) OK plist 无注释 + 无 mediaserverd 注入 + Bundles 白名单正确"
           echo "  (2) OK dylib 头正常 + install name 规范 + Filter 正确"
 
           rm -rf /tmp/lcctl && mkdir -p /tmp/lcctl
@@ -157,9 +163,14 @@ jobs:
           # 这个坑 v1.0.30 修过一次（commit 7431db0），
           # v1.0.74 改 plist 时又加了回来（commit ba3ac6d）→ 复发。
           # 现在用独立步骤硬拦，避免「改 plist 时顺手加回来」。
-          if grep -q "mediaserverd" LiveCap.plist \
-             && ! grep -q "mediaserverd" <(sed 's/<!--[^>]*-->//g' LiveCap.plist); then
+          # plist 里【不能有 XML 注释】（ElleKit 解析会失败），
+          # 所以直接全文查 mediaserverd，不用剥注释。
+          if grep -q "mediaserverd" LiveCap.plist; then
             echo "ERROR: LiveCap.plist 仍包含 mediaserverd 注入"
+            exit 1
+          fi
+          if grep -q "<!--" LiveCap.plist; then
+            echo "ERROR: LiveCap.plist 含 XML 注释（ElleKit 解析 Filter 会失败）"
             exit 1
           fi
           if grep -q "<key>Executables</key>" LiveCap.plist; then
