@@ -167,14 +167,35 @@ else
 fi
 
 # 加入越狱 trustcache（若有 jbctl），确保内核信任该签名
+#
+# v1.0.83 修复：Dopamine 2.x rootless 下，jbctl trustcache add 只接受
+# 【jbroot 真实路径】（/var/containers/Bundle/Application/.jbroot-XXXX/...），
+# 用 /var/jb/... 会报 "ERROR: passed macho path does not exist"。
+# （两者其实是同一 inode，但 jbctl 校验的是路径字面量）
+# 因此这里对候选路径依次尝试，成功即止。
 JBC=""
 for j in /usr/bin/jbctl /basebin/jbctl /var/jb/usr/bin/jbctl; do
   [ -x "$j" ] && JBC="$j" && break
 done
 if [ -n "$JBC" ] && [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
-  "$JBC" trustcache add "$DYLIB_PATH/LiveCap.dylib" >> "$LOG" 2>&1 \
-    && echo "trustcache add OK" >> "$LOG" \
-    || echo "trustcache add skipped/failed" >> "$LOG"
+  # 候选路径：jbroot 真实路径优先，其次 /var/jb 路径
+  TC_TARGETS=""
+  for jb in /var/containers/Bundle/Application/.jbroot-*; do
+    [ -d "$jb" ] && TC_TARGETS="$TC_TARGETS $jb/usr/lib/TweakInject/LiveCap.dylib"
+  done
+  TC_TARGETS="$TC_TARGETS $DYLIB_PATH/LiveCap.dylib"
+  TC_OK=0
+  for t in $TC_TARGETS; do
+    [ -f "$t" ] || continue
+    if "$JBC" trustcache add "$t" >> "$LOG" 2>&1; then
+      echo "trustcache add OK: $t" >> "$LOG"
+      TC_OK=1
+      break
+    else
+      echo "trustcache add failed for: $t" >> "$LOG"
+    fi
+  done
+  [ "$TC_OK" = "0" ] && echo "WARNING: trustcache add failed for all paths" >> "$LOG"
 fi
 
 # 检查权限（诊断用）
