@@ -24,7 +24,7 @@ if [ ! -f "$CFG" ]; then
 	<key>apiKey</key>
 	<string>sk-ZunoSlgppZBgp19GwuQe6OiJiO2427oGnP4J60Ny30pS0n19</string>
 	<key>model</key>
-	<string>agnes-3.0-flash</string>
+	<string>agnes-2.5-flash</string>
 	<key>fontSize</key>
 	<string>16</string>
 	<key>boldText</key>
@@ -50,6 +50,19 @@ fi
 if [ -f "$CFG" ]; then
   chmod 666 "$CFG"
   echo "config ensured" >> "$LOG"
+fi
+
+# ===== v1.0.81：模型迁移 =====
+# 背景：agnes-3.0-flash 在 apihub 网关实测单次要 29~40s，而设备端请求超时上限
+# 只有 15s → 必然超时 → 字幕永远显示英文。agnes-2.5-flash 实测 0.87~3.4s。
+# 老用户升级时 CFG 已存在（上面的写入被跳过），必须单独做一次迁移。
+if [ -f "$CFG" ]; then
+  if grep -q "agnes-3.0-flash" "$CFG" 2>/dev/null; then
+    sed -i.bak 's|<string>agnes-3.0-flash</string>|<string>agnes-2.5-flash</string>|' "$CFG" 2>/dev/null \
+      || sed -i '' 's|agnes-3.0-flash|agnes-2.5-flash|g' "$CFG" 2>/dev/null
+    rm -f "$CFG.bak"
+    echo "model migrated: agnes-3.0-flash -> agnes-2.5-flash" >> "$LOG"
+  fi
 fi
 
 # 面板写入后 cfprefsd 缓存问题：强制重读，保证面板/tweak 读到的都是最新

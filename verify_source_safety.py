@@ -103,6 +103,86 @@ def check_required_features(src):
             errors.append("缺少关键修复: %s (%s)" % (desc, token))
 
 
+def check_v81_fixes(src):
+    """v1.0.81 关键修复的回归拦截
+
+    这几条对应用户实测反馈的三个问题，漏掉任何一条都会退回到旧行为：
+      1. 字幕框不轮动  → showPending 必须立刻刷屏（不能只在首次显示时刷）
+      2. 一直显示英文  → 必须用快模型 agnes-2.5-flash + 短 prompt + 并行竞速
+      3. 日志刷屏      → 高频路径必须节流
+    """
+    # 1) 轮动：showPending 里必须有 renderCurrent 调用
+    # 注意正则必须精确锚定到方法体的第一个 '{'，否则贪婪匹配会落到内层 if 的 '{' 上
+    m = re.search(r"-\s*\(NSUInteger\)\s*showPending:\(NSString \*\)\w+\s*\{", src)
+    if not m:
+        errors.append("v1.0.81 回归: showPending 签名必须返回 NSUInteger seq")
+    else:
+        start = m.end() - 1
+        depth = 0
+        end = start
+        for i in range(start, len(src)):
+            if src[i] == "{":
+                depth += 1
+            elif src[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        body = src[start:end]
+        if "renderCurrent" not in body:
+            errors.append("v1.0.81 回归: showPending 内没有 renderCurrent —— "
+                          "字幕框会不轮动（画面冻结在第一句）")
+        if "_displayedSeq = seq" not in body:
+            errors.append("v1.0.81 回归: showPending 内没有设置 _displayedSeq —— "
+                          "译文无法与画面配对")
+
+    # 2) 翻译：快模型 + 竞速 + 合理超时
+    if "agnes-2.5-flash" not in src:
+        errors.append("v1.0.81 回归: 默认模型必须是 agnes-2.5-flash "
+                      "（agnes-3.0-flash 实测 29~40s，必然超时）")
+    if "raceTranslate" not in src:
+        errors.append("v1.0.81 回归: 缺少 raceTranslate —— "
+                      "串行 fallback 会被最慢的厂商拖死（实测 45s+）")
+    if "req.timeoutInterval = 15.0" in src:
+        errors.append("v1.0.81 回归: openai 超时仍是 15s，"
+                      "慢模型必然超时（应 >= 30s）")
+    # prompt 长度：长 prompt 会把延迟从 1s 抬到 35s
+    m = re.search(r'@"You are a professional subtitle translator', src)
+    if m:
+        errors.append("v1.0.81 回归: 仍在使用 1401 字节长 prompt —— "
+                      "网关排队时间会暴涨到 30s+")
+
+    # 3) 日志节流：高频路径必须走 LCLogThrottled
+    for tag, desc in [("asbr", "音频 buffer"), ("decin", "解码入口"),
+                      ("decpkts", "包数"), ("decframes", "解码帧数")]:
+        if 'LCLogThrottled(@"%s"' % tag not in src:
+            errors.append("v1.0.81 回归: %s 日志未节流（缺 LCLogThrottled(@\"%s\")）"
+                          % (desc, tag))
+
+    # 4) provider 内部不得写缓存（竞速下会覆盖胜出结果 / 污染出英文回显）
+    # 注意这几个方法的签名是跨多行的，正则必须允许换行
+    for fn in ["mymemoryTranslate", "openaiTranslate", "tencentTranslate"]:
+        m = re.search(r"-\s*\(void\)\s*" + fn + r"\s*:[^;{]*\{", src)
+        if not m:
+            errors.append("v1.0.81 回归: 找不到 %s 方法定义，无法校验缓存归属" % fn)
+            continue
+        start = m.end() - 1
+        depth = 0
+        end = start
+        for i in range(start, len(src)):
+            if src[i] == "{":
+                depth += 1
+            elif src[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        body = src[start:end]
+        if "_cache[cacheKey] =" in body:
+            errors.append("v1.0.81 回归: %s 内部写缓存 —— "
+                          "竞速下会覆盖胜出译文/写入英文回显" % fn)
+
+
 def main():
     try:
         src = read_src()
@@ -114,6 +194,7 @@ def main():
     check_macho_bounds_guards(src)
     check_output_capacity(src)
     check_required_features(src)
+    check_v81_fixes(src)
 
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
@@ -131,6 +212,7 @@ def main():
 
     print("  OK: 未发现 UI 热路径 I/O、无界内存访问等已知闪退风险")
     print("  OK: 关键修复均在位（手势同时识别/大模型引擎/TC3 scope/User-Agent）")
+    print("  OK: v1.0.81 修复在位（轮动刷新/快模型+竞速/日志节流/缓存归属）")
     return 0
 
 

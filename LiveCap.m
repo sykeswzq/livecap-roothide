@@ -32,6 +32,53 @@ static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
 
 #pragma mark - 日志
 
+// ===== 高频日志节流 =====
+// 背景：音频回调每秒触发数十次，直接写盘会把 livecap.log 刷到 10MB 级。
+// 后果有两点：① 每次写盘都要 seek+write+close，拖慢 App；
+//            ② 设备日志被刷屏，排查问题时根本看不到关键行。
+// 做法：同一 key 在 minInterval 秒内只打印一次。
+static NSMutableDictionary *gLogThrottle = nil;
+static dispatch_once_t gLogThrottleOnce;
+
+static BOOL LCLogThrottled(NSString *key, NSTimeInterval minInterval) {
+    dispatch_once(&gLogThrottleOnce, ^{
+        gLogThrottle = [NSMutableDictionary dictionary];
+    });
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    @synchronized (gLogThrottle) {
+        NSNumber *last = gLogThrottle[key];
+        if (last && (now - [last doubleValue]) < minInterval) return NO;
+        gLogThrottle[key] = @(now);
+        return YES;
+    }
+}
+
+// 日志轮转：超过 4MB 就归档为 .old，避免无限膨胀
+static void LCRotateLogIfNeeded(NSString *path) {
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:NULL];
+    if (!attrs) return;
+    unsigned long long sz = [attrs fileSize];
+    if (sz < 4ull * 1024ull * 1024ull) return;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *old = [path stringByAppendingString:@".old"];
+    [fm removeItemAtPath:old error:NULL];
+    [fm moveItemAtPath:path toPath:old error:NULL];
+}
+
+// 追加写一行到文件（不存在则创建）
+static void LCAppendLine(NSString *path, NSData *data) {
+    @try {
+        if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
+            NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
+            [fh seekToEndOfFile];
+            [fh writeData:data];
+            [fh closeFile];
+        } else {
+            [data writeToFile:path atomically:YES];
+        }
+    } @catch (NSException *e) {}
+}
+
 static void LCLog(const char *msg) {
     NSLog(@"[LiveCap] %s", msg);
     @autoreleasepool {
@@ -42,19 +89,15 @@ static void LCLog(const char *msg) {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
         if (paths.count) {
             NSString *p = [paths[0] stringByAppendingPathComponent:@"livecap.log"];
-            if ([[NSFileManager defaultManager] fileExistsAtPath:p]) {
-                @try {
-                    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
-                    [fh seekToEndOfFile];
-                    [fh writeData:data];
-                    [fh closeFile];
-                } @catch (NSException *e) {}
-            } else {
-                [data writeToFile:p atomically:YES];
-            }
+            LCRotateLogIfNeeded(p);
+            LCAppendLine(p, data);
         }
         // 尽力写全局路径（App Store 沙盒可能拒绝，失败静默）
-        [data writeToFile:@"/var/mobile/Documents/livecap.log" atomically:YES];
+        // 注意：必须是【追加】，用 writeToFile:atomically: 会整文件覆盖，
+        // 结果只留下最后一行，还每次都做一次完整文件写入。
+        NSString *gp = @"/var/mobile/Documents/livecap.log";
+        LCRotateLogIfNeeded(gp);
+        LCAppendLine(gp, data);
     }
 }
 
@@ -159,7 +202,10 @@ static NSString *LCJBRootPath(NSString *path) {
 
 - (NSString *)model {
     NSString *s = _d[@"model"];
-    return (s && s.length) ? s : @"agnes-3.0-flash";
+    // 默认用 agnes-2.5-flash：实测 agnes-3.0-flash 无论 prompt 长短都要 29~40s，
+    // 远超字幕场景可接受延迟（设备网络超时上限只有 15s → 必然全失败）。
+    // agnes-2.5-flash 实测 0.87~3.4s。
+    return (s && s.length) ? s : @"agnes-2.5-flash";
 }
 
 - (NSString *)tencentSecretId {
@@ -373,45 +419,23 @@ static NSString *LCJBRootPath(NSString *path) {
 
     _inflight = YES;
     NSString *target = [[LCConfig shared] targetLang];
-    NSString *sysPrompt = [NSString stringWithFormat:
-        @"You are a professional subtitle translator. Your task is to translate video subtitles accurately and naturally.\n\n"
-        @"Translation Rules:\n"
-        @"1. Translate into %@ (简体中文 if unspecified). Maintain the original tone and style.\n"
-        @"2. For dialogue: use colloquial, natural language appropriate for the context.\n"
-        @"3. For narration: use formal, clear language.\n"
-        @"4. Keep abbreviations and proper nouns intact.\n"
-        @"5. Output ONLY the translated text. No explanations, no quotation marks, no prefixes like '翻译：' or '译文：'.\n"
-        @"6. Preserve line breaks exactly as in the original.\n"
-        @"7. If the text contains multiple lines, translate each line separately but keep the same line structure.\n"
-        @"8. The input may be an imperfect speech-to-text fragment with recognition errors.\n"
-        @"   Still translate it into Chinese: infer the intended meaning from context and output Chinese.\n"
-        @"   NEVER echo the English input back. The output MUST contain Chinese characters.\n"
-        @"9. If the input is too short or nonsensical to translate, output your best Chinese guess,\n"
-        @"   but NEVER return an empty response.\n\n"
-        @"Examples:\n"
-        @"Input: Hello, how are you?\n"
-        @"Output: 你好，最近怎么样？\n\n"
-        @"Input: I'm doing great, thanks!\n"
-        @"Output: 我很好，谢谢！", target];
 
-    // 厂商优先级：Agnes(OpenAI兼容，用户当前主力，实测 <1s 返回)
-    //              → MyMemory(免费兜底，已修好 URL 编码)
-    //              → 腾讯云(排最后：实测返回 UserNotRegistered「服务未开通」，
-    //                排在前面每次都要白费一次往返)
-    NSMutableArray *order = [NSMutableArray array];
-    NSString *openaiKey = [[LCConfig shared] apiKey];
-    NSString *openaiBase = [[LCConfig shared] apiBase];
-    if (openaiKey.length && openaiBase.length) [order addObject:@"agnes"];
-    [order addObject:@"mymemory"]; // 永远保留兜底
-    BOOL tencentDisabled = NO;
-    @synchronized(self) { tencentDisabled = _tencentDisabled; }
-    NSString *secretId = [[LCConfig shared] tencentSecretId];
-    NSString *secretKey = [[LCConfig shared] tencentSecretKey];
-    if (!tencentDisabled && secretId.length && secretKey.length) [order addObject:@"tencent"];
+    // ===== prompt 精简（v1.0.81）=====
+    // 实测（设备 → apihub.agnes-ai.cn 网关）：
+    //   agnes-3.0-flash + 1401 字节长 prompt → 29~40s（必然超时）
+    //   agnes-2.5-flash +  232 字节中 prompt → 0.96~7.6s（可用）
+    // 长 prompt 不只是慢，还会显著抬高网关排队时间。
+    // 这里保留最关键的三条约束（只输出译文 / 输入可能是脏片段要照翻 / 绝不回显英文），
+    // 去掉示例和冗长规则，压到 ~230 字节。
+    NSString *sysPrompt = [NSString stringWithFormat:
+        @"Translate to %@. Output ONLY the translation: no quotes, no explanation. "
+        @"The input may be a noisy speech-to-text fragment: infer the meaning and output Chinese. "
+        @"NEVER echo the English input; the output MUST contain Chinese characters.",
+        target];
 
     __weak typeof(self) weakSelf = self;
-    [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                   order:order idx:0 maxRetries:2 completion:^(NSString *result) {
+    [self raceTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
+             completion:^(NSString *result) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
         dispatch_async(strongSelf->_queue, ^{
@@ -422,74 +446,129 @@ static NSString *LCJBRootPath(NSString *path) {
     }];
 }
 
-// 按 order 顺序逐个厂商尝试，失败(done=NO)自动顺延下一个；网络超时错误可重试 maxRetries 次
-- (void)translateStep:(NSString *)text sysPrompt:(NSString *)sysPrompt cacheKey:(NSString *)cacheKey
-               target:(NSString *)target order:(NSArray *)order idx:(NSInteger)idx maxRetries:(NSInteger)maxRetries
-           completion:(void (^)(NSString *result))completion {
-    if (idx >= order.count) {
-        LCLogF(@"translate: all providers failed text=[%@]", text);
-        if (completion) completion(nil);
-        return;
+// 译文有效性校验：模型对识别质量差的输入（乱码/短片段）常原样返回英文 ——
+// 这不算翻译成功。必须与原文比对，且目标语言为中文时结果里必须含中文字符。
+- (BOOL)isUsableTranslation:(NSString *)res forText:(NSString *)text {
+    if (!res.length) return NO;
+    NSString *norm = [res stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!norm.length) return NO;
+    NSString *orig = [text stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if ([norm isEqualToString:orig]) return NO;
+    NSString *dst = [[LCConfig shared] targetLang];
+    if ([dst hasPrefix:@"zh"]) {
+        BOOL hasCJK = NO;
+        for (NSUInteger i = 0; i < norm.length; i++) {
+            unichar ch = [norm characterAtIndex:i];
+            if (ch >= 0x4E00 && ch <= 0x9FFF) { hasCJK = YES; break; }
+        }
+        if (!hasCJK) return NO;
     }
-    NSString *provider = order[idx];
-    void (^proceed)(NSString *res) = ^(NSString *res){
-        // 模型对识别质量差的输入（乱码/短片段）常原样返回英文 —— 这不算翻译成功。
-        // 必须与原文比对，判定失败后顺延到下一个 provider（MyMemory 免费兜底）。
-        BOOL usable = res.length > 0;
-        if (usable) {
-            NSString *norm = [res stringByTrimmingCharactersInSet:
-                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            NSString *orig = [text stringByTrimmingCharactersInSet:
-                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            if ([norm isEqualToString:orig]) {
-                LCLogF(@"translate: provider '%@' returned原文未翻译, treat as failure", provider);
-                usable = NO;
+    return YES;
+}
+
+// ===== 并行竞速翻译（v1.0.81）=====
+// 背景：串行 fallback 的致命问题是「等最慢的那家」。
+//   旧顺序 agnes → mymemory → tencent，而 agnes 单次实测 29~40s，
+//   串起来一句要 45s+，字幕永远追不上语音（实测画面停在第一句 51 秒）。
+// 改成并行发出，谁先返回【有效译文】谁获胜，其余结果直接丢弃：
+//   实测 agnes-2.5-flash 0.87~3.4s、MyMemory 1.25~2.4s，
+//   竞速后整体延迟 = min(两者) ≈ 1s。
+// 竞速天然提供了冗余：一家失败另一家顶上，不再需要靠重试放大延迟。
+- (void)raceTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
+               cacheKey:(NSString *)cacheKey target:(NSString *)target
+             completion:(void (^)(NSString *result))completion {
+    NSString *apiKey = [[LCConfig shared] apiKey];
+    NSString *apiBase = [[LCConfig shared] apiBase];
+    NSString *model = [[LCConfig shared] model];
+
+    // 参赛厂商
+    NSMutableArray *providers = [NSMutableArray array];
+    if (apiKey.length && apiBase.length) [providers addObject:@"agnes"];
+    [providers addObject:@"mymemory"];               // 永远保留的免费兜底
+    BOOL tencentDisabled = NO;
+    @synchronized(self) { tencentDisabled = _tencentDisabled; }
+    NSString *secretId = [[LCConfig shared] tencentSecretId];
+    NSString *secretKey = [[LCConfig shared] tencentSecretKey];
+    if (!tencentDisabled && secretId.length && secretKey.length) [providers addObject:@"tencent"];
+
+    // 竞速状态：pending=未结束请求数，won=是否已有赢家
+    NSMutableDictionary *state = [NSMutableDictionary dictionary];
+    state[@"pending"] = @(providers.count);
+    state[@"won"] = @NO;
+
+    // 单个厂商的回调
+    void (^onResult)(NSString *, NSString *) = ^(NSString *provider, NSString *res) {
+        BOOL accept = NO;
+        BOOL allFailed = NO;
+        @synchronized (state) {
+            BOOL won = [state[@"won"] boolValue];
+            if (!won && res.length && [self isUsableTranslation:res forText:text]) {
+                state[@"won"] = @YES;
+                accept = YES;
             } else {
-                // 目标语言是中文时，结果里必须含中文，否则视为没翻
-                NSString *dst = [[LCConfig shared] targetLang];
-                if ([dst hasPrefix:@"zh"]) {
-                    BOOL hasCJK = NO;
-                    for (NSUInteger i = 0; i < norm.length; i++) {
-                        unichar ch = [norm characterAtIndex:i];
-                        if (ch >= 0x4E00 && ch <= 0x9FFF) { hasCJK = YES; break; }
-                    }
-                    if (!hasCJK) {
-                        LCLogF(@"translate: provider '%@' returned no Chinese, treat as failure", provider);
-                        usable = NO;
-                    }
+                if (res.length) {
+                    LCLogF(@"translate: provider '%@' unusable (原文回显或无中文)", provider);
+                } else {
+                    LCLogF(@"translate: provider '%@' failed", provider);
                 }
+                NSInteger p = [state[@"pending"] integerValue] - 1;
+                state[@"pending"] = @(p);
+                // 所有厂商都失败 → 整句翻译失败
+                if (p <= 0 && !won) allFailed = YES;
             }
         }
-        if (usable) {
-            LCLogF(@"translate: provider '%@' OK len=%lu", provider, (unsigned long)res.length);
+        if (accept) {
             @synchronized(self) {
                 _cache[cacheKey] = res;
                 if (_cache.count > 300) [_cache removeAllObjects];
             }
+            LCLogF(@"translate: provider '%@' WON len=%lu", provider, (unsigned long)res.length);
             if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(res); });
-        } else {
-            LCLogF(@"translate: provider '%@' failed, fallback", provider);
-            [self translateStep:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
-                         order:order idx:idx+1 maxRetries:maxRetries completion:completion];
+        } else if (allFailed) {
+            LCLogF(@"translate: race all failed text=[%@]", text);
+            if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(nil); });
         }
     };
-    if ([provider isEqualToString:@"tencent"]) {
-        NSString *secretId = [[LCConfig shared] tencentSecretId];
-        NSString *secretKey = [[LCConfig shared] tencentSecretKey];
-        LCLogF(@"translate: step %ld -> tencent", (long)idx);
-        [self tencentTranslate:text systemPrompt:sysPrompt cacheKey:cacheKey
-                      secretId:secretId secretKey:secretKey completion:proceed];
-    } else if ([provider isEqualToString:@"agnes"]) {
-        NSString *openaiKey = [[LCConfig shared] apiKey];
-        NSString *openaiBase = [[LCConfig shared] apiBase];
-        LCLogF(@"translate: step %ld -> agnes", (long)idx);
-        [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
-                       apiKey:openaiKey apiBase:openaiBase
-                         model:[LCConfig shared].model completion:proceed];
-    } else {
-        LCLogF(@"translate: step %ld -> mymemory", (long)idx);
-        [self mymemoryTranslate:text targetLang:target cacheKey:cacheKey completion:proceed];
+
+    // 并行发出全部请求
+    for (NSString *provider in providers) {
+        NSString *p = [provider copy];
+        if ([p isEqualToString:@"tencent"]) {
+            LCLogF(@"translate: race -> tencent");
+            [self tencentTranslate:text systemPrompt:sysPrompt cacheKey:cacheKey
+                          secretId:secretId secretKey:secretKey
+                       completion:^(NSString *r) { onResult(p, r); }];
+        } else if ([p isEqualToString:@"agnes"]) {
+            LCLogF(@"translate: race -> agnes model=%@", model);
+            [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
+                          apiKey:apiKey apiBase:apiBase model:model maxAttempts:1
+                       completion:^(NSString *r) { onResult(p, r); }];
+        } else {
+            LCLogF(@"translate: race -> mymemory");
+            [self mymemoryTranslate:text targetLang:target cacheKey:cacheKey
+                         completion:^(NSString *r) { onResult(p, r); }];
+        }
     }
+}
+
+// MyMemory 会把 ' " & < > 转成 HTML 实体，直接上屏会显示成 &#39; 这种乱码。
+// 这里做一次还原（只处理常见的几种，避免引入 NSAttributedString 的额外依赖开销）。
+static NSString *LCDecodeHTMLEntities(NSString *s) {
+    if (!s.length) return s;
+    if ([s rangeOfString:@"&"].location == NSNotFound) return s;
+    NSMutableString *m = [s mutableCopy];
+    NSDictionary *map = @{
+        @"&#39;": @"'", @"&apos;": @"'", @"&quot;": @"\"",
+        @"&amp;":  @"&",  @"&lt;":   @"<", @"&gt;":   @">",
+        @"&#34;": @"\"", @"&nbsp;": @" ",
+    };
+    for (NSString *k in map) {
+        [m replaceOccurrencesOfString:k withString:map[k]
+                               options:NSLiteralSearch range:NSMakeRange(0, m.length)];
+    }
+    return [m copy];
 }
 
 // 语言代码：BCP-47 -> MyMemory 格式（zh 用 zh-CN，其余取前缀）
@@ -544,10 +623,14 @@ static NSString *LCShortLang(NSString *lc) {
         if ([content hasPrefix:@"NO QUERY SPECIFIED"] || [content hasPrefix:@"MY MEMORY WARNING"]) { if (completion) completion(nil); return; }
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        @synchronized(self) {
-            _cache[cacheKey] = result;
-            if (_cache.count > 300) [_cache removeAllObjects];
-        }
+        // MyMemory 会把引号等转成 HTML 实体（&#39; &quot; &amp;），必须还原
+        result = LCDecodeHTMLEntities(result);
+        // 注意：这里【不】写缓存。
+        // 竞速模式下 provider 内部写缓存会出问题：
+        //   ① 慢的那家回来后会把胜出的译文覆盖掉；
+        //   ② 更糟的是返回「英文回显」的结果被写进缓存，
+        //      之后同一句再翻译会直接命中这个坏缓存，永远显示英文。
+        // 缓存统一由 raceTranslate 的胜出方写入。
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
         }
@@ -644,10 +727,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
         }
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        @synchronized(self) {
-            _cache[cacheKey] = result;
-            if (_cache.count > 300) [_cache removeAllObjects];
-        }
+        // 同样不在 provider 内部写缓存，统一由竞速层负责
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
         }
@@ -659,10 +739,11 @@ static NSString *LCTmtLang(NSString *lcLang) {
 - (void)openaiTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
                cacheKey:(NSString *)cacheKey
                apiKey:(NSString *)apiKey apiBase:(NSString *)apiBase
-                  model:(NSString *)model
+                  model:(NSString *)model maxAttempts:(NSInteger)maxAttempts
              completion:(void (^)(NSString *result))completion {
     [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
-                   apiKey:apiKey apiBase:apiBase model:model attempt:0 completion:completion];
+                   apiKey:apiKey apiBase:apiBase model:model
+                  attempt:0 maxAttempts:maxAttempts completion:completion];
 }
 
 // 带重试的内部实现：agnes 网关存在间歇性超时（实测约 3 成请求 -1001），
@@ -671,7 +752,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
 - (void)openaiTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
                cacheKey:(NSString *)cacheKey
                apiKey:(NSString *)apiKey apiBase:(NSString *)apiBase
-                  model:(NSString *)model attempt:(NSInteger)attempt
+                  model:(NSString *)model attempt:(NSInteger)attempt maxAttempts:(NSInteger)maxAttempts
              completion:(void (^)(NSString *result))completion {
     if (text.length > 1800) text = [text substringToIndex:1800];
     NSString *trimmedModel = model.length ? model : @"agnes-2.5-flash";
@@ -699,7 +780,9 @@ static NSString *LCTmtLang(NSString *lcLang) {
     {
         NSString *raw = [[NSString alloc] initWithData:payload encoding:NSUTF8StringEncoding] ?: @"(非UTF8)";
         NSString *head = raw.length > 500 ? [raw substringToIndex:500] : raw;
-        LCLogF(@"translate: PAYLOAD len=%lu head=[%@]", (unsigned long)payload.length, head);
+        if (LCLogThrottled(@"payload", 15.0)) {
+            LCLogF(@"translate: PAYLOAD len=%lu head=[%@]", (unsigned long)payload.length, head);
+        }
     }
 
     // 拼接 API URL（可能以 / 结尾）
@@ -716,7 +799,10 @@ static NSString *LCTmtLang(NSString *lcLang) {
     // 换成普通客户端标识后翻译恢复正常。
     [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
     req.HTTPBody = payload;
-    req.timeoutInterval = 15.0;
+    // 超时放宽到 30s：实测网关慢模型单次要 29~40s，15s 必然 -1001 超时。
+    // 但因为 v1.0.81 改成了并行竞速（MyMemory 同时在跑），慢的这一路超时
+    // 也不会拖累整句 —— 快的那个早已返回。
+    req.timeoutInterval = 30.0;
 
     LCLogF(@"translate: openai request url=%@ model=%@ attempt=%ld", chatUrl, trimmedModel, (long)attempt);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
@@ -730,14 +816,16 @@ static NSString *LCTmtLang(NSString *lcLang) {
                                taskErr.code == NSURLErrorCannotConnectToHost ||
                                taskErr.code == NSURLErrorCannotFindHost ||
                                taskErr.code == NSURLErrorDNSLookupFailed));
-            if (retryable && attempt < 2) {
+            // 重试次数由调用方指定：竞速模式下 maxAttempts=1（即不重试），
+            // 因为另一家厂商已经在并行跑了，重试只会白白放大延迟。
+            if (retryable && attempt < maxAttempts) {
                 NSTimeInterval delay = 0.8 * (attempt + 1);
                 LCLogF(@"translate: openai retry in %.1fs (attempt %ld -> %ld)", delay, (long)attempt, (long)(attempt + 1));
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
                                dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                     [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
                                    apiKey:apiKey apiBase:apiBase model:model
-                                  attempt:attempt + 1 completion:completion];
+                                  attempt:attempt + 1 maxAttempts:maxAttempts completion:completion];
                 });
                 return;
             }
@@ -758,7 +846,9 @@ static NSString *LCTmtLang(NSString *lcLang) {
             if (!raw) raw = [NSString stringWithFormat:@"(binary %lu bytes)",
                              (unsigned long)data.length];
             NSString *head = raw.length > 600 ? [raw substringToIndex:600] : raw;
-            LCLogF(@"translate: RAW len=%lu head=[%@]", (unsigned long)data.length, head);
+            if (LCLogThrottled(@"raw", 15.0)) {
+                LCLogF(@"translate: RAW len=%lu head=[%@]", (unsigned long)data.length, head);
+            }
             // 额外：打印 content 字段的字节数和中文字符数
             NSDictionary *j = json;
             NSArray *chs = j[@"choices"];
@@ -787,10 +877,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
         NSString *result = [content stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
         LCLogF(@"translate: openai response len=%lu text=[%@]", (unsigned long)result.length, result);
-        @synchronized(self) {
-            _cache[cacheKey] = result;
-            if (_cache.count > 300) [_cache removeAllObjects];
-        }
+        // 不在这里写缓存 —— 竞速模式下会覆盖胜出方的结果（见 raceTranslate 注释）
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
         }
@@ -880,12 +967,15 @@ static BOOL gProcessingFormatValid = NO;
 @interface LCSubtitleOverlay : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
 - (void)install;
-// 原子配对显示：新英文先到 → showPending（不动画面）
-//           译文回来   → showPair（英文+中文整对切换）
-//           翻译失败   → showFailed（只显示英文）
-- (void)showPending:(NSString *)origin;
-- (void)showPair:(NSString *)origin translation:(NSString *)translation;
-- (void)showFailed:(NSString *)origin;
+// ===== v1.0.81 显示策略 =====
+// 旧策略（原子配对）：英文先到只登记，译文回来才整对刷屏。
+//   后果：只要翻译慢/失败，画面就永远停在第一句 —— 用户反馈「不轮动」。
+// 新策略（seq 配对）：ASR 每出一句 final 就【立即】把英文刷上屏，
+//   字幕框随语音轮动；译文回来后补上中文；迟到的旧译文按 seq 丢弃，不会串句。
+- (NSUInteger)showPending:(NSString *)origin;   // 返回本次 seq
+- (void)showPartial:(NSString *)origin;          // partial 只登记，不刷屏
+- (void)showPair:(NSString *)origin translation:(NSString *)translation seq:(NSUInteger)seq;
+- (void)showFailed:(NSString *)origin seq:(NSUInteger)seq;
 - (void)renderCurrent;
 - (void)hide;
 - (void)showToast:(NSString *)text;
@@ -1134,12 +1224,12 @@ static BOOL gProcessingFormatValid = NO;
                     if (text.length == 0) return;
                     LCLogF(@"asr: text [%@]", text);
                     dispatch_async(dispatch_get_main_queue(), ^{
-                        // 原子配对：英文先到只登记，译文回来才整对显示
-                        [[LCSubtitleOverlay shared] showPending:text];
+                        // seq 配对：英文先上屏（字幕框轮动），译文回来按 seq 回填
+                        NSUInteger seq = [[LCSubtitleOverlay shared] showPending:text];
                         [[LCTranslator shared] translate:text
                             completion:^(NSString *tr) {
-                                if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr];
-                                else [[LCSubtitleOverlay shared] showFailed:text];
+                                if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr seq:seq];
+                                else [[LCSubtitleOverlay shared] showFailed:text seq:seq];
                             }];
                     });
                 }];
@@ -1303,12 +1393,12 @@ static BOOL gProcessingFormatValid = NO;
                     if (text.length == 0) return;
                     LCLogF(@"asr16: text [%@]", text);
                     dispatch_async(dispatch_get_main_queue(), ^{
-                        // 原子配对：英文先到只登记，译文回来才整对显示
-                        [[LCSubtitleOverlay shared] showPending:text];
+                        // seq 配对：英文先上屏（字幕框轮动），译文回来按 seq 回填
+                        NSUInteger seq = [[LCSubtitleOverlay shared] showPending:text];
                         [[LCTranslator shared] translate:text
                             completion:^(NSString *tr) {
-                                if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr];
-                                else [[LCSubtitleOverlay shared] showFailed:text];
+                                if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr seq:seq];
+                                else [[LCSubtitleOverlay shared] showFailed:text seq:seq];
                             }];
                     });
                 }];
@@ -1334,12 +1424,17 @@ static BOOL gProcessingFormatValid = NO;
     BOOL _installed;
     BOOL _dragging;
     CGPoint _dragStartCenter;
-    // ===== 原子配对状态 =====
-    // _displayedOrigin / _displayedTranslation 是当前【同时显示】的一对内容，
-    // 两者永远来自同一句英文（成对渲染，避免半英半中）
+    // ===== v1.0.81 seq 配对状态 =====
+    // _displayedOrigin / _displayedTranslation 是当前【同时显示】的一对内容。
+    // _displayedSeq 记录当前画面属于第几句（seq 由 showPending 分配）。
+    // 译文回来时用 seq 对账：seq < _displayedSeq 说明这句已经过时，直接丢弃，
+    // 避免出现「画面是新英文、下面挂着旧译文」的错配。
     NSString *_displayedOrigin;
     NSString *_displayedTranslation;
     NSString *_pendingOrigin;      // 最新一句英文，翻译还在路上
+    NSUInteger _seqCounter;        // 单调递增的句子序号分配器
+    NSUInteger _displayedSeq;      // 当前画面对应的 seq
+    NSUInteger _pendingSeq;        // 最新一句待翻译的 seq
     BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
     CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
 }
@@ -1562,63 +1657,88 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 
 // ===== 原子配对显示 =====
 // 背景：翻译是异步的（网络往返 0.5~2s），而 ASR 每 4~5s 就换一句。
-// 旧实现把「显示英文」和「回填中文」当成两个独立事件：
-//   t=0  ASR 给出 A → 画面显示英文 A
-//   t=1  ASR 给出 B → 画面显示英文 B（中文还没回来）
-//   t=2  A 的译文回来 → 中文 A 贴到英文 B 上（半英半中）
-// 若再对「请求文本」和「当前文本」做相等校验，则译文又会被全部丢弃（一直全英文）。
-// 正确做法：英文与中文【成对】渲染 —— 译文没到就不动画面，
-// 译文到了整对切换。这样画面里英文和中文永远属于同一句。
-- (void)showPending:(NSString *)origin {
+// v1.0.80 的「原子配对」实现有致命缺陷：showPending 只在「从未显示过任何内容」时
+// 才刷新画面。于是第一句之后，后续每一句 pending 都只更新 _pendingOrigin 而
+// 【不碰画面】，画面被永久冻结在第一句 —— 实测日志里 9 条 pending 只对应 1 次
+// showFailed，字幕框表现为「不轮动」。
+//
+// v1.0.81 改为 seq 配对：
+//   showPending  → 分配 seq，立刻把英文刷上屏（字幕框随语音轮动）
+//   showPair     → 译文回来，seq 对账通过才回填中文；seq 过时直接丢弃
+//   showFailed   → 翻译失败，seq 对账通过才确认（此时画面已是该句英文，无需重刷）
+- (NSUInteger)showPending:(NSString *)origin {
     if (!_container || !_installed) {
         LCLogF(@"overlay: show skipped (container=%d installed=%d)", _container != nil, _installed);
-        return;
+        return 0;
     }
     @try {
-        if (origin.length == 0) return;
+        if (origin.length == 0) return 0;
+        NSUInteger seq = ++_seqCounter;
         _pendingOrigin = origin;
-        // 还没有任何成对内容时（例如所有翻译都失败），至少把英文显示出来
-        if (_displayedOrigin.length == 0) {
-            _displayedOrigin = origin;
-            _displayedTranslation = nil;
-            [self renderCurrent];
-        }
-        LCLogF(@"overlay: pending origin=[%@]", origin);
+        _pendingSeq = seq;
+        // 【关键】立即刷新画面：新英文立刻上屏，字幕框随语音轮动。
+        // 译文暂时清空，等 showPair 回来再补上 —— 宁可短暂缺中文，也不能卡住不动。
+        _displayedOrigin = origin;
+        _displayedTranslation = nil;
+        _displayedSeq = seq;
+        [self renderCurrent];
+        LCLogF(@"overlay: pending seq=%lu origin=[%@]", (unsigned long)seq, origin);
+        return seq;
     } @catch (NSException *e) {
         LCLog(@"overlay: pending error");
+        return 0;
     }
 }
 
-// 翻译成功：英文 + 中文整对显示
-- (void)showPair:(NSString *)origin translation:(NSString *)translation {
+// partial（半句）只登记，不刷屏 —— 避免半句话反复顶掉完整句子
+- (void)showPartial:(NSString *)origin {
+    @try {
+        if (origin.length == 0) return;
+        _pendingOrigin = origin;
+    } @catch (NSException *e) {}
+}
+
+// 翻译成功：回填中文。seq 过期说明这句已经滚过去了，丢弃以免错配。
+- (void)showPair:(NSString *)origin translation:(NSString *)translation seq:(NSUInteger)seq {
     if (!_container || !_installed) {
         LCLogF(@"overlay: show skipped (container=%d installed=%d)", _container != nil, _installed);
         return;
     }
     @try {
         if (origin.length == 0) return;
-        if (translation.length == 0) { [self showFailed:origin]; return; }
+        if (translation.length == 0) { [self showFailed:origin seq:seq]; return; }
+        if (seq != 0 && seq < _displayedSeq) {
+            LCLogF(@"overlay: drop stale pair seq=%lu (displayed=%lu) origin=[%@]",
+                   (unsigned long)seq, (unsigned long)_displayedSeq, origin);
+            return;
+        }
         _displayedOrigin = origin;
         _displayedTranslation = translation;
-        if ([_pendingOrigin isEqualToString:origin]) _pendingOrigin = nil;
-        LCLogF(@"overlay: showPair origin=[%@] trans=[%@] transLen=%lu",
-               origin, translation, (unsigned long)translation.length);
+        _displayedSeq = seq ? seq : _displayedSeq;
+        if (seq && seq == _pendingSeq) _pendingOrigin = nil;
+        LCLogF(@"overlay: showPair seq=%lu origin=[%@] trans=[%@] transLen=%lu",
+               (unsigned long)seq, origin, translation, (unsigned long)translation.length);
         [self renderCurrent];
     } @catch (NSException *e) {
         LCLog(@"overlay: showPair error");
     }
 }
 
-// 翻译彻底失败：只显示英文，避免画面卡在上一句
-- (void)showFailed:(NSString *)origin {
+// 翻译彻底失败：画面已经是这句英文（showPending 已刷过），无需重刷，只做记账。
+- (void)showFailed:(NSString *)origin seq:(NSUInteger)seq {
     if (!_container || !_installed) return;
     @try {
         if (origin.length == 0) return;
+        if (seq != 0 && seq < _displayedSeq) {
+            LCLogF(@"overlay: drop stale fail seq=%lu (displayed=%lu)",
+                   (unsigned long)seq, (unsigned long)_displayedSeq);
+            return;
+        }
         _displayedOrigin = origin;
         _displayedTranslation = nil;
-        if ([_pendingOrigin isEqualToString:origin]) _pendingOrigin = nil;
-        LCLogF(@"overlay: showFailed origin=[%@]", origin);
-        [self renderCurrent];
+        _displayedSeq = seq ? seq : _displayedSeq;
+        if (seq && seq == _pendingSeq) _pendingOrigin = nil;
+        LCLogF(@"overlay: showFailed seq=%lu origin=[%@]", (unsigned long)seq, origin);
     } @catch (NSException *e) {
         LCLog(@"overlay: showFailed error");
     }
@@ -1765,6 +1885,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     _pendingOrigin = nil;
     _displayedOrigin = nil;
     _displayedTranslation = nil;
+    // seq 计数器【不】重置：保持单调递增，这样 hide 之前发出的译文回来时
+    // 会因 seq < _displayedSeq 被丢弃，不会把已隐藏的字幕又画回来。
 }
 
 // 快速开关提示（复用字幕条，2 秒后自动消失）
@@ -1898,13 +2020,13 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
                 [self->_accum setString:@""];
                 NSString *captureText = self->_pendingFinal;  // 捕获当前文本，防止被下一句覆盖
                 LCLogF(@"speech: final [%@] -> sending for translation", captureText);
-                [[LCSubtitleOverlay shared] showPending:captureText];
+                NSUInteger seq = [[LCSubtitleOverlay shared] showPending:captureText];
                 // 合并开关：翻译跟随总开关
                 [[LCTranslator shared] translate:captureText
                     completion:^(NSString *tr) {
                         LCLogF(@"speech: translation result len=%lu text=[%@]", (unsigned long)tr.length, tr);
-                        if (tr.length) [[LCSubtitleOverlay shared] showPair:captureText translation:tr];
-                        else [[LCSubtitleOverlay shared] showFailed:captureText];
+                        if (tr.length) [[LCSubtitleOverlay shared] showPair:captureText translation:tr seq:seq];
+                        else [[LCSubtitleOverlay shared] showFailed:captureText seq:seq];
                     }];
             }
         } else {
@@ -1918,7 +2040,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             //   ① 浪费请求（每 1s 一条），把串行队列塞满，真正的 final 排不上
             //   ② partial 的译文回来时，画面上的英文已经是另一段 → 错配
             // 所以 partial 只登记不翻译，等 final 到了再整段翻译。
-            [[LCSubtitleOverlay shared] showPending:text];
+            // 也不能刷屏：partial 是半句话，顶掉画面上的完整句子会闪烁。
+            [[LCSubtitleOverlay shared] showPartial:text];
         }
     }];
 }
@@ -2021,13 +2144,16 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     const AudioStreamBasicDescription *asbdP = CMAudioFormatDescriptionGetStreamBasicDescription(fmt);
     if (!asbdP) return;
     AudioStreamBasicDescription asbd = *asbdP;
-    LCLogF(@"asbr: got buffer sr=%u ch=%u fmt=0x%x (%s) frames=%lld",
-           (unsigned)asbd.mSampleRate, (unsigned)asbd.mChannelsPerFrame,
-           (unsigned)asbd.mFormatID,
-           asbd.mFormatID == kAudioFormatLinearPCM ? "LPCM" :
-           asbd.mFormatID == 'aac ' ? "AAC" :
-           asbd.mFormatID == 'mp4a' ? "MP4A" : "other",
-           (long long)CMSampleBufferGetNumSamples(sbuf));
+    // 高频路径：每个音频 buffer 都会进来，必须节流，否则日志每秒数千行
+    if (LCLogThrottled(@"asbr", 3.0)) {
+        LCLogF(@"asbr: got buffer sr=%u ch=%u fmt=0x%x (%s) frames=%lld",
+               (unsigned)asbd.mSampleRate, (unsigned)asbd.mChannelsPerFrame,
+               (unsigned)asbd.mFormatID,
+               asbd.mFormatID == kAudioFormatLinearPCM ? "LPCM" :
+               asbd.mFormatID == 'aac ' ? "AAC" :
+               asbd.mFormatID == 'mp4a' ? "MP4A" : "other",
+               (long long)CMSampleBufferGetNumSamples(sbuf));
+    }
     if (asbd.mSampleRate <= 0) return;
     if (![[LCHttpASR shared] isRunning]) {
         gProcessingFormat = asbd;
@@ -2157,12 +2283,14 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
         LCLogF(@"audio: dec set default fpp=1024");
     }
 
-    LCLogF(@"audio: dec in sr=%.0f fmt=0x%08x ch=%u fpp=%u len=%zu",
-           inASBD2.mSampleRate, (unsigned)inASBD2.mFormatID,
-           (unsigned)inASBD2.mChannelsPerFrame, (unsigned)inASBD2.mFramesPerPacket, dataLen);
+    if (LCLogThrottled(@"decin", 3.0)) {
+        LCLogF(@"audio: dec in sr=%.0f fmt=0x%08x ch=%u fpp=%u len=%zu",
+               inASBD2.mSampleRate, (unsigned)inASBD2.mFormatID,
+               (unsigned)inASBD2.mChannelsPerFrame, (unsigned)inASBD2.mFramesPerPacket, dataLen);
+    }
 
-    // 打印数据头部，判断封装格式
-    {
+    // 打印数据头部，判断封装格式（节流：hex 字符串构建本身也有开销）
+    if (LCLogThrottled(@"dechex", 10.0)) {
         NSMutableString *hex = [NSMutableString string];
         size_t nHex = MIN(dataLen, 16);
         for (size_t i = 0; i < nHex; i++) [hex appendFormat:@"%02x ", (uint8_t)dataPtr[i]];
@@ -2375,7 +2503,9 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
             }
         }
     }
-    LCLogF(@"audio: dec pkts=%u", (unsigned)descCount);
+    if (LCLogThrottled(@"decpkts", 3.0)) {
+        LCLogF(@"audio: dec pkts=%u", (unsigned)descCount);
+    }
 
     // 计算输出缓冲大小
     // 关键：压缩格式(AAC)下 CMSampleBufferGetNumSamples 返回的是【包数】，
@@ -2463,7 +2593,9 @@ static OSStatus LCInputProc(AudioConverterRef conv, UInt32 *numPackets,
     free(outData);
     [[LCHttpASR shared] appendMonoFloat:mono frames:producedFrames];
     free(mono);
-    LCLogF(@"audio: decoded %u frames", (unsigned)producedFrames);
+    if (LCLogThrottled(@"decframes", 3.0)) {
+        LCLogF(@"audio: decoded %u frames", (unsigned)producedFrames);
+    }
 }
 
 - (void)stop {
@@ -3428,7 +3560,7 @@ static void LCInit(void) {
         for (int mi = 0; mpaths[mi]; mi++) {
             FILE *mf = fopen(mpaths[mi], "a");
             if (mf) {
-                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.80) ===\n");
+                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.81) ===\n");
                 fprintf(mf, "[%lld] ctor ran: prog=%s path=%s\n", (long long)time(NULL), exe, mpaths[mi]);
                 fflush(mf);
                 fclose(mf);
