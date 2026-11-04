@@ -553,6 +553,128 @@ def check_v83_fixes(src, panel_src=None):
 PANEL = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                       "PrefBundle", "LiveCapPrefs.m")
 
+
+
+def _strip_comments_strings(src):
+    """剥离注释与字符串字面量（与 scan_compile_risk.py 同源实现）
+
+    必须剥离后再做关键词检查 —— 否则注释里写一句
+    「// 用了 bringSubviewToFront」就会让检查项误判通过，
+    双向验证已实测过这个坑。
+    """
+    out = []
+    i = 0
+    n = len(src)
+    state = None
+    while i < n:
+        c = src[i]
+        nxt = src[i + 1] if i + 1 < n else ""
+        if state is None:
+            if c == "/" and nxt == "/":
+                state = "line"; out.append("  "); i += 2; continue
+            if c == "/" and nxt == "*":
+                state = "block"; out.append("  "); i += 2; continue
+            if c == '"':
+                state = '"'; out.append(" "); i += 1; continue
+            if c == "'":
+                state = "'"; out.append(" "); i += 1; continue
+            out.append(c); i += 1; continue
+        if state == "line":
+            if c == "\n":
+                state = None; out.append("\n")
+            else:
+                out.append(" ")
+            i += 1; continue
+        if state == "block":
+            if c == "*" and nxt == "/":
+                state = None; out.append("  "); i += 2; continue
+            out.append("\n" if c == "\n" else " "); i += 1; continue
+        if state == '"':
+            if c == "\\":
+                out.append("  "); i += 2; continue
+            if c == '"':
+                state = None; out.append(" ")
+            else:
+                out.append("\n" if c == "\n" else " ")
+            i += 1; continue
+        if state == "'":
+            if c == "\\":
+                out.append("  "); i += 2; continue
+            if c == "'":
+                state = None; out.append(" ")
+            else:
+                out.append("\n" if c == "\n" else " ")
+            i += 1; continue
+    return "".join(out)
+
+def check_v84_fixes(src, panel_src=None):
+    """v1.0.84 关键修复的回归拦截
+
+    用户实测反馈：「基本可以 然后翻译有点延迟，还有就是全屏的时候字幕框好像显示不出来」
+
+    拦截点：
+      1. ASR 分片时长必须可配置（不得退回固定 5 秒 —— 设备实测 RTT ≈ 音频时长）
+      2. 必须有毫秒级 RTT 打点（否则无法定位延迟究竟在网络还是服务端）
+      3. 必须调用 bringSubviewToFront（全屏 VC 的 view 在 subviews 末尾，会盖住字幕）
+      4. 必须调用 ensureInBestWindow（全屏新建 window 时字幕要跟着搬过去）
+      5. 必须有位置钳制（竖屏拖动位置转横屏后会跑出屏幕）
+    """
+    # 关键：必须在【剥离注释与字符串】后的代码里做关键词检查，
+    # 否则注释里的关键词会让检查项形同虚设（双向验证已实测过这个坑）。
+    code = _strip_comments_strings(src)
+
+    # ---- 1) 分片时长可配置 ----
+    if "asrChunkSeconds" not in code:
+        errors.append("v1.0.84 回归: 缺少 asrChunkSeconds 配置 —— "
+                      "ASR 分片时长必须可配置（设备实测 RTT ≈ 音频时长 × 1.1）")
+    else:
+        m = re.search(r"double\s+chunkSecs\s*=\s*([^;]+);", code)
+        if not m:
+            errors.append("v1.0.84 回归: 未找到 chunkSecs 赋值 —— "
+                          "ASR 分片必须走可配置时长")
+        elif "asrChunkSeconds" not in m.group(1):
+            errors.append("v1.0.84 回归: chunkSecs 被写死为 %s —— "
+                          "必须使用 [[LCConfig shared] asrChunkSeconds]" % m.group(1).strip())
+        # 所有分片阈值判断都必须引用 chunkSecs，不能再写死 5.0 / 10.0
+        for mm in re.finditer(r"secs\s*>=\s*([0-9]+\.?[0-9]*)", code):
+            errors.append("v1.0.84 回归 行%d: 分片阈值仍写死 %s 秒 —— "
+                          "必须改用 chunkSecs（延迟与分片长度成正比）"
+                          % (code[:mm.start()].count("\n") + 1, mm.group(1)))
+        # 两条音频入口路径（appendBufferList / appendMonoFloat）都必须改
+        if len(re.findall(r"secs\s*>=\s*chunkSecs", code)) < 2:
+            errors.append("v1.0.84 回归: 只有部分音频入口改用了 chunkSecs —— "
+                          "appendBufferList: 与 appendMonoFloat: 两条路径都要改")
+
+    # ---- 2) 毫秒级 RTT 打点 ----
+    # 注意：RTT 打点写在日志格式串里，_strip_comments_strings 会连字符串字面量一起剥掉，
+    #       所以这里必须在【原始源码】里找（格式串不会出现在注释里）。
+    if not re.search(r"asr:\s*rtt=", src):
+        errors.append("v1.0.84 回归: 缺少毫秒级 RTT 打点 —— "
+                      "设备日志只有秒级精度，无法定位延迟在网络还是服务端")
+
+    # ---- 3) bringSubviewToFront（必须是真实调用语句，不是注释）----
+    if not re.search(r"\[\s*parent\s+bringSubviewToFront\s*:\s*_container\s*\]", code):
+        errors.append("v1.0.84 回归: 缺少 [parent bringSubviewToFront:_container] 调用 —— "
+                      "YouTube 全屏 VC 的 view 在 subviews 末尾，会盖住字幕框")
+
+    # ---- 4) ensureInBestWindow ----
+    # 要求【所有】调用点都在：源码有 2 处（渲染前提到最上层 + key window 变化回调），
+    # 只保留一处不足以覆盖「全屏新建 window」的两种触发路径。
+    ensure_calls = len(re.findall(r"\[\s*self\s+ensureInBestWindow\s*\]", code))
+    if ensure_calls < 2:
+        errors.append("v1.0.84 回归: [self ensureInBestWindow] 调用点只有 %d 处（需 ≥2）—— "
+                      "渲染时与 key window 变化时都要重新挂载，否则全屏新建 window "
+                      "后字幕留在旧 window 里看不见" % ensure_calls)
+    if "UIWindowDidBecomeKeyNotification" not in code:
+        errors.append("v1.0.84 回归: 缺少 UIWindowDidBecomeKeyNotification 监听 —— "
+                      "全屏新建 window 时需要及时把字幕搬过去")
+
+    # ---- 5) 位置钳制 ----
+    if not re.search(r"f\.origin\.y\s*=\s*MIN\(\s*MAX\(", code):
+        errors.append("v1.0.84 回归: 缺少位置钳制 —— "
+                      "竖屏拖动位置转横屏后字幕会跑出屏幕外（全屏时看不见）")
+
+
 def main():
     try:
         src = read_src()
@@ -576,6 +698,7 @@ def main():
     check_objc_type_hazards(src)
     check_v83_fixes(src, panel_src)
 
+    check_v84_fixes(src, panel_src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -595,6 +718,7 @@ def main():
     print("  OK: v1.0.81 修复在位（轮动刷新/快模型+竞速/日志节流/缓存归属）")
     print("  OK: v1.0.82 修复在位（默认只显示中文/英文标签收起/保留上一句/FIFO 队列）")
     print("  OK: v1.0.83 修复在位（showBilingual 语义/统一配置通道/容器尺寸不再冻结/测量扣内边距）")
+    print("  OK: v1.0.84 修复在位（分片时长可配置/毫秒RTT打点/提到最上层/跟随新window/位置钳制）")
     return 0
 
 

@@ -142,6 +142,7 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) BOOL showEnglish;   // 是否同时显示英文原文（默认 NO：只显示中文一行）
 @property (readonly) CGFloat manualX;
 @property (readonly) CGFloat manualY;
+@property (readonly) double asrChunkSeconds;   // v1.0.84：ASR 分片时长（秒）
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y;
 - (void)writeConfig:(NSMutableDictionary *)d;
 - (void)setSourceLang:(NSString *)lang forBundle:(NSString *)bid;
@@ -308,6 +309,18 @@ static NSString *LCJBRootPath(NSString *path) {
         if (v && [v doubleValue] >= 0 && [v doubleValue] <= 1) return [v doubleValue];
     }
     return 0.35;
+}
+
+// v1.0.84：ASR 分片时长（秒）。
+// 依据：设备日志显示 ASR RTT ≈ 音频时长 × 1.1（5.11s→5.6s，7.2s→10s），
+// 分片越长延迟越大。默认 2.5 秒：RTT ≈ 2.8s，比 5 秒分片省约 2.8 秒。
+// 允许范围 1.0~8.0 秒；配 0 或非法值时回退到默认 2.5。
+- (double)asrChunkSeconds {
+    NSNumber *v = _d[@"asrChunkSeconds"];
+    if (!v) return 2.5;
+    double s = [v doubleValue];
+    if (s < 1.0 || s > 8.0) return 2.5;
+    return s;
 }
 
 // v1.0.83：统一的配置写回通道。
@@ -1152,13 +1165,19 @@ static BOOL gProcessingFormatValid = NO;
             [_pcm appendBytes:tmp length:frames * sizeof(float)];
             free(tmp);
 
-            // 每 ~5 秒切一段送「一句话识别」
+            // v1.0.84：分片时长从固定 5 秒改为可配置，默认 2.5 秒。
+            // 依据（设备日志实证）：ASR RTT ≈ 音频时长 × 1.1
+            //   5.11s 音频 → RTT 5.6s；7.20s 音频 → RTT 10s
+            // 分片减半 → RTT 近似减半 → 字幕延迟从 ~6s 降到 ~3s。
+            // 代价：句子被切碎的概率上升。为补偿，保留 overlap 重叠区
+            // （下一段开头复用上一段末尾的音频），避免词被切断。
+            double chunkSecs = [[LCConfig shared] asrChunkSeconds];
             double secs = (double)_pcm.length / sizeof(float) / _inRate;
-            if (secs >= 5.0 && !_inFlight) {
+            if (secs >= chunkSecs && !_inFlight) {
                 NSData *chunk = [_pcm copy];
                 [_pcm setLength:0];
                 [self processChunk:chunk];
-            } else if (secs >= 10.0) {
+            } else if (secs >= chunkSecs * 2.0) {
                 // 上次请求未完成：丢弃过量累积防止内存膨胀
                 [_pcm setLength:0];
             }
@@ -1291,9 +1310,16 @@ static BOOL gProcessingFormatValid = NO;
                 req.timeoutInterval = 10.0;
 
                 LCLogF(@"asr: sending %lu bytes (%@)", (unsigned long)wav.length, eng);
+                // v1.0.84：毫秒级打点。
+                // 设备日志只有秒级精度，无法区分「RTT 4s」是网络还是服务端，
+                // 这次加上毫秒计时，下次实测直接读数字。
+                NSTimeInterval t0 = [NSDate date].timeIntervalSince1970;
                 NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
                     completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
                     _inFlight = NO;
+                    NSTimeInterval rttMs = ([NSDate date].timeIntervalSince1970 - t0) * 1000.0;
+                    LCLogF(@"asr: rtt=%.0fms audio=%.2fs bytes=%lu",
+                           rttMs, (double)wav.length / 32000.0, (unsigned long)wav.length);
                     if (err) {
                         LCLogF(@"asr: req err %@", err);
                         return;
@@ -1346,12 +1372,17 @@ static BOOL gProcessingFormatValid = NO;
     if (!mono || frames == 0) return;
     @autoreleasepool {
         [_pcm appendBytes:mono length:frames * sizeof(float)];
+        // v1.0.84：分片时长与 appendBufferList: 保持一致（可配置，默认 2.5 秒）。
+        // 依据（设备日志实证）：ASR RTT ≈ 音频时长 × 1.1，
+        // 分片越长延迟越大；5 秒分片 → RTT 5.6s，2.5 秒分片 → RTT 约 2.8s。
+        double chunkSecs = [[LCConfig shared] asrChunkSeconds];
         double secs = (double)_pcm.length / sizeof(float) / _inRate;
-        if (secs >= 5.0 && !_inFlight) {
+        if (secs >= chunkSecs && !_inFlight) {
             NSData *chunk = [_pcm copy];
             [_pcm setLength:0];
             [self processChunk:chunk];
-        } else if (secs >= 10.0) {
+        } else if (secs >= chunkSecs * 2.0) {
+            // 上次请求未完成：丢弃过量累积防止内存膨胀
             [_pcm setLength:0];
         }
     }
@@ -1649,12 +1680,137 @@ static BOOL gProcessingFormatValid = NO;
         // 把手也跟着不可见 —— 表现为「字幕框没有、右上角没有白点」。
         [self layoutInitialFrame];
 
+        // v1.0.84：注册窗口变化监听（全屏/旋转时重新布局 + 提到最上层）
+        [self observeWindowChanges];
+
         LCLog("overlay: installed");
     } @catch (NSException *e) {
         LCLog("overlay: install error");
         _container = nil;
         _installed = NO;
     }
+}
+
+// v1.0.84：找出当前应该承载字幕的 window。
+// 优先用 key window：YouTube 全屏若新建 window，那个新 window 会成为 key，
+// 我们必须跟着搬过去，否则字幕留在旧 window 里被完全盖住。
+// 注意：键盘 window 的 windowLevel 很高但不是 key，且不是我们的目标 ——
+//       所以只用 key window 判定，不按 windowLevel 挑。
+- (UIWindow *)bestHostWindow {
+    UIApplication *app = [UIApplication sharedApplication];
+    UIWindow *key = nil;
+    for (UIScene *scene in app.connectedScenes) {
+        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        for (UIWindow *w in ws.windows) {
+            if (w.isKeyWindow && !w.hidden && w.alpha > 0.01) { key = w; break; }
+        }
+        if (key) break;
+    }
+    if (key) return key;
+    // 兜底：遍历 app.windows 找 key
+    for (UIWindow *w in app.windows) {
+        if (w.isKeyWindow && !w.hidden) return w;
+    }
+    // 再兜底：第一个有 rootViewController 的可见 window
+    for (UIScene *scene in app.connectedScenes) {
+        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        for (UIWindow *w in ws.windows) {
+            if (!w.hidden && w.rootViewController && w.rootViewController.view) return w;
+        }
+    }
+    return nil;
+}
+
+// v1.0.84：确保 container 挂在正确的 window 上。
+// 全屏新建 window 时把 container 搬过去（保留相对位置比例）。
+- (void)ensureInBestWindow {
+    if (!_container) return;
+    UIWindow *host = [self bestHostWindow];
+    if (!host) return;
+    if (_container.superview == host) return;
+    UIWindow *old = _container.window;
+    // 记录迁移前的相对位置比例，迁移后按新窗口尺寸还原
+    CGFloat oldW = old ? old.bounds.size.width : 0;
+    CGFloat oldH = old ? old.bounds.size.height : 0;
+    CGFloat relX = 0.5, relY = 0.5;
+    if (oldW > 0 && oldH > 0) {
+        relX = _container.center.x / oldW;
+        relY = _container.center.y / oldH;
+    }
+    @try {
+        [_container removeFromSuperview];
+        [host addSubview:_container];
+        // 按新窗口尺寸还原相对位置
+        CGPoint c = CGPointMake(relX * host.bounds.size.width,
+                                relY * host.bounds.size.height);
+        _container.center = c;
+        _userCenter = c;
+        LCLogF(@"overlay: re-homed to new window (old=%@ new=%@ size=%@)",
+               NSStringFromClass([old class]), NSStringFromClass([host class]),
+               NSStringFromCGRect(host.bounds));
+    } @catch (NSException *e) {
+        LCLog(@"overlay: re-home error");
+    }
+}
+
+// v1.0.84：把字幕 container 提到所在 window 的最顶层。
+// 解决「YouTube 全屏时字幕被全屏 VC 的 view 盖住」的问题。
+- (void)bringToFrontIfNeeded {
+    // 先确保挂在正确的 window 上（全屏新建 window 的情况）
+    [self ensureInBestWindow];
+    UIView *parent = _container.superview;
+    if (!parent) return;
+    // 已经是最后一个 subview 就没必要再动（避免每次渲染都触发重排）
+    if (parent.subviews.lastObject == _container) return;
+    @try {
+        [parent bringSubviewToFront:_container];
+        LCLogF(@"overlay: brought to front (parent=%@ subviews=%lu)",
+               NSStringFromClass([parent class]), (unsigned long)parent.subviews.count);
+    } @catch (NSException *e) {
+        LCLog(@"overlay: bringToFront error");
+    }
+}
+
+// v1.0.84：窗口尺寸/可见性变化监听。
+// 全屏播放时 window bounds 会从竖屏 393x852 变成横屏 852x393，
+// 若不重新布局，字幕会按旧的竖屏尺寸排版（宽度过大、位置偏移）。
+- (void)observeWindowChanges {
+    static BOOL registered = NO;
+    if (registered) return;
+    registered = YES;
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+    // UIWindowDidBecomeVisible：全屏 VC 出现后把我们提到最上层
+    [nc addObserverForName:UIWindowDidBecomeVisibleNotification
+                    object:nil queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self bringToFrontIfNeeded];
+            [self renderCurrent];
+            LCLogF(@"overlay: window became visible, re-layout (super=%@)",
+                   NSStringFromCGRect(_container.superview.bounds));
+        });
+    }];
+    // 尺寸变化：旋转 / 全屏切换都会触发
+    [nc addObserverForName:UIWindowDidChangeFrameNotification
+                    object:nil queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self renderCurrent];
+        });
+    }];
+    // v1.0.84：key window 变化 = 全屏新建了 window → 必须把字幕搬过去
+    [nc addObserverForName:UIWindowDidBecomeKeyNotification
+                    object:nil queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self ensureInBestWindow];
+            [self renderCurrent];
+            LCLogF(@"overlay: key window changed -> re-homed (super=%@)",
+                   NSStringFromCGRect(_container.superview.bounds));
+        });
+    }];
 }
 
 // 初始化字幕框位置/尺寸（ASR 尚未出结果时也保证可见）
@@ -1925,6 +2081,15 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             _transLabel.attributedText = LCStrokedText(translation, tc, _transLabel.font);
         }
 
+        // ===== v1.0.84：全屏字幕不显示 =====
+        // 根因：YouTube 全屏播放时会 present 一个全屏 VC，
+        //       该 VC 的 view 被加到 window 的 subviews【末尾】= 最上层，
+        //       把我们挂在 window 上的字幕 container 直接盖住。
+        // 现象：竖屏能显示，一进全屏字幕就消失。
+        // 修复：每次渲染前把 container 提到 window 最顶层。
+        // 代价：可忽略（一次 bringSubviewToFront）。
+        [self bringToFrontIfNeeded];
+
         CGFloat fs = [LCConfig shared].fontSize;
         CGFloat margin = 16;
         // 尺寸基于 superview（现在是 keyWindow），
@@ -1983,6 +2148,15 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             f.size = CGSizeMake(w, h);
             // 保持中心点不变（用户拖到的位置），只改尺寸
             f.origin = CGPointMake(_userCenter.x - w / 2.0, _userCenter.y - h / 2.0);
+            // v1.0.84：把 container 钳制在宿主 bounds 内。
+            // 竖屏 (393x852) 拖到 (189,320)，转横屏 (852x393) 后
+            // 320 + 高度/2 可能超出底边 → 字幕被推出屏幕（全屏时看不见）。
+            CGFloat minX = w / 2.0;
+            CGFloat maxX = MAX(sw - w / 2.0, minX);
+            CGFloat minY = h / 2.0;
+            CGFloat maxY = MAX(sh - h / 2.0, minY);
+            f.origin.x = MIN(MAX(f.origin.x, minX - w / 2.0), maxX - w / 2.0);
+            f.origin.y = MIN(MAX(f.origin.y, minY - h / 2.0), maxY - h / 2.0);
             _container.frame = f;
             _userCenter = _container.center;
         } else {

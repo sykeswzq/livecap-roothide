@@ -178,7 +178,7 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) return 4;
     if (section == 1) return 2;  // 腾讯云 SecretId / SecretKey
-    if (section == 2) return 5;  // 字号 / 粗体 / 文字颜色 / 背景样式 / 显示英文原文
+    if (section == 2) return 6;  // 字号 / 粗体 / 文字颜色 / 背景样式 / 识别分片 / 显示英文原文
     return 0;
 }
 
@@ -247,7 +247,15 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
             cell.textLabel.text = @"背景样式";
             cell.detailTextLabel.text = [self lc_bgStyleTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        } else if (indexPath.row == 4) {
+            // v1.0.84：ASR 分片时长（秒）—— 直接影响字幕延迟
+            cell.textLabel.text = @"识别分片";
+            double cs = [(NSNumber *)LCGet(@"asrChunkSeconds") doubleValue];
+            if (cs < 1.0 || cs > 8.0) cs = 2.5;
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"%.1f 秒", cs];
+            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else {
+            // row == 5：显示英文原文
             // v1.0.82：默认只显示中文一行；打开后恢复「英文原文 + 中文翻译」两行
             cell.textLabel.text = @"显示英文原文";
             UISwitch *sw = [[UISwitch alloc] init];
@@ -350,6 +358,26 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
             LCSet(@(v), @"fontSize");
             [self.lc_tv reloadData];
         }]];
+        [self presentViewController:alert animated:YES completion:nil];
+    }
+    else if (indexPath.section == 2 && indexPath.row == 4) {
+        // v1.0.84：ASR 分片时长选择
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"识别分片时长"
+                                                                       message:@"分片越短字幕延迟越低，但句子越容易被切断"
+                                                                preferredStyle:UIAlertControllerStyleActionSheet];
+        NSArray *opts = @[@1.5, @2.5, @3.5, @5.0];
+        for (NSNumber *v in opts) {
+            double s = [v doubleValue];
+            NSString *title = [NSString stringWithFormat:@"%.1f 秒%@", s,
+                               (s == 2.5 ? @"（推荐）" : @"")];
+            [alert addAction:[UIAlertAction actionWithTitle:title
+                                                      style:UIAlertActionStyleDefault
+                                                    handler:^(UIAlertAction *a) {
+                LCSet(@(s), @"asrChunkSeconds");
+                [self.lc_tv reloadData];
+            }]];
+        }
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 2 && indexPath.row == 2) {

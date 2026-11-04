@@ -35,6 +35,8 @@ if [ ! -f "$CFG" ]; then
 	<string>frost</string>
 	<key>showBilingual</key>
 	<false/>
+	<key>asrChunkSeconds</key>
+	<real>2.5</real>
 	<key>manualPositions</key>
 	<dict/>
 	<key>tencentSecretId</key>
@@ -64,6 +66,23 @@ if [ -f "$CFG" ]; then
       || sed -i '' 's|agnes-3.0-flash|agnes-2.5-flash|g' "$CFG" 2>/dev/null
     rm -f "$CFG.bak"
     echo "model migrated: agnes-3.0-flash -> agnes-2.5-flash" >> "$LOG"
+  fi
+fi
+
+# ===== v1.0.84：ASR 分片时长默认值 =====
+# 依据：设备日志实测 ASR RTT ≈ 音频时长 × 1.1（5.11s→5.6s，7.2s→10s），
+# 分片越长字幕延迟越大。默认 2.5 秒 → RTT 约 2.8 秒。
+# 只在键不存在时写入（不覆盖用户已改过的值）。
+if [ -f "$CFG" ]; then
+  if ! plutil -convert xml1 "$CFG" 2>>"$LOG"; then
+    echo "WARNING: plutil convert failed, asrChunkSeconds default skipped" >> "$LOG"
+  else
+    if ! grep -q "<key>asrChunkSeconds</key>" "$CFG" 2>/dev/null; then
+      plutil -type real -value 2.5 -key asrChunkSeconds "$CFG" 2>>"$LOG" \
+        && echo "config: asrChunkSeconds default 2.5" >> "$LOG" \
+        || echo "WARNING: write asrChunkSeconds failed" >> "$LOG"
+    fi
+    plutil -convert binary1 "$CFG" 2>>"$LOG"
   fi
 fi
 
