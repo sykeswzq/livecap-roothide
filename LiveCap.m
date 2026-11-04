@@ -1215,6 +1215,7 @@ static BOOL gProcessingFormatValid = NO;
     CGPoint _dragStartCenter;
     NSString *_lastTranslation;   // 保留最近一次翻译，避免被下一轮 ASR 的 nil 覆盖
     NSString *_lastOrigin;
+    CFAbsoluteTime _lastTranslationTime; // 记录翻译完成时间，用于超时清除
     BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
     CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
 }
@@ -1451,8 +1452,15 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         if (translation.length) {
             _lastTranslation = translation;
             _lastOrigin = origin;
+            _lastTranslationTime = CFAbsoluteTimeGetCurrent();
         } else if (origin.length) {
-            translation = _lastTranslation;   // 复用上一句的中文，等新翻译回来再替换
+            // 超时清除：缓存翻译超过 3 秒未更新则丢弃，避免"半英半中"（新旧句错配）
+            CFAbsoluteTime elapsed = CFAbsoluteTimeGetCurrent() - _lastTranslationTime;
+            if (elapsed > 3.0) {
+                LCLogF(@"overlay: stale translation cleared (elapsed=%.1fs)", elapsed);
+                _lastTranslation = nil;
+            }
+            translation = _lastTranslation;
             _lastOrigin = origin;
         }
 
@@ -1584,6 +1592,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
 
 - (void)hide {
     _container.hidden = YES;
+    _lastTranslation = nil;  // 隐藏时清除缓存翻译
+    _lastTranslationTime = 0;
 }
 
 // 快速开关提示（复用字幕条，2 秒后自动消失）
@@ -1715,13 +1725,14 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             if ([self->_accum length] > 0) {
                 self->_pendingFinal = [self->_accum copy];
                 [self->_accum setString:@""];
-                LCLogF(@"speech: final [%@] -> sending for translation", self->_pendingFinal);
-                [[LCSubtitleOverlay shared] showOriginal:self->_pendingFinal translation:nil];
+                NSString *captureText = self->_pendingFinal;  // 捕获当前文本，防止被下一句覆盖
+                LCLogF(@"speech: final [%@] -> sending for translation", captureText);
+                [[LCSubtitleOverlay shared] showOriginal:captureText translation:nil];
                 // 合并开关：翻译跟随总开关
-                [[LCTranslator shared] translate:self->_pendingFinal
+                [[LCTranslator shared] translate:captureText
                     completion:^(NSString *tr) {
                         LCLogF(@"speech: translation result len=%lu text=[%@]", (unsigned long)tr.length, tr);
-                        if (tr.length) [[LCSubtitleOverlay shared] showOriginal:self->_pendingFinal translation:tr];
+                        if (tr.length) [[LCSubtitleOverlay shared] showOriginal:captureText translation:tr];
                     }];
             }
         } else {
@@ -1732,9 +1743,10 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             self->_lastPartialAt = now;
             [[LCSubtitleOverlay shared] showOriginal:text translation:nil];
             // 合并开关：翻译跟随总开关
-            [[LCTranslator shared] translate:text
+            NSString *captureText = text;  // 捕获当前文本，防止被下一句覆盖
+            [[LCTranslator shared] translate:captureText
                 completion:^(NSString *tr) {
-                    if (tr.length) [[LCSubtitleOverlay shared] showOriginal:text translation:tr];
+                    if (tr.length) [[LCSubtitleOverlay shared] showOriginal:captureText translation:tr];
                 }];
         }
     }];
@@ -3210,35 +3222,42 @@ static void LCLazyInit(void) {
 __attribute__((constructor))
 static void LCInit(void) {
     // 纯 C 诊断：构造函数第一行就写文件，不依赖 ObjC
+    const char *exe = getprogname();
+    if (!exe) return;
+    
+    // 写入 /var/mobile/Documents/（越狱设备可写）
     const char *diag_path = "/var/mobile/Documents/livecap_ctor.log";
     FILE *df = fopen(diag_path, "a");
     if (df) {
-        fprintf(df, "=== LCInit ctor called at %ld ===\n", (long)time(NULL));
+        fprintf(df, "=== LCInit ctor called at %ld prog=%s ===\n", (long)time(NULL), exe);
         fflush(df);
         fclose(df);
     }
+    
+    // 也尝试写入应用沙盒 Documents 目录
+    @autoreleasepool {
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        if (paths.count) {
+            NSString *sandboxPath = [paths[0] stringByAppendingPathComponent:@"livecap_ctor_sandbox.log"];
+            FILE *sf = fopen([sandboxPath UTF8String], "a");
+            if (sf) {
+                fprintf(sf, "=== LCInit sandbox ctor at %ld ===\n", (long)time(NULL));
+                fflush(sf);
+                fclose(sf);
+            }
+        }
+    }
 
-    const char *exe = getprogname();
-    if (!exe) return;
-    char m[256];
-    snprintf(m, sizeof(m), "ctor: prog=%s", exe);
-    LCLog(m);
-
-    // 系统音频守护进程：先纯 C 写文件验证注入+可写路径，再延迟 2s 启用音频 tap。
-    // 注意：绝不能在构造器内同步 rebind_symbols —— dlopen 早期 dyld image 列表未就绪会段错误（已实测 -11 崩溃）。
+    // 系统音频守护进程检查
     if (strcmp(exe, "mediaserverd") == 0) {
-        // 探测可写路径（纯 C，不依赖 ObjC）：/var/log → /var/mobile/Documents → /tmp → /var/jb 系列
-        const char *mpaths[] = { "/var/log/livecap_media.log",
+        // 探测可写路径
+        const char *mpaths[] = { "/tmp/livecap_media.log",
                                  "/var/mobile/Documents/livecap_media.log",
-                                 "/tmp/livecap_media.log",
-                                 "/var/jb/var/log/livecap_media.log",
-                                 "/var/jb/tmp/livecap_media.log",
-                                 "/var/mobile/Library/Preferences/livecap_media.log",
                                  NULL };
         for (int mi = 0; mpaths[mi]; mi++) {
             FILE *mf = fopen(mpaths[mi], "a");
             if (mf) {
-                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.28) ===\n");
+                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.77) ===\n");
                 fprintf(mf, "[%lld] ctor ran: prog=%s path=%s\n", (long long)time(NULL), exe, mpaths[mi]);
                 fflush(mf);
                 fclose(mf);
