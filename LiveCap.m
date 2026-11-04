@@ -432,15 +432,20 @@ static NSString *LCJBRootPath(NSString *path) {
     // 现在改为 FIFO 队列，每句都保证有回调；队列过长时丢【最旧】的
     // （它已经落后于语音太多，显示出来反而是错的）。
     dispatch_async(_queue, ^{
-        [self->_pendingItems addObject:@{@"text": trimmed, @"comp": completion ?: [NSNull null]}];
+        // 注意：completion 是 block 类型，不能写成 completion ?: [NSNull null]
+        //   —— ?: 运算符要求两侧类型一致，block 与 NSNull* 混用会编译报错
+        //      (incompatible operand types: 'void (^)(NSString *)' and 'NSNull *')
+        // 这里统一用 id 承载，取出时再显式 cast 回 block。
+        id compBox = completion ? (id)completion : (id)[NSNull null];
+        [self->_pendingItems addObject:@{@"text": trimmed, @"comp": compBox}];
         const NSUInteger kMaxQueue = 3;
         while (self->_pendingItems.count > kMaxQueue) {
             NSDictionary *dropped = self->_pendingItems.firstObject;
             [self->_pendingItems removeObjectAtIndex:0];
             id dc = dropped[@"comp"];
             LCLogF(@"translate: queue overflow, drop oldest text=[%@]", dropped[@"text"]);
-            if (dc != [NSNull null]) {
-                void (^dcomp)(NSString *) = dc;
+            if (dc && dc != [NSNull null]) {
+                void (^dcomp)(NSString *) = (void (^)(NSString *))dc;
                 dispatch_async(dispatch_get_main_queue(), ^{ dcomp(nil); });
             }
         }
@@ -458,7 +463,10 @@ static NSString *LCJBRootPath(NSString *path) {
     NSString *text = item[@"text"];
     if (!text.length) { [self pumpQueue]; return; }
     id rawComp = item[@"comp"];
-    void (^comp)(NSString *) = (rawComp != [NSNull null]) ? rawComp : nil;
+    void (^comp)(NSString *) = nil;
+    if (rawComp && rawComp != [NSNull null]) {
+        comp = (void (^)(NSString *))rawComp;
+    }
 
     NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [[LCConfig shared] targetLang], text];
     NSString *cached = nil;

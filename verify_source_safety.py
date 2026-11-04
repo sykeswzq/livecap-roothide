@@ -320,6 +320,69 @@ def check_v82_fixes(src):
                           "静默 return 会让这句的 completion 永不执行（中文整句丢失）")
 
 
+def check_objc_type_hazards(src):
+    """拦截 Objective-C 编译期类型错误（本机无 xcrun，无法本地编译，
+    只能靠静态扫描 + CI 兜底；CI 一次往返 3~5 分钟，反复试错代价太高）。
+
+    已踩过的坑：
+      LiveCap.m:435  error: incompatible operand types
+        ('void (^)(NSString *__strong)' and 'NSNull * _Nonnull')
+      根因：?: 运算符要求两侧类型一致，block 与 NSNull* 混用直接编译报错。
+    """
+    # 0) 先剥掉注释行 —— 注释里的示例代码（如「不能写成 completion ?: [NSNull null]」）
+    #    会造成误报
+    code_lines = []
+    for ln in src.split("\n"):
+        st = ln.lstrip()
+        if st.startswith("//"):
+            code_lines.append("")
+        else:
+            code_lines.append(ln)
+    code = "\n".join(code_lines)
+
+    # 1) ?: 两侧出现 block 字面量
+    #    正确匹配 ?: 表达式：cond ? A : B
+    #    （注意 A 允许为空 —— `completion ?: [NSNull null]` 是最危险的那种）
+    TERNARY = re.compile(r"([A-Za-z_][\w\.\[\]]*)\s*\?\s*([^:;\n]*?)\s*:\s*([^;\n]+)")
+    for m in TERNARY.finditer(code):
+        a, b = m.group(2).strip(), m.group(3).strip()
+        if "^(NSString" in a or "^(NSString" in b:
+            line = code[:m.start()].count("\n") + 1
+            errors.append(
+                "编译错误风险 行%d: ?: 两侧混用 block 字面量 —— "
+                "?: 要求两侧类型一致（block vs NSNull* 会报 incompatible operand types）"
+                % line)
+
+    # 2) ?: 一侧是 NSNull、另一侧不是 —— 但两侧都显式 cast 成 id 的写法是合法的
+    #    （id compBox = completion ? (id)completion : (id)[NSNull null];）
+    #    只有【未 cast】时才是编译错误。
+    for m in TERNARY.finditer(code):
+        a, b = m.group(2).strip(), m.group(3).strip()
+        if ("NSNull" in a) == ("NSNull" in b):
+            continue
+        # 两侧都显式 cast 成 id → 合法
+        if a.startswith("(id)") and b.startswith("(id)"):
+            continue
+        line = code[:m.start()].count("\n") + 1
+        errors.append(
+            "编译错误风险 行%d: ?: 一侧是 NSNull 另一侧不是 —— "
+            "block 与 NSNull* 类型不兼容（两侧都要 cast 成 id）" % line)
+
+    # 3) block 变量从容器取出后未显式 cast（id -> block 需要 cast）
+    for m in re.finditer(r"void \(\^(\w+)\)\([^)]*\)\s*=\s*\([^)]*\)\s*(\w+)\[", code):
+        line = code[:m.start()].count("\n") + 1
+        if "(void (^)" not in m.group(0):
+            errors.append("编译错误风险 行%d: %s 从容器取出后未显式 cast 成 block"
+                          % (line, m.group(1)))
+
+    # 4) 从 id 直接赋值给 block 变量（缺 cast 会报 incompatible pointer types）
+    for m in re.finditer(r"void \(\^(\w+)\)\([^)]*\)\s*=\s*(\w+)\[", code):
+        name, srcvar = m.group(1), m.group(2)
+        line = code[:m.start()].count("\n") + 1
+        errors.append("编译错误风险 行%d: %s 直接由 %s[...] 赋值 —— "
+                      "必须显式 cast 成 block 类型" % (line, name, srcvar))
+
+
 def main():
     try:
         src = read_src()
@@ -333,6 +396,7 @@ def main():
     check_required_features(src)
     check_v81_fixes(src)
     check_v82_fixes(src)
+    check_objc_type_hazards(src)
 
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
