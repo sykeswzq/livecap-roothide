@@ -153,18 +153,21 @@ for sym, anchor, repl in B4_CASES:
     if not hit:
         sys.exit(1)
 
-# ---- B5: AudioConverter 回调签名改回 size_t ----
-bad = mutate(
-    BASE_SRC,
-    "static UInt32 LCAACInputProc(void *inRefCon",
-    "static size_t LCAACInputProc(void *inRefCon",
-    "B5")
-errs = run_check(bad, BASE_PLIST, BASE_POST)
-hit = [e for e in errs if "LCAACInputProc" in e]
-print("  [B5] LCAACInputProc 返回 size_t -> %s"
-      % ("拦截 ✅" if hit else "❌ 没拦住！"))
-if not hit:
-    sys.exit(1)
+# ---- B5: AudioConverter 回调签名改回错误类型 ----
+# CI 实证：SDK 头文件 AudioConverter.h:866 要求的是 OSStatus(int)，
+# 用 UInt32 / size_t 都会报 incompatible function pointer types。
+for wrong in ["size_t", "UInt32"]:
+    bad = mutate(
+        BASE_SRC,
+        "static OSStatus LCAACInputProc(void *inRefCon",
+        "static %s LCAACInputProc(void *inRefCon" % wrong,
+        "B5-" + wrong)
+    errs = run_check(bad, BASE_PLIST, BASE_POST)
+    hit = [e for e in errs if "LCAACInputProc" in e]
+    print("  [B5] LCAACInputProc 返回 %s -> %s"
+          % (wrong, "拦截 ✅" if hit else "❌ 没拦住！"))
+    if not hit:
+        sys.exit(1)
 
 print("")
 print("=" * 68)

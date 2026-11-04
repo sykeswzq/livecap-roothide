@@ -885,17 +885,21 @@ def check_v86_fixes(src, panel_src=None):
                 break
 
     # ---- 5) AudioConverter 回调签名必须正确 ----
+    # SDK 里 AudioConverterComplexInputDataProc / ...OutputDataProc 的签名是：
+    #   OSStatus (*)(void *inRefCon, UInt32 *ioNumberDataPackets, ...)
+    # 返回类型必须是 OSStatus(int)。用 UInt32 / size_t 都会报
+    # "incompatible function pointer types"。
     if "LCAACInputProc" in code:
-        if not re.search(r"static\s+UInt32\s+LCAACInputProc\s*\(", code):
+        if not re.search(r"static\s+OSStatus\s+LCAACInputProc\s*\(", code):
             errors.append(
-                "v1.0.86 回归: LCAACInputProc 返回类型不是 UInt32 —— "
-                "AudioConverterInputDataProc 要求 UInt32 返回值，"
-                "用 size_t 会报 incompatible function pointer types。")
+                "v1.0.86 回归: LCAACInputProc 返回类型不是 OSStatus —— "
+                "AudioConverterComplexInputDataProc 要求 OSStatus 返回值，"
+                "用 UInt32/size_t 会报 incompatible function pointer types。")
     if "LCAACOutputProc" in code:
-        if not re.search(r"static\s+UInt32\s+LCAACOutputProc\s*\(", code):
+        if not re.search(r"static\s+OSStatus\s+LCAACOutputProc\s*\(", code):
             errors.append(
-                "v1.0.86 回归: LCAACOutputProc 返回类型不是 UInt32 —— "
-                "AudioConverterOutputDataProc 要求 UInt32 返回值。")
+                "v1.0.86 回归: LCAACOutputProc 返回类型不是 OSStatus —— "
+                "AudioConverterComplexOutputDataProc 要求 OSStatus 返回值。")
 
 
 def main():

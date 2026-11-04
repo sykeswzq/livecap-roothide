@@ -65,11 +65,11 @@ typedef struct {
 } LCPcmCursor;
 
 // AudioConverter 输入回调：把 PCM16 分片喂给编码器
-// 签名必须是 AudioConverterInputDataProc：
-//   UInt32 (*)(void *inRefCon, UInt32 *ioNumberDataPackets, void **outData)
-// 注意返回类型是 UInt32 而不是 size_t —— 用错会在 CI 报
+// 签名必须严格等于 AudioConverterComplexInputDataProc：
+//   OSStatus (*)(void *inRefCon, UInt32 *ioNumberDataPackets, void **outData)
+// 返回类型是 OSStatus(int)，不是 UInt32 / size_t —— 用错 CI 会报
 // "incompatible function pointer types"。
-static UInt32 LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **ioData) {
+static OSStatus LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **ioData) {
     LCPcmCursor *cur = (LCPcmCursor *)inRefCon;
     size_t remain = cur->len - cur->pos;
     size_t want = (size_t)(*ioNumDataPackets) * 2;   // 每包 2 字节（16bit mono）
@@ -82,8 +82,8 @@ static UInt32 LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **io
 }
 
 // AudioConverter 输出回调：把编码好的 AAC 帧收集起来
-static UInt32 LCAACOutputProc(void *inRefCon, UInt32 *ioNumDataPackets,
-                             const AudioBufferList **ioData) {
+static OSStatus LCAACOutputProc(void *inRefCon, UInt32 *ioNumDataPackets,
+                               const AudioBufferList **ioData) {
     NSMutableData *out = (__bridge NSMutableData *)inRefCon;
     const AudioBufferList *abl = *ioData;
     if (abl && abl->mNumberBuffers > 0) {
