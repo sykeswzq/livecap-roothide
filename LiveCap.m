@@ -274,6 +274,12 @@ static NSString *LCJBRootPath(NSString *path) {
 @interface LCTranslator : NSObject
 + (instancetype)shared;
 - (void)translate:(NSString *)text completion:(void (^)(NSString *result))completion;
+// 带重试的 OpenAI 兼容翻译（网络超时自动重试，最多 3 次）
+- (void)openaiTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
+               cacheKey:(NSString *)cacheKey
+               apiKey:(NSString *)apiKey apiBase:(NSString *)apiBase
+                  model:(NSString *)model attempt:(NSInteger)attempt
+             completion:(void (^)(NSString *result))completion;
 @end
 
 @implementation LCTranslator {
@@ -448,11 +454,14 @@ static NSString *LCShortLang(NSString *lc) {
                  cacheKey:(NSString *)cacheKey completion:(void (^)(NSString *result))completion {
     NSString *src = LCShortLang([LCConfig shared].sourceLang);
     NSString *dst = LCShortLang(target);
+    // 关键：langpair 的分隔符 | 属于 URL 保留字符，必须百分号编码，
+    // 否则 NSURL 报 -1002 (unsupported URL)，MyMemory 永远失败
+    NSString *langPair = [NSString stringWithFormat:@"%@%%7C%@", src, dst];
     NSString *urlStr = [NSString stringWithFormat:
-        @"https://api.mymemory.translated.net/get?q=%@&langpair=%@|%@",
+        @"https://api.mymemory.translated.net/get?q=%@&langpair=%@",
         [text stringByAddingPercentEncodingWithAllowedCharacters:
             [NSCharacterSet URLQueryAllowedCharacterSet]],
-        src, dst];
+        langPair];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
     [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
     req.timeoutInterval = 12.0;
@@ -582,6 +591,18 @@ static NSString *LCTmtLang(NSString *lcLang) {
                apiKey:(NSString *)apiKey apiBase:(NSString *)apiBase
                   model:(NSString *)model
              completion:(void (^)(NSString *result))completion {
+    [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
+                   apiKey:apiKey apiBase:apiBase model:model attempt:0 completion:completion];
+}
+
+// 带重试的内部实现：agnes 网关存在间歇性超时（实测约 3 成请求 -1001），
+// 单次失败直接顺延到下一个 provider 会导致「一直显示英文」，
+// 因此对网络类错误（超时/连接失败）在同一 provider 上重试。
+- (void)openaiTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
+               cacheKey:(NSString *)cacheKey
+               apiKey:(NSString *)apiKey apiBase:(NSString *)apiBase
+                  model:(NSString *)model attempt:(NSInteger)attempt
+             completion:(void (^)(NSString *result))completion {
     if (text.length > 1800) text = [text substringToIndex:1800];
     NSString *trimmedModel = model.length ? model : @"agnes-2.5-flash";
     // 动态 max_tokens：每行最多 96 token，最少 256，最多 2048
@@ -627,11 +648,29 @@ static NSString *LCTmtLang(NSString *lcLang) {
     req.HTTPBody = payload;
     req.timeoutInterval = 15.0;
 
-    LCLogF(@"translate: openai request url=%@ model=%@", chatUrl, trimmedModel);
+    LCLogF(@"translate: openai request url=%@ model=%@ attempt=%ld", chatUrl, trimmedModel, (long)attempt);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
         if (taskErr) {
-            LCLogF(@"translate: openai req err %@ url=%@", taskErr, chatUrl);
+            LCLogF(@"translate: openai req err %@ url=%@ attempt=%ld", taskErr, chatUrl, (long)attempt);
+            // 网络类错误（超时/连接中断）→ 退避后重试同一 provider
+            BOOL retryable = ([taskErr.domain isEqualToString:NSURLErrorDomain] &&
+                              (taskErr.code == NSURLErrorTimedOut ||
+                               taskErr.code == NSURLErrorNetworkConnectionLost ||
+                               taskErr.code == NSURLErrorCannotConnectToHost ||
+                               taskErr.code == NSURLErrorCannotFindHost ||
+                               taskErr.code == NSURLErrorDNSLookupFailed));
+            if (retryable && attempt < 2) {
+                NSTimeInterval delay = 0.8 * (attempt + 1);
+                LCLogF(@"translate: openai retry in %.1fs (attempt %ld -> %ld)", delay, (long)attempt, (long)(attempt + 1));
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                               dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
+                                   apiKey:apiKey apiBase:apiBase model:model
+                                  attempt:attempt + 1 completion:completion];
+                });
+                return;
+            }
             if (completion) completion(nil);
             return;
         }
@@ -770,6 +809,8 @@ static BOOL gProcessingFormatValid = NO;
 + (instancetype)shared;
 - (void)install;
 - (void)showOriginal:(NSString *)origin translation:(NSString *)translation;
+// 判断「发起翻译时的英文」与「当前英文」是否算同一句（防翻译错配）
+- (BOOL)origin:(NSString *)req matchesCurrent:(NSString *)cur;
 - (void)hide;
 - (void)showToast:(NSString *)text;
 @end
@@ -1215,6 +1256,7 @@ static BOOL gProcessingFormatValid = NO;
     CGPoint _dragStartCenter;
     NSString *_lastTranslation;   // 保留最近一次翻译，避免被下一轮 ASR 的 nil 覆盖
     NSString *_lastOrigin;
+    NSString *_lastRequestedOrigin; // 最近一次【发起翻译】时的英文，用于回填配对校验
     CFAbsoluteTime _lastTranslationTime; // 记录翻译完成时间，用于超时清除
     BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
     CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
@@ -1436,6 +1478,20 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     return as;
 }
 
+// 判断「发起翻译时的英文」与「当前显示的英文」是否算同一句
+// ASR 是增量累积的：同一句话的后续片段会以原句为前缀，
+// 因此只要一方是另一方的前缀，或前 40 字符高度重合，就认为是同一句。
+- (BOOL)origin:(NSString *)req matchesCurrent:(NSString *)cur {
+    if (!req.length || !cur.length) return YES;
+    if ([req isEqualToString:cur]) return YES;
+    if ([cur hasPrefix:req]) return YES;
+    if ([req hasPrefix:cur]) return YES;
+    // 取较短者的前 40 字符比较（覆盖识别微调的情况）
+    NSUInteger n = MIN(40, MIN(req.length, cur.length));
+    if (n < 10) return NO;
+    return [[req substringToIndex:n] isEqualToString:[cur substringToIndex:n]];
+}
+
 - (void)showOriginal:(NSString *)origin translation:(NSString *)translation {
     if (!_container || !_installed) {
         LCLogF(@"overlay: show skipped (container=%d installed=%d)", _container != nil, _installed);
@@ -1443,6 +1499,20 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     }
     @try {
         if (origin.length == 0 && translation.length == 0) return;
+
+        // ===== 翻译回填前的配对校验 =====
+        // 翻译往返 1-3 秒，期间 ASR 可能已经产出新句子。
+        // 若直接回填，A 句的中文会贴到 B 句的英文上（半英半中）。
+        // 判定：只有当【当前英文】与【发起翻译时的英文】是同一句
+        // （互为前缀 / 高度重合）时才允许回填，否则丢弃这次翻译。
+        if (translation.length && _lastRequestedOrigin.length && origin.length) {
+            BOOL same = [self origin:_lastRequestedOrigin matchesCurrent:origin];
+            if (!same) {
+                LCLogF(@"overlay: drop mismatched translation req=[%@] cur=[%@]",
+                       _lastRequestedOrigin, origin);
+                return;
+            }
+        }
 
         // 竞态修复：ASR 每轮先调 showOriginal(text, nil) 显示英文原文，
         // 翻译要几秒后才回填。若这期间又来新一轮 ASR，翻译会被 nil 覆盖，
@@ -1463,6 +1533,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             translation = _lastTranslation;
             _lastOrigin = origin;
         }
+        _lastRequestedOrigin = origin;
 
         LCLogF(@"overlay: show origin=[%@] trans=[%@] transLen=%lu", origin, translation, (unsigned long)translation.length);
         UIColor *tc = [[LCConfig shared] textColor];
@@ -1594,6 +1665,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
     _container.hidden = YES;
     _lastTranslation = nil;  // 隐藏时清除缓存翻译
     _lastTranslationTime = 0;
+    _lastRequestedOrigin = nil;
 }
 
 // 快速开关提示（复用字幕条，2 秒后自动消失）
@@ -3257,7 +3329,7 @@ static void LCInit(void) {
         for (int mi = 0; mpaths[mi]; mi++) {
             FILE *mf = fopen(mpaths[mi], "a");
             if (mf) {
-                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.78) ===\n");
+                fprintf(mf, "=== LiveCap mediaserverd tap (1.0.79) ===\n");
                 fprintf(mf, "[%lld] ctor ran: prog=%s path=%s\n", (long long)time(NULL), exe, mpaths[mi]);
                 fflush(mf);
                 fclose(mf);
