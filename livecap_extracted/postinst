@@ -1,0 +1,152 @@
+#!/bin/sh
+# postinst：预写默认配置 + 让设置面板能改写 filter + 刷新注入缓存
+LOG=/var/mobile/Documents/livecap_install.log
+mkdir -p /var/mobile/Documents
+chmod 777 /var/mobile/Documents
+echo "=== postinst $(date) ===" > "$LOG"
+
+# 默认配置（面板与 tweak 共用 /var/mobile/Library/Preferences/com.sykes.livecap.plist）
+CFG=/var/mobile/Library/Preferences/com.sykes.livecap.plist
+if [ ! -f "$CFG" ]; then
+  cat > "$CFG" << 'CFGEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>enabled</key>
+	<true/>
+	<key>sourceLang</key>
+	<string>en-US</string>
+	<key>targetLang</key>
+	<string>zh-CN</string>
+	<key>apiBase</key>
+	<string>https://apihub.agnes-ai.cn/v1</string>
+	<key>apiKey</key>
+	<string>sk-ZunoSlgppZBgp19GwuQe6OiJiO2427oGnP4J60Ny30pS0n19</string>
+	<key>model</key>
+	<string>agnes-3.0-flash</string>
+	<key>fontSize</key>
+	<string>16</string>
+	<key>boldText</key>
+	<false/>
+	<key>textColorHex</key>
+	<string>#FFFFFFFF</string>
+	<key>backgroundStyle</key>
+	<string>frost</string>
+	<key>manualPositions</key>
+	<dict/>
+	<key>tencentSecretId</key>
+	<string></string>
+	<key>tencentSecretKey</key>
+	<string></string>
+</dict>
+</plist>
+CFGEOF
+  chmod 666 "$CFG"
+  echo "config written" >> "$LOG"
+fi
+
+# 腾讯云密钥由用户在设置面板填写（或 ssh 直写 plist），不硬编码进公开仓库
+if [ -f "$CFG" ]; then
+  chmod 666 "$CFG"
+  echo "config ensured" >> "$LOG"
+fi
+
+# 面板写入后 cfprefsd 缓存问题：强制重读，保证面板/tweak 读到的都是最新
+killall -9 cfprefsd 2>/dev/null || true
+
+# ===== roothide 注入修复 =====
+DYLIB_PATH="/var/jb/Library/MobileSubstrate/DynamicLibraries"
+AUTOPATCHES_DIR="/usr/lib/DynamicPatches"
+AUTOPATCHES_FILE="$AUTOPATCHES_DIR/AutoPatches.dylib"
+
+# 1. 修复 dylib 和 plist 权限
+if [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
+  chown mobile:staff "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chown dylib OK" >> "$LOG"
+  chmod 755 "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chmod dylib OK" >> "$LOG"
+else
+  echo "ERROR: LiveCap.dylib not found at $DYLIB_PATH" >> "$LOG"
+fi
+
+if [ -f "$DYLIB_PATH/LiveCap.plist" ]; then
+  chown mobile:staff "$DYLIB_PATH/LiveCap.plist" 2>/dev/null && echo "chown plist OK" >> "$LOG"
+  chmod 666 "$DYLIB_PATH/LiveCap.plist" 2>/dev/null && echo "chmod plist OK" >> "$LOG"
+else
+  echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
+fi
+
+# 2. 创建 roothidepatch 软链接（关键修复）
+ROOTHIDE_PATCH="$DYLIB_PATH/LiveCap.dylib.roothidepatch"
+if [ ! -L "$ROOTHIDE_PATCH" ]; then
+  # 软链接不存在，创建它
+  ln -sf "$AUTOPATCHES_FILE" "$ROOTHIDE_PATCH" 2>/dev/null
+  if [ -L "$ROOTHIDE_PATCH" ]; then
+    chown mobile:staff "$ROOTHIDE_PATCH" 2>/dev/null
+    chmod 777 "$ROOTHIDE_PATCH" 2>/dev/null
+    echo "roothidepatch symlink created" >> "$LOG"
+  else
+    echo "ERROR: Failed to create roothidepatch symlink" >> "$LOG"
+  fi
+else
+  echo "roothidepatch symlink exists" >> "$LOG"
+fi
+
+# 3. 确保 AutoPatches.dylib 存在
+if [ ! -f "$AUTOPATCHES_FILE" ]; then
+  echo "WARNING: AutoPatches.dylib not found at $AUTOPATCHES_FILE" >> "$LOG"
+  echo "Please install roothidepatch package first:" >> "$LOG"
+  echo "  dpkg -i /path/to/com.roothidepatch.deb" >> "$LOG"
+else
+  echo "AutoPatches.dylib found at $AUTOPATCHES_FILE" >> "$LOG"
+fi
+
+# ===== 代码签名自愈 =====
+# 背景：若打包流程里 ldid 签名后还修改了 Mach-O header（install_name patch），
+# CodeDirectory 哈希会失效，设备端加载报 "code signature invalid (errno=85)"，
+# 表现为 tweak 完全不注入、无任何日志。这里在安装时强制重签一次，确保可加载。
+LDID=""
+for l in /usr/bin/ldid /var/jb/usr/bin/ldid /var/jb/usr/sbin/ldid; do
+  [ -x "$l" ] && LDID="$l" && break
+done
+if [ -n "$LDID" ]; then
+  echo "ldid found: $LDID" >> "$LOG"
+  for f in "$DYLIB_PATH/LiveCap.dylib" \
+           "/var/jb/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"; do
+    if [ -f "$f" ]; then
+      "$LDID" -S "$f" >> "$LOG" 2>&1 && echo "re-sign OK: $f" >> "$LOG" \
+        || echo "re-sign FAILED: $f" >> "$LOG"
+    fi
+  done
+else
+  echo "WARNING: ldid not found, cannot re-sign dylib" >> "$LOG"
+fi
+
+# 加入越狱 trustcache（若有 jbctl），确保内核信任该签名
+JBC=""
+for j in /usr/bin/jbctl /basebin/jbctl /var/jb/usr/bin/jbctl; do
+  [ -x "$j" ] && JBC="$j" && break
+done
+if [ -n "$JBC" ] && [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
+  "$JBC" trustcache add "$DYLIB_PATH/LiveCap.dylib" >> "$LOG" 2>&1 \
+    && echo "trustcache add OK" >> "$LOG" \
+    || echo "trustcache add skipped/failed" >> "$LOG"
+fi
+
+# 检查权限（诊断用）
+echo "--- file permissions ---" >> "$LOG"
+ls -la "$DYLIB_PATH/" >> "$LOG" 2>&1
+
+# 刷新图标缓存 + 让注入生效（重启 runningboardd 清理残留注入状态）
+for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
+  if [ -x "$k" ]; then "$k" runningboardd >> "$LOG" 2>&1 || true; break; fi
+done
+killall runningboardd 2>/dev/null || true
+
+# mediaserverd system audio tap: restart daemon to load dylib (audio blips briefly, normal)
+killall mediaserverd 2>/dev/null || true
+
+# 等待进程重启
+sleep 2
+
+echo "=== postinst done ===" >> "$LOG"
+exit 0

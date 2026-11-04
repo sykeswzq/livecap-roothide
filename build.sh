@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.84
+VER=1.0.85
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -34,6 +34,7 @@ xcrun --sdk iphoneos clang \
   -install_name "$NEWID" \
   -framework UIKit -framework Foundation -framework AVFoundation \
   -framework Speech -framework MediaToolbox -framework AudioToolbox -framework CoreGraphics \
+  -framework CFNetwork \
   -arch arm64e \
   -mios-version-min=13.0 \
   -isysroot "$SDK" \

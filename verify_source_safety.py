@@ -692,6 +692,106 @@ def check_v84_fixes(src, panel_src=None):
                           % (line, bad))
 
 
+def check_v85_fixes(src, panel_src=None):
+    """v1.0.85 关键修复的回归拦截
+
+    用户实测反馈：「还是翻译速度有点慢 然后全屏的时候字幕框太宽了」
+
+    设备实测（2026-11-04）：
+      ASR RTT ≈ 1.1 × 音频秒数（5.11s→5.5s，2.56s→4.2~5.3s）
+      翻译 RTT ≈ 0.82s（mymemory 赢竞速）→ 翻译只占 20%，ASR 占 80%
+
+    拦截点：
+      1. ASR 必须允许并发（BOOL _inFlight 串行 → 计数器）
+      2. ASR 两条路径都必须走 AAC 压缩（漏改任一条 = 没修）
+      3. AAC 编码失败 / 被腾讯云拒绝 → 必须能回退 WAV
+      4. ASR 必须用直连 session（禁用系统代理）+ 失败回退代理
+      5. 字幕框宽度必须有绝对上限（否则全屏时铺满整屏）
+      6. pcm16 路径不得写死 5 秒分片（v1.0.84 漏改过）
+    """
+    code = _strip_comments_strings(src)
+
+    # ---- 1) 并发控制 ----
+    if re.search(r"BOOL\s+_inFlight\b", code):
+        errors.append("v1.0.85 回归: 仍用 BOOL _inFlight 串行锁 —— "
+                      "串行时 ASR 吞吐只有 0.91 实时率，字幕永远追不上语音，"
+                      "必须改成计数器 + 并发上限")
+    if "LC_ASR_MAX_CONCURRENCY" not in code:
+        errors.append("v1.0.85 回归: 缺少 LC_ASR_MAX_CONCURRENCY 并发上限常量")
+    elif "LC_ASR_MAX_CONCURRENCY" in code:
+        m = re.search(r"LC_ASR_MAX_CONCURRENCY\s*=\s*(\d+)", code)
+        if not m:
+            errors.append("v1.0.85 回归: LC_ASR_MAX_CONCURRENCY 未赋常量值")
+        elif int(m.group(1)) < 2:
+            errors.append("v1.0.85 回归: 并发上限为 %s —— 必须 ≥2，"
+                          "否则串行排队问题依旧" % m.group(1))
+    # 并发判定必须真的用上计数
+    conc = len(re.findall(r"_inFlightCount\s*<\s*LC_ASR_MAX_CONCURRENCY", code))
+    if conc < 2:
+        errors.append("v1.0.85 回归: 并发判定只出现 %d 处（需 ≥2）—— "
+                      "appendBufferList: / appendMonoFloat: 两条音频入口都要改" % conc)
+    # 释放槽位必须防负数
+    if not re.search(r"if\s*\(\s*_inFlightCount\s*>\s*0\s*\)\s*_inFlightCount--", code):
+        errors.append("v1.0.85 回归: 并发计数释放未防负数 —— "
+                      "多次 DONE 会让计数变负，之后所有请求都会被判定为「槽位满」")
+
+    # ---- 2) AAC 压缩（两条路径都要有）----
+    aac_calls = len(re.findall(r"LCAACEncode16kMono\s*\(", code))
+    if aac_calls < 3:   # 1 处定义 + 2 处调用
+        errors.append("v1.0.85 回归: LCAACEncode16kMono 调用只有 %d 处（需 ≥2 处调用）—— "
+                      "processChunk: 与 processChunk16: 两条路径都要压缩，"
+                      "漏一条等于没修（v1.0.84 分片时长就漏过一条）" % aac_calls)
+    # AAC 编码器本身必须存在且设置码率
+    if "kAudioFormatMPEG4AAC" not in code:
+        errors.append("v1.0.85 回归: 缺少 AAC 编码器实现 —— "
+                      "PCM16@16k 需要 256kbps，设备上行只有约 255kbps，"
+                      "必须压缩上传才能降延迟")
+    if not re.search(r"kAudioConverterEncodeBitRate", code):
+        errors.append("v1.0.85 回归: AAC 未设置码率 —— 会用系统默认码率，体积压不下去")
+    # 两条路径都要把 VoiceFormat 动态化
+    # 注意：@"VoiceFormat" 是字符串字面量，_strip_comments_strings 会把它剥掉，
+    #       所以必须在【原始源码】里匹配（注释里写的是 VoiceFormat = "aac"，不会误判）。
+    if len(re.findall(r'@"VoiceFormat"\s*:\s*voiceFormat', src)) < 2:
+        errors.append("v1.0.85 回归: VoiceFormat 未在两条路径都动态化 —— "
+                      "必须按实际编码格式填 wav/aac")
+
+    # ---- 3) 回退机制 ----
+    # 注意用词边界 \b：否则 _aacBrokenUnused 这类改名能骗过子串检查
+    if not re.search(r"\b_aacBroken\b", code):
+        errors.append("v1.0.85 回归: 缺少 _aacBroken 标记 —— "
+                      "AAC 被腾讯云拒绝时必须能永久回退 WAV，不能整条链路挂掉")
+    if not re.search(r"\b_directFailed\b", code):
+        errors.append("v1.0.85 回归: 缺少 _directFailed 标记 —— "
+                      "直连失败时必须能永久回退走代理（用户设备开了境外代理工具）")
+
+    # ---- 4) 直连 session ----
+    if "connectionProxyDictionary" not in code:
+        errors.append("v1.0.85 回归: 缺少 connectionProxyDictionary —— "
+                      "ASR 请求仍会走系统代理，多出 2 个跨洋 RTT（约 1.5s 固定开销）")
+    if "kCFNetworkProxiesHTTPSEnable" not in code:
+        errors.append("v1.0.85 回归: 缺少 kCFNetworkProxiesHTTPSEnable —— "
+                      "HTTPS 代理没被禁用，ASR 仍走代理")
+
+    # ---- 5) 字幕框宽度上限 ----
+    if not re.search(r"MIN\(\s*hostW\s*-\s*margin\s*\*\s*2\s*,\s*[0-9.]+\s*\)", code):
+        errors.append("v1.0.85 回归: 字幕框宽度缺少绝对上限 —— "
+                      "全屏横屏时 hostW=852 会让容器宽 840 铺满整屏，"
+                      "必须加 MIN(hostW - margin*2, 460) 之类的上限")
+
+    # ---- 6) pcm16 路径不得写死分片 ----
+    if re.search(r"_pcm16\.length\s*>=\s*16000\s*\*\s*2\s*\*\s*[0-9]+", code):
+        errors.append("v1.0.85 回归: pcm16 路径仍写死分片秒数 —— "
+                      "必须改用 asrChunkSeconds 配置（v1.0.84 漏改过这一处）")
+    # secs16 必须由实际字节数算出，不能写死常量
+    m = re.search(r"double\s+secs16\s*=\s*([^;]+);", code)
+    if not m:
+        errors.append("v1.0.85 回归: 未找到 secs16 计算 —— "
+                      "pcm16 路径的分片判定必须按实际字节数算秒数")
+    elif "_pcm16.length" not in m.group(1):
+        errors.append("v1.0.85 回归: secs16 被写死为 %s —— "
+                      "必须由 _pcm16.length 实际算出秒数" % m.group(1).strip())
+
+
 def main():
     try:
         src = read_src()
@@ -716,6 +816,7 @@ def main():
     check_v83_fixes(src, panel_src)
 
     check_v84_fixes(src, panel_src)
+    check_v85_fixes(src, panel_src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")

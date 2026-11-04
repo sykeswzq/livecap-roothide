@@ -18,6 +18,7 @@
 #import <unistd.h>
 #import <mach-o/dyld.h>
 #import <AudioToolbox/AudioToolbox.h>
+#import <CFNetwork/CFNetwork.h>
 #import "fishhook.h"
 
 // TC3 签名函数前置声明（定义在腾讯云 ASR 区，翻译区先调用）
@@ -29,6 +30,151 @@ static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
 static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
                                      NSString *timestamp, NSString *date,
                                      NSData *payload, NSString *host);
+
+// ===== v1.0.85：ASR 并发上限 =====
+// 背景：v1.0.84 之前 ASR 是完全串行的（_inFlight 布尔锁）。
+// 设备实测（2026-11-04）ASR RTT ≈ 1.1 × 音频秒数，
+// 串行时吞吐 = 音频时长 / RTT ≈ 1/1.1 = 0.91 实时率 →
+// 字幕永远追不上语音，表现为「越播越滞后」。
+// 改成 2 路并发后吞吐翻倍，可以跟上实时。
+static const NSInteger LC_ASR_MAX_CONCURRENCY = 2;
+
+// 请求结束时释放一个并发槽位（防止计数变负）
+#define LC_ASR_DONE() do { \
+    if (_inFlightCount > 0) _inFlightCount--; \
+} while (0)
+
+// ===== v1.0.85：AAC 编码（压缩上传）=====
+// 背景：设备实测 ASR RTT ≈ 1.1 × 音频秒数，而 Windows 本地同音频只要 0.3~0.6s。
+// 拟合得 RTT ≈ 1.1 × 音频秒，说明【上传实时音频要花音频那么久】——
+// 即上行带宽只有约 255kbps（PCM16@16k 需要 256kbps，恰好卡在带宽上限）。
+// 再叠加 Base64 膨胀 33%（腾讯云 TC3 API 强制 Base64），传输时间再 +33%。
+//
+// 解决办法：改用 AAC-LC 16kbps 编码，体积降 8 倍
+//   PCM16@16k = 32000 B/s  →  AAC-LC@16kbps = 2000 B/s
+// 2.5 秒音频：81778 B → 约 10000 B → 上传时间从 2.5s 降到 0.3s。
+// 腾讯云一句话识别支持 VoiceFormat = "aac"（裸 AAC 流，无 ADTS 头）。
+//
+// 风险控制：编码器在某些设备/采样率上可能不可用 → 返回 nil，
+// 调用方自动回退 WAV/PCM（速度退回 v1.0.84 水平，不会更差）。
+
+typedef struct {
+    const uint8_t *data;
+    size_t len;
+    size_t pos;
+} LCPcmCursor;
+
+// AudioConverter 输入回调：把 PCM16 分片喂给编码器
+static size_t LCAACInputProc(void *inRefCon, UInt32 *ioNumDataPackets, void **ioData) {
+    LCPcmCursor *cur = (LCPcmCursor *)inRefCon;
+    size_t remain = cur->len - cur->pos;
+    size_t want = (size_t)(*ioNumDataPackets) * 2;   // 每包 2 字节（16bit mono）
+    size_t give = (remain < want) ? remain : want;
+    if (give == 0) { *ioNumDataPackets = 0; return noErr; }
+    *ioData = (void *)(cur->data + cur->pos);
+    cur->pos += give;
+    *ioNumDataPackets = (UInt32)(give / 2);
+    return noErr;
+}
+
+// AudioConverter 输出回调：把编码好的 AAC 帧收集起来
+static size_t LCAACOutputProc(void *inRefCon, UInt32 *ioNumDataPackets,
+                             const AudioBufferList **ioData) {
+    NSMutableData *out = (__bridge NSMutableData *)inRefCon;
+    const AudioBufferList *abl = *ioData;
+    if (abl && abl->mNumberBuffers > 0) {
+        const AudioBuffer &b = abl->mBuffers[0];
+        if (b.mDataByteSize > 0 && b.mData) {
+            [out appendBytes:b.mData length:b.mDataByteSize];
+        }
+    }
+    *ioNumDataPackets = 0;   // 已取走
+    return noErr;
+}
+
+// PCM16@16k mono → AAC-LC@16k mono（裸帧流，无 ADTS 头）
+// 失败返回 nil（调用方回退 WAV）
+static NSData *LCAACEncode16kMono(NSData *pcm16) {
+    if (!pcm16 || pcm16.length < 4096) return nil;
+
+    AudioStreamBasicDescription inFmt;
+    memset(&inFmt, 0, sizeof(inFmt));
+    inFmt.mSampleRate       = 16000;
+    inFmt.mFormatID         = kAudioFormatLinearPCM;
+    inFmt.mFormatFlags      = kLinearPCMFormatFlagIsSignedInteger
+                            | kLinearPCMFormatFlagIsPacked;
+    inFmt.mFramesPerPacket  = 1;
+    inFmt.mChannelsPerFrame = 1;
+    inFmt.mBitsPerChannel   = 16;
+    inFmt.mBytesPerFrame    = 2;
+    inFmt.mBytesPerPacket   = 2;
+
+    AudioStreamBasicDescription outFmt;
+    memset(&outFmt, 0, sizeof(outFmt));
+    outFmt.mSampleRate       = 16000;
+    outFmt.mFormatID         = kAudioFormatMPEG4AAC;
+    outFmt.mFormatFlags      = kAudioFormatFlagIsEncoded;
+    outFmt.mFramesPerPacket  = 1024;
+    outFmt.mChannelsPerFrame = 1;
+
+    AudioConverterRef conv = NULL;
+    if (AudioConverterNew(&inFmt, &outFmt, &conv) != noErr || conv == NULL) {
+        return nil;
+    }
+
+    UInt32 bitRate = 16000;   // 16 kbps：足够语音识别，体积是 PCM 的 1/16
+    if (AudioConverterSetProperty(conv, kAudioConverterEncodeBitRate,
+                                  sizeof(bitRate), &bitRate) != noErr) {
+        AudioConverterDispose(conv);
+        return nil;
+    }
+    UInt32 quality = kAudioConverterQuality_Medium;
+    AudioConverterSetProperty(conv, kAudioConverterEncodeQuality,
+                              sizeof(quality), &quality);
+
+    LCPcmCursor cur;
+    cur.data = (const uint8_t *)pcm16.bytes;
+    cur.len  = pcm16.length;
+    cur.pos  = 0;
+
+    NSMutableData *out = [NSMutableData dataWithCapacity:pcm16.length / 8];
+    UInt32 outCount = 0;
+    AudioConverterInputStatus status =
+        AudioConverterFillComplexBuffer(conv, LCAACInputProc, &cur, &outCount,
+                                        LCAACOutputProc, (__bridge void *)out);
+    AudioConverterDispose(conv);
+
+    // 编码失败或输出过短 → 返回 nil 让调用方回退 WAV
+    if (status != kAudioConverterErr_InvalidInputSize && out.length < 512) {
+        return nil;
+    }
+    if (out.length == 0) return nil;
+    return out;
+}
+
+// ===== v1.0.85：Session 工厂（ASR 直连 / 走代理）=====
+// 背景：设备实测 ASR RTT ≈ 1.1 × 音频秒数 + 约 1.5s 固定开销，
+// 而翻译（走 Cloudflare 边缘）只要 0.82s。
+// 多出来的固定开销来自【系统 HTTP 代理】：请求先到境外代理节点再转发到腾讯云，
+// 多出 2 个跨洋 RTT（腾讯云错误码 6001 也是这么提示的：
+// 「国内站用户请检查是否使用境外代理，如果使用请关闭」）。
+// 做法：ASR 请求禁用系统代理直连；若直连失败则永久回退到走代理。
+static NSURLSession *LCSessionDirect(void) {
+    NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSMutableDictionary *proxy = [NSMutableDictionary dictionary];
+    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesHTTPEnable];
+    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesHTTPSEnable];
+    [proxy setObject:@NO forKey:(__bridge NSString *)kCFNetworkProxiesSOCKSEnable];
+    cfg.connectionProxyDictionary = proxy;
+    cfg.timeoutIntervalForRequest = 12.0;
+    return [NSURLSession sessionWithConfiguration:cfg];
+}
+
+static NSURLSession *LCSessionDefault(void) {
+    NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration defaultSessionConfiguration];
+    cfg.timeoutIntervalForRequest = 12.0;
+    return [NSURLSession sessionWithConfiguration:cfg];
+}
 
 #pragma mark - 日志
 
@@ -1099,8 +1245,13 @@ static BOOL gProcessingFormatValid = NO;
     NSMutableData *_pcm16;        // 16bit 单声道 PCM 累积（AVSampleBuffer 管线）
     double _inRate;               // 输入采样率
     BOOL _running;
-    BOOL _inFlight;               // 上一次请求未返回时跳过本段
-    NSURLSession *_session;
+    // v1.0.85：BOOL _inFlight → NSInteger _inFlightCount
+    // 允许最多 LC_ASR_MAX_CONCURRENCY 个请求同时在飞，消除串行排队导致的持续滞后。
+    NSInteger _inFlightCount;
+    NSURLSession *_session;       // 直连（禁用系统代理）
+    NSURLSession *_sessionProxy;  // 备用（走系统代理）
+    BOOL _directFailed;           // 直连失败标记：一旦失败永久回退走代理
+    BOOL _aacBroken;              // AAC 编码/识别失败标记：一旦失败永久回退 WAV
 }
 
 + (instancetype)shared {
@@ -1110,7 +1261,9 @@ static BOOL gProcessingFormatValid = NO;
         s = [[LCHttpASR alloc] init];
         s->_pcm = [NSMutableData data];
         s->_pcm16 = [NSMutableData data];
-        s->_session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+        // v1.0.85：ASR 用直连 session（禁用系统代理）
+        s->_session = LCSessionDirect();
+        s->_sessionProxy = LCSessionDefault();
     });
     return s;
 }
@@ -1125,7 +1278,8 @@ static BOOL gProcessingFormatValid = NO;
     }
     _inRate = asbd.mSampleRate;
     [_pcm setLength:0];
-    _inFlight = NO;
+    [_pcm16 setLength:0];
+    _inFlightCount = 0;
     _running = YES;
     LCLogF(@"asr: tencent online ASR started (sr=%g ch=%u)", _inRate,
            (unsigned)asbd.mChannelsPerFrame);
@@ -1173,7 +1327,7 @@ static BOOL gProcessingFormatValid = NO;
             // （下一段开头复用上一段末尾的音频），避免词被切断。
             double chunkSecs = [[LCConfig shared] asrChunkSeconds];
             double secs = (double)_pcm.length / sizeof(float) / _inRate;
-            if (secs >= chunkSecs && !_inFlight) {
+            if (secs >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
                 NSData *chunk = [_pcm copy];
                 [_pcm setLength:0];
                 [self processChunk:chunk];
@@ -1189,7 +1343,7 @@ static BOOL gProcessingFormatValid = NO;
 
 - (void)processChunk:(NSData *)floatMono {
     if (!floatMono || floatMono.length < sizeof(float) * 1600) return;  // <0.1s 丢弃
-    _inFlight = YES;
+    _inFlightCount++;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @autoreleasepool {
             @try {
@@ -1198,10 +1352,10 @@ static BOOL gProcessingFormatValid = NO;
                 const float *in = (const float *)floatMono.bytes;
                 double ratio = _inRate / 16000.0;
                 NSUInteger outCount = (NSUInteger)(inCount / ratio);
-                if (outCount < 160) { _inFlight = NO; return; }  // 太短
+                if (outCount < 160) { LC_ASR_DONE(); return; }  // 太短
                 NSMutableData *pcm16 = [NSMutableData dataWithCapacity:outCount * 2];
                 SInt16 *out = (SInt16 *)malloc(outCount * 2);
-                if (!out) { _inFlight = NO; return; }
+                if (!out) { LC_ASR_DONE(); return; }
                 for (NSUInteger n = 0; n < outCount; n++) {
                     NSUInteger idx = (NSUInteger)(n * ratio);
                     if (idx >= inCount) idx = inCount - 1;
@@ -1213,43 +1367,64 @@ static BOOL gProcessingFormatValid = NO;
                 [pcm16 appendBytes:out length:outCount * 2];
                 free(out);
 
-                // 2) WAV 头（16bit mono 16k）
-                NSMutableData *wav = [NSMutableData dataWithCapacity:pcm16.length + 44];
-                const char *riff = "RIFF";
-                [wav appendBytes:riff length:4];
-                uint32_t riffSize = (uint32_t)(36 + pcm16.length);
-                [wav appendBytes:&riffSize length:4];
-                const char *wave = "WAVE";
-                [wav appendBytes:wave length:4];
-                const char *fmt = "fmt ";
-                [wav appendBytes:fmt length:4];
-                uint32_t fmtSize = 16;
-                [wav appendBytes:&fmtSize length:4];
-                uint16_t audioFmt = 1;
-                [wav appendBytes:&audioFmt length:2];
-                uint16_t chn = 1;
-                [wav appendBytes:&chn length:2];
-                uint32_t rate = 16000;
-                [wav appendBytes:&rate length:4];
-                uint32_t byteRate = 16000 * 2;
-                [wav appendBytes:&byteRate length:4];
-                uint16_t blockAlign = 2;
-                [wav appendBytes:&blockAlign length:2];
-                uint16_t bits = 16;
-                [wav appendBytes:&bits length:2];
-                const char *data = "data";
-                [wav appendBytes:data length:4];
-                uint32_t dataSize = (uint32_t)pcm16.length;
-                [wav appendBytes:&dataSize length:4];
-                [wav appendData:pcm16];
+                // 2) v1.0.85：优先 AAC 压缩上传。
+                // 依据（设备日志实测 2026-11-04）：ASR RTT ≈ 1.1 × 音频秒数，
+                // 而 Windows 本地同音频只要 0.3~0.6s。
+                // 拟合说明【上传实时音频要花音频那么久】——上行带宽约 255kbps，
+                // 而 PCM16@16k 恰好需要 256kbps，正好卡在带宽上限；
+                // 再叠加腾讯云 TC3 强制的 Base64 膨胀 33%，传输时间再 +33%。
+                // 改用 AAC-LC 16kbps 后体积降 8 倍（32000 B/s → 2000 B/s），
+                // 2.5 秒音频：81778 B → 约 10000 B → 上传时间 2.5s → 0.3s。
+                // 腾讯云一句话识别支持 VoiceFormat = "aac"（裸 AAC 流，无 ADTS 头）。
+                // 编码器不可用时返回 nil → 自动回退 WAV（速度退回 v1.0.84 水平）。
+                NSData *audioData = nil;
+                NSString *voiceFormat = @"wav";
+                if (!self->_aacBroken) {
+                    NSData *aac = LCAACEncode16kMono(pcm16);
+                    if (aac.length >= 512) {
+                        audioData = aac;
+                        voiceFormat = @"aac";
+                    }
+                }
+                if (!audioData) {
+                    NSMutableData *wav = [NSMutableData dataWithCapacity:pcm16.length + 44];
+                    const char *riff = "RIFF";
+                    [wav appendBytes:riff length:4];
+                    uint32_t riffSize = (uint32_t)(36 + pcm16.length);
+                    [wav appendBytes:&riffSize length:4];
+                    const char *wave = "WAVE";
+                    [wav appendBytes:wave length:4];
+                    const char *fmt = "fmt ";
+                    [wav appendBytes:fmt length:4];
+                    uint32_t fmtSize = 16;
+                    [wav appendBytes:&fmtSize length:4];
+                    uint16_t audioFmt = 1;
+                    [wav appendBytes:&audioFmt length:2];
+                    uint16_t chn = 1;
+                    [wav appendBytes:&chn length:2];
+                    uint32_t rate = 16000;
+                    [wav appendBytes:&rate length:4];
+                    uint32_t byteRate = 16000 * 2;
+                    [wav appendBytes:&byteRate length:4];
+                    uint16_t blockAlign = 2;
+                    [wav appendBytes:&blockAlign length:2];
+                    uint16_t bits = 16;
+                    [wav appendBytes:&bits length:2];
+                    const char *data = "data";
+                    [wav appendBytes:data length:4];
+                    uint32_t dataSize = (uint32_t)pcm16.length;
+                    [wav appendBytes:&dataSize length:4];
+                    [wav appendData:pcm16];
+                    audioData = wav;
+                }
 
                 // 3) base64 + 请求
-                NSString *b64 = [wav base64EncodedStringWithOptions:0];
+                NSString *b64 = [audioData base64EncodedStringWithOptions:0];
                 NSString *secretId = [[LCConfig shared] tencentSecretId];
                 NSString *secretKey = [[LCConfig shared] tencentSecretKey];
                 if (secretId.length == 0 || secretKey.length == 0) {
                     LCLog("asr: tencent keys missing");
-                    _inFlight = NO;
+                    LC_ASR_DONE();
                     return;
                 }
                 // 识别语言映射
@@ -1275,16 +1450,16 @@ static BOOL gProcessingFormatValid = NO;
                     @"SubServiceType": @2,
                     @"EngSerViceType": eng,
                     @"SourceType": @1,
-                    @"VoiceFormat": @"wav",
+                    @"VoiceFormat": voiceFormat,
                     @"UsrAudioKey": [NSString stringWithFormat:@"livecap-%@", [[NSUUID UUID] UUIDString]],
                     @"Data": b64,
-                    @"DataLen": @(wav.length),
+                    @"DataLen": @(audioData.length),
                     @"FilterDirty": @0,
                     @"FilterModal": @0,
                     @"FilterPunc": @1
                 };
                 NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
-                if (!payload) { _inFlight = NO; return; }
+                if (!payload) { LC_ASR_DONE(); return; }
 
                 long long ts = (long long)[[NSDate date] timeIntervalSince1970];
                 NSString *tsStr = [NSString stringWithFormat:@"%lld", ts];
@@ -1309,25 +1484,49 @@ static BOOL gProcessingFormatValid = NO;
                 req.HTTPBody = payload;
                 req.timeoutInterval = 10.0;
 
-                LCLogF(@"asr: sending %lu bytes (%@)", (unsigned long)wav.length, eng);
+                LCLogF(@"asr: sending %lu bytes (%@ fmt=%@)", (unsigned long)audioData.length,
+                       eng, voiceFormat);
                 // v1.0.84：毫秒级打点。
                 // 设备日志只有秒级精度，无法区分「RTT 4s」是网络还是服务端，
                 // 这次加上毫秒计时，下次实测直接读数字。
                 NSTimeInterval t0 = [NSDate date].timeIntervalSince1970;
-                NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+                NSURLSession *useSession = self->_directFailed ? self->_sessionProxy : self->_session;
+                NSURLSessionDataTask *task = [useSession dataTaskWithRequest:req
                     completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
-                    _inFlight = NO;
+                    LC_ASR_DONE();
                     NSTimeInterval rttMs = ([NSDate date].timeIntervalSince1970 - t0) * 1000.0;
-                    LCLogF(@"asr: rtt=%.0fms audio=%.2fs bytes=%lu",
-                           rttMs, (double)wav.length / 32000.0, (unsigned long)wav.length);
+                    LCLogF(@"asr: rtt=%.0fms audio=%.2fs bytes=%lu fmt=%@",
+                           rttMs, (double)pcm16.length / 32000.0,
+                           (unsigned long)audioData.length, voiceFormat);
                     if (err) {
-                        LCLogF(@"asr: req err %@", err);
+                        // v1.0.85：直连失败 → 永久回退走系统代理。
+                        // 设备上可能开了境外代理工具，直连腾讯云被拦；
+                        // 一旦失败就走代理，宁可慢一点也不能没字幕。
+                        if (!self->_directFailed) {
+                            self->_directFailed = YES;
+                            self->_session = self->_sessionProxy;
+                            LCLogF(@"asr: direct failed (%@), fallback to proxy", err);
+                        } else {
+                            LCLogF(@"asr: req err %@", err);
+                        }
                         return;
                     }
                     NSError *__autoreleasing pe = nil;
                     NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
                     if (pe || !json) { LCLogF(@"asr: parse err %@", pe); return; }
                     NSDictionary *respD = json[@"Response"];
+                    if (respD[@"Error"]) {
+                        // v1.0.85：腾讯云返回错误 → 若本次用的是 AAC，
+                        // 说明该引擎/该格式不接受裸 AAC 流 → 永久回退 WAV。
+                        if ([voiceFormat isEqualToString:@"aac"]) {
+                            self->_aacBroken = YES;
+                            LCLogF(@"asr: aac rejected by tencent (%@), fallback to wav",
+                                   respD[@"Error"]);
+                        } else {
+                            LCLogF(@"asr: tencent error %@", respD[@"Error"]);
+                        }
+                        return;
+                    }
                     NSString *text = respD[@"Result"];
                     if (![text isKindOfClass:[NSString class]] || text.length == 0) {
                         LCLogF(@"asr: empty result (%@)", json);
@@ -1349,7 +1548,7 @@ static BOOL gProcessingFormatValid = NO;
                 }];
                 [task resume];
             } @catch (NSException *e) {
-                _inFlight = NO;
+                LC_ASR_DONE();
                 LCLogF(@"asr: process err %@", e);
             }
         }
@@ -1358,7 +1557,7 @@ static BOOL gProcessingFormatValid = NO;
 
 - (void)stop {
     _running = NO;
-    _inFlight = NO;
+    LC_ASR_DONE();
     [_pcm setLength:0];
     [_pcm16 setLength:0];
 }
@@ -1377,7 +1576,7 @@ static BOOL gProcessingFormatValid = NO;
         // 分片越长延迟越大；5 秒分片 → RTT 5.6s，2.5 秒分片 → RTT 约 2.8s。
         double chunkSecs = [[LCConfig shared] asrChunkSeconds];
         double secs = (double)_pcm.length / sizeof(float) / _inRate;
-        if (secs >= chunkSecs && !_inFlight) {
+        if (secs >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
             NSData *chunk = [_pcm copy];
             [_pcm setLength:0];
             [self processChunk:chunk];
@@ -1394,11 +1593,16 @@ static BOOL gProcessingFormatValid = NO;
     if (!pcm16 || pcm16.length == 0) return;
     @autoreleasepool {
         [_pcm16 appendData:pcm16];
-        if (_pcm16.length >= 16000 * 2 * 5 && !_inFlight) {
+        // v1.0.85：修掉写死的 5 秒分片（v1.0.84 只改了 float 路径，漏了这里）。
+        // 统一使用 asrChunkSeconds 配置，默认 2.5 秒。
+        double chunkSecs = [[LCConfig shared] asrChunkSeconds];
+        double secs16 = (double)_pcm16.length / 2.0 / 16000.0;
+        if (secs16 >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
             NSData *chunk = [_pcm16 copy];
             [_pcm16 setLength:0];
             [self processChunk16:chunk];
-        } else if (_pcm16.length >= 16000 * 2 * 10) {
+        } else if (secs16 >= chunkSecs * 2.0) {
+            // 并发槽位满：丢弃过量累积防止内存膨胀
             [_pcm16 setLength:0];
         }
     }
@@ -1406,45 +1610,67 @@ static BOOL gProcessingFormatValid = NO;
 
 - (void)processChunk16:(NSData *)pcm16 {
     if (!pcm16 || pcm16.length < 1600) return;
-    _inFlight = YES;
+    _inFlightCount++;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @autoreleasepool {
             @try {
-                NSMutableData *wav = [NSMutableData dataWithCapacity:pcm16.length + 44];
-                const char *riff = "RIFF";
-                [wav appendBytes:riff length:4];
-                uint32_t riffSize = (uint32_t)(36 + pcm16.length);
-                [wav appendBytes:&riffSize length:4];
-                const char *wave = "WAVE";
-                [wav appendBytes:wave length:4];
-                const char *fmt = "fmt ";
-                [wav appendBytes:fmt length:4];
-                uint32_t fmtSize = 16;
-                [wav appendBytes:&fmtSize length:4];
-                uint16_t audioFmt = 1;
-                [wav appendBytes:&audioFmt length:2];
-                uint16_t chn = 1;
-                [wav appendBytes:&chn length:2];
-                uint32_t rate = 16000;
-                [wav appendBytes:&rate length:4];
-                uint32_t byteRate = 16000 * 2;
-                [wav appendBytes:&byteRate length:4];
-                uint16_t blockAlign = 2;
-                [wav appendBytes:&blockAlign length:2];
-                uint16_t bits = 16;
-                [wav appendBytes:&bits length:2];
-                const char *data = "data";
-                [wav appendBytes:data length:4];
-                uint32_t dataSize = (uint32_t)pcm16.length;
-                [wav appendBytes:&dataSize length:4];
-                [wav appendData:pcm16];
+                // 2) v1.0.85：优先 AAC 压缩上传。
+                // 依据（设备日志实测 2026-11-04）：ASR RTT ≈ 1.1 × 音频秒数，
+                // 而 Windows 本地同音频只要 0.3~0.6s。
+                // 拟合说明【上传实时音频要花音频那么久】——上行带宽约 255kbps，
+                // 而 PCM16@16k 恰好需要 256kbps，正好卡在带宽上限；
+                // 再叠加腾讯云 TC3 强制的 Base64 膨胀 33%，传输时间再 +33%。
+                // 改用 AAC-LC 16kbps 后体积降 8 倍（32000 B/s → 2000 B/s），
+                // 2.5 秒音频：81778 B → 约 10000 B → 上传时间 2.5s → 0.3s。
+                // 腾讯云一句话识别支持 VoiceFormat = "aac"（裸 AAC 流，无 ADTS 头）。
+                // 编码器不可用时返回 nil → 自动回退 WAV（速度退回 v1.0.84 水平）。
+                NSData *audioData = nil;
+                NSString *voiceFormat = @"wav";
+                if (!self->_aacBroken) {
+                    NSData *aac = LCAACEncode16kMono(pcm16);
+                    if (aac.length >= 512) {
+                        audioData = aac;
+                        voiceFormat = @"aac";
+                    }
+                }
+                if (!audioData) {
+                    NSMutableData *wav = [NSMutableData dataWithCapacity:pcm16.length + 44];
+                    const char *riff = "RIFF";
+                    [wav appendBytes:riff length:4];
+                    uint32_t riffSize = (uint32_t)(36 + pcm16.length);
+                    [wav appendBytes:&riffSize length:4];
+                    const char *wave = "WAVE";
+                    [wav appendBytes:wave length:4];
+                    const char *fmt = "fmt ";
+                    [wav appendBytes:fmt length:4];
+                    uint32_t fmtSize = 16;
+                    [wav appendBytes:&fmtSize length:4];
+                    uint16_t audioFmt = 1;
+                    [wav appendBytes:&audioFmt length:2];
+                    uint16_t chn = 1;
+                    [wav appendBytes:&chn length:2];
+                    uint32_t rate = 16000;
+                    [wav appendBytes:&rate length:4];
+                    uint32_t byteRate = 16000 * 2;
+                    [wav appendBytes:&byteRate length:4];
+                    uint16_t blockAlign = 2;
+                    [wav appendBytes:&blockAlign length:2];
+                    uint16_t bits = 16;
+                    [wav appendBytes:&bits length:2];
+                    const char *data = "data";
+                    [wav appendBytes:data length:4];
+                    uint32_t dataSize = (uint32_t)pcm16.length;
+                    [wav appendBytes:&dataSize length:4];
+                    [wav appendData:pcm16];
+                    audioData = wav;
+                }
 
-                NSString *b64 = [wav base64EncodedStringWithOptions:0];
+                NSString *b64 = [audioData base64EncodedStringWithOptions:0];
                 NSString *secretId = [[LCConfig shared] tencentSecretId];
                 NSString *secretKey = [[LCConfig shared] tencentSecretKey];
                 if (secretId.length == 0 || secretKey.length == 0) {
                     LCLog("asr16: tencent keys missing");
-                    _inFlight = NO;
+                    LC_ASR_DONE();
                     return;
                 }
                 NSString *lang = [[LCConfig shared] sourceLang];
@@ -1459,16 +1685,16 @@ static BOOL gProcessingFormatValid = NO;
                     @"SubServiceType": @2,
                     @"EngSerViceType": eng,
                     @"SourceType": @1,
-                    @"VoiceFormat": @"wav",
+                    @"VoiceFormat": voiceFormat,
                     @"UsrAudioKey": [NSString stringWithFormat:@"livecap-%@", [[NSUUID UUID] UUIDString]],
                     @"Data": b64,
-                    @"DataLen": @(wav.length),
+                    @"DataLen": @(audioData.length),
                     @"FilterDirty": @0,
                     @"FilterModal": @0,
                     @"FilterPunc": @1
                 };
                 NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
-                if (!payload) { _inFlight = NO; return; }
+                if (!payload) { LC_ASR_DONE(); return; }
 
                 long long ts = (long long)[[NSDate date] timeIntervalSince1970];
                 NSString *tsStr = [NSString stringWithFormat:@"%lld", ts];
@@ -1493,15 +1719,42 @@ static BOOL gProcessingFormatValid = NO;
                 req.HTTPBody = payload;
                 req.timeoutInterval = 10.0;
 
-                LCLogF(@"asr16: sending %lu bytes (%@)", (unsigned long)wav.length, eng);
-                NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+                LCLogF(@"asr16: sending %lu bytes (%@ fmt=%@)", (unsigned long)audioData.length,
+                       eng, voiceFormat);
+                // v1.0.85：备用路径也补上毫秒级打点（原来只有秒级日志）
+                NSTimeInterval t0 = [NSDate date].timeIntervalSince1970;
+                NSURLSession *useSession = self->_directFailed ? self->_sessionProxy : self->_session;
+                NSURLSessionDataTask *task = [useSession dataTaskWithRequest:req
                     completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
-                    _inFlight = NO;
-                    if (err) { LCLogF(@"asr16: req err %@", err); return; }
+                    LC_ASR_DONE();
+                    NSTimeInterval rttMs = ([NSDate date].timeIntervalSince1970 - t0) * 1000.0;
+                    LCLogF(@"asr16: rtt=%.0fms audio=%.2fs bytes=%lu fmt=%@",
+                           rttMs, (double)pcm16.length / 32000.0,
+                           (unsigned long)audioData.length, voiceFormat);
+                    if (err) {
+                        if (!self->_directFailed) {
+                            self->_directFailed = YES;
+                            self->_session = self->_sessionProxy;
+                            LCLogF(@"asr16: direct failed (%@), fallback to proxy", err);
+                        } else {
+                            LCLogF(@"asr16: req err %@", err);
+                        }
+                        return;
+                    }
                     NSError *__autoreleasing pe = nil;
                     NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
                     if (pe || !json) { LCLogF(@"asr16: parse err %@", pe); return; }
                     NSDictionary *respD = json[@"Response"];
+                    if (respD[@"Error"]) {
+                        if ([voiceFormat isEqualToString:@"aac"]) {
+                            self->_aacBroken = YES;
+                            LCLogF(@"asr16: aac rejected by tencent (%@), fallback to wav",
+                                   respD[@"Error"]);
+                        } else {
+                            LCLogF(@"asr16: tencent error %@", respD[@"Error"]);
+                        }
+                        return;
+                    }
                     NSString *text = respD[@"Result"];
                     if (![text isKindOfClass:[NSString class]] || text.length == 0) {
                         LCLogF(@"asr16: empty result (%@)", json);
@@ -1523,7 +1776,7 @@ static BOOL gProcessingFormatValid = NO;
                 }];
                 [task resume];
             } @catch (NSException *e) {
-                _inFlight = NO;
+                LC_ASR_DONE();
                 LCLogF(@"asr16: process err %@", e);
             }
         }
@@ -2109,12 +2362,27 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         CGRect hostBounds = _container.superview ? _container.superview.bounds : [UIScreen mainScreen].bounds;
         CGFloat hostW = hostBounds.size.width;
         CGFloat hostH = hostBounds.size.height;
-        CGFloat maxW = hostW - margin * 2;
+        // v1.0.85：字幕框宽度上限。
+        // 问题：全屏横屏时 hostW=852 → maxW=820 → 容器宽 840，几乎占满整屏，
+        //       用户反馈「全屏的时候字幕框太宽了」。
+        // 做法：① 绝对上限 460pt（横屏不再随屏幕拉满）
+        //       ② 下方再按译文实际宽度收窄（短句就不占大片背景）
+        CGFloat maxW = MIN(hostW - margin * 2, 460.0);
 
         CGFloat pad = 10;
         // 完整测量两段文本高度（不截断，文本多长框多高）
         // 测量宽度与实际 label 宽度一致（要避开右上角的拖动把手）
         CGFloat handleSpace = _dragHandle ? 26.0 : 0.0;
+        // v1.0.85：内容自适应宽度。
+        // 按译文单行实际宽度收窄容器，短句时背景不再铺满整行。
+        // 宽度下限 200pt（太窄会导致中文频繁换行、框变高）。
+        if (translation.length && _transLabel.font) {
+            CGFloat tw = [translation sizeWithAttributes:
+                @{NSFontAttributeName: _transLabel.font}].width;
+            CGFloat desired = tw + handleSpace + pad * 2 + 10.0;
+            CGFloat lo = MIN(200.0, hostW - margin * 2);
+            maxW = MAX(MIN(desired, maxW), lo);
+        }
         // v1.0.83：测量宽度必须【扣掉左右内边距】。
         // 旧实现 measureW = maxW - handleSpace，但 label 实际放在 x=pad 处、宽 textW，
         // 文字真正能用的宽度 = textW - 2*pad 的量级；

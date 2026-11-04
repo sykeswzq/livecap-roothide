@@ -1,0 +1,1998 @@
+[1793769444] init: wake
+[1793769444] init: [0/4] dylib loaded in com.google.ios.youtube v21.33.6
+[1793769444] init: [1/4] swizzle avplayer
+[1793769444] hook: replaceCurrentItem OK
+[1793769444] hook: currentItem OK
+[1793769444] hook: avp init OK
+[1793769444] hook: avp initWithPlayerItem OK
+[1793769444] hook: avp initWithURL OK
+[1793769444] hook: item init(noargs) OK
+[1793769444] hook: item init OK
+[1793769444] hook: item initWithAsset OK
+[1793769444] hook: item initWithURL OK
+[1793769444] hook: setAudioMix OK
+[1793769444] hook: setMuted OK
+[1793769444] hook: setVolume OK
+[1793769444] discover: AVSampleBufferAudioRenderer has 44 methods
+[1793769444] discover:   - enqueueSampleBuffer:
+[1793769444] discover: AVSampleBufferRenderSynchronizer has 34 methods
+[1793769444] 
+[1793769444] 
+[1793769444] probe: AVAudioEngine.init OK
+[1793769444] probe: AVSampleBufferAudioRenderer.init OK
+[1793769444] hook: ASBR enqueueSampleBuffer OK
+[1793769444] probe: AVSampleBufferRenderSynchronizer.init OK
+[1793769444] probe: AVAudioPlayerNode.init OK
+[1793769444] probe: AVAudioSession.setActive OK
+[1793769444] probe: AVAudioSession.setCategory OK
+[1793769444] hook: AudioUnitSetProperty rebind=0
+[1793769444] init: [1b/4] hook AudioUnitSetProperty done
+[1793769444] init: [2/4] swizzle shortcut
+[1793769444] hook: shortcut action OK
+[1793769444] init: [3/4] install shortcut item
+[1793769444] shortcut: reinstalled (toggle+en+ja+zh)
+[1793769444] init: [4/4] speech auth + active observer
+[1793769444] speech: auth status=0
+[1793769444] speech: target app has NO speech usage description -> ‰ΩøÁî®ËÖæËÆØ‰∫ëÂú®Á∫øËØÜÂà´
+[1793769444] asr: waiting for audio format (tap prepare will call again)
+[1793769444] init: active, install overlay
+[1793769444] overlay: initial frame c=(6,286,381,36)
+[1793769444] overlay: installed
+[1793769444] init: done
+[1793769447] audio: AVSampleBufferRenderSynchronizer init 0x28289f740
+[1793769447] audio: AVSampleBufferAudioRenderer init 0x2828d97b0
+[1793769447] asbr: enqueue called sbuf=0x114094c00 self=<AVSampleBufferAudioRenderer: 0x2828d97b0> cmd=enqueueSampleBuffer:
+[1793769447] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769447] asr: tencent online ASR started (sr=44100 ch=2)
+[1793769447] audio: dec normalize aac->mp4a
+[1793769447] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4054
+[1793769447] audio: dec head[16]: 21 30 05 00 a0 1b ff c0 00 00 00 00 00 00 00 00 
+[1793769447] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769447] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4054)
+[1793769447] audio: dec pkts=10
+[1793769447] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769447] audio: decoded 10240 frames
+[1793769447] asbr: enqueue called sbuf=0x111a2dc00 self=<AVSampleBufferAudioRenderer: 0x2828d97b0> cmd=enqueueSampleBuffer:
+[1793769447] audio: dec normalize aac->mp4a
+[1793769447] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769447] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3889)
+[1793769447] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769447] asbr: enqueue called sbuf=0x1256f6650 self=<AVSampleBufferAudioRenderer: 0x2828d97b0> cmd=enqueueSampleBuffer:
+[1793769447] audio: dec normalize aac->mp4a
+[1793769447] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769447] audio: dec built 4 pkt descs from 4 sizes (eff=4, dataLen=1419)
+[1793769447] audio: dec req pkts=4096 realFrames=4096 cap=32768
+[1793769447] asbr: enqueue called sbuf=0x1111e0e00 self=<AVSampleBufferAudioRenderer: 0x2828d97b0> cmd=enqueueSampleBuffer:
+[1793769447] audio: dec normalize aac->mp4a
+[1793769447] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769447] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3673)
+[1793769447] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769447] asbr: enqueue called sbuf=0x1111e1400 self=<AVSampleBufferAudioRenderer: 0x2828d97b0> cmd=enqueueSampleBuffer:
+[1793769447] audio: dec normalize aac->mp4a
+[1793769447] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769447] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3600)
+[1793769447] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769447] audio: AVSampleBufferRenderSynchronizer init 0x2828faca0
+[1793769449] audio: AVSampleBufferRenderSynchronizer init 0x2828dbde0
+[1793769449] audio: AVAudioSession setActive 1 st=1
+[1793769449] audio: AVSampleBufferAudioRenderer init 0x282829ee0
+[1793769449] asbr: enqueue called sbuf=0x11117c200 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4044)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x112065400 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3704)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3695)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x111b01400 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3778)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x111453600 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3701)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x1120a8600 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3805)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x11145ae00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3719)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x1113e5800 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3620)
+[1793769449] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769449] asbr: enqueue called sbuf=0x1354596e0 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769449] audio: dec normalize aac->mp4a
+[1793769449] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769449] audio: dec built 4 pkt descs from 4 sizes (eff=4, dataLen=1434)
+[1793769449] audio: dec req pkts=4096 realFrames=4096 cap=32768
+[1793769450] audio: AVAudioSession setActive 1 st=1
+[1793769450] asbr: enqueue called sbuf=0x111d80c00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3915)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x111d82a00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3703)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x111dc7c00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3600)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x114014e00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3713)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x11158fa00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3780)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x11319ba00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3664)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x111648a00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3697)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x11319f600 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3715)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x1131cb200 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3845)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x116874600 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] asr: sending 162026 bytes (16k_multi_lang)
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3650)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x116862600 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3639)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x1115b9c00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3663)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x111596800 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3759)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x11137da00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3782)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x111573600 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3645)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x11205cc00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3777)
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] asbr: enqueue called sbuf=0x1168f3c00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3607
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3607)
+[1793769450] audio: dec pkts=10
+[1793769450] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769450] audio: decoded 10240 frames
+[1793769450] asbr: enqueue called sbuf=0x111f52a00 self=<AVSampleBufferAudioRenderer: 0x282829ee0> cmd=enqueueSampleBuffer:
+[1793769450] audio: dec normalize aac->mp4a
+[1793769450] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769450] audio: dec built 7 pkt descs from 7 sizes (eff=7, dataLen=2312)
+[1793769450] audio: dec req pkts=7168 realFrames=7168 cap=57344
+[1793769451] audio: AVSampleBufferRenderSynchronizer init 0x2829db1d0
+[1793769451] asr: text [Hey]
+[1793769451] overlay: layout c=(6,285,381,39) oLbl=(10,10,h=19) tLbl=(0,0,h=0) oh=19.1 th=0.0 super={{0, 0}, {393, 852}}
+[1793769451] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769451] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769451] overlay: pending seq=1 origin=[Hey]
+[1793769451] translate: race -> agnes model=agnes-2.5-flash
+[1793769451] translate: PAYLOAD len=419 head=[{"messages":[{"content":"Translate to zh-CN. Output ONLY the translation: no quotes, no explanation. The input may be a noisy speech-to-text fragment: infer the meaning and output Chinese. NEVER echo the English input; the output MUST contain Chinese characters.","role":"system"},{"content":"Hey","role":"user"}],"temperature":0.29999999999999999,"model":"agnes-2.5-flash","top_p":0.59999999999999998,"max_tokens":256}]
+[1793769451] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769451] translate: race -> mymemory
+[1793769451] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Hey&langpair=en%7Czh-CN
+[1793769451] translate: race -> tencent
+[1793769452] translate: mymemory req err Error Domain=NSURLErrorDomain Code=-1200 "ÂèëÁîü‰∫ÜSSLÈîôËØØÔºåÊó†Ê≥ïÂª∫Á´ã‰∏éËØ•ÊúçÂä°Âô®ÁöÑÂÆâÂÖ®ËøûÊé•„ÄÇ" UserInfo={NSErrorFailingURLStringKey=https://api.mymemory.translated.net/get?q=Hey&langpair=en%7Czh-CN, NSLocalizedRecoverySuggestion=‰Ω†‰ªçË¶ÅËøûÊé•Ê≠§ÊúçÂä°Âô®ÂêóÔºü, _kCFStreamErrorDomainKey=3, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <6ECFD3D5-14B5-4844-829C-E4E1BCD336B4>.<2>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <6ECFD3D5-14B5-4844-829C-E4E1BCD336B4>.<2>"
+), NSLocalizedDescription=ÂèëÁîü‰∫ÜSSLÈîôËØØÔºåÊó†Ê≥ïÂª∫Á´ã‰∏éËØ•ÊúçÂä°Âô®ÁöÑÂÆâÂÖ®ËøûÊé•„ÄÇ, NSErrorFailingURLKey=https://api.mymemory.translated.net/get?q=Hey&langpair=en%7Czh-CN, NSUnderlyingError=0x283846550 {Error Domain=kCFErrorDomainCFNetwork Code=-1200 "(null)" UserInfo={_kCFStreamPropertySSLClientCertificateState=0, _kCFNetworkCFStreamSSLErrorOriginalValue=-9824, _kCFStreamErrorDomainKey=3, _kCFStreamErrorCodeKey=-9824, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: lo0}}, _kCFStreamErrorCodeKey=-9824} url=https://api.mymemory.translated.net/get?q=Hey&langpair=en%7Czh-CN
+[1793769452] translate: provider 'mymemory' failed
+[1793769452] translate: tencent api err {
+    Code = "FailedOperation.UserNotRegistered";
+    Message = "Service has not been opened, please open service at Tencent Cloud console";
+}
+[1793769452] translate: tencent disabled for this session (service not opened)
+[1793769452] translate: provider 'tencent' failed
+[1793769452] audio: AVSampleBufferAudioRenderer init 0x2828ecd80
+[1793769452] asbr: enqueue called sbuf=0x11201c000 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769452] audio: dec normalize aac->mp4a
+[1793769452] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769452] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3950)
+[1793769452] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769452] asbr: enqueue called sbuf=0x11400d600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769452] audio: dec normalize aac->mp4a
+[1793769452] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769452] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3983)
+[1793769452] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769453] asbr: enqueue called sbuf=0x114183c00 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769453] audio: dec normalize aac->mp4a
+[1793769453] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769453] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3736)
+[1793769453] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769453] asbr: enqueue called sbuf=0x112011e00 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769453] audio: dec normalize aac->mp4a
+[1793769453] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769453] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3510)
+[1793769453] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769453] asbr: enqueue called sbuf=0x112012400 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769453] audio: dec normalize aac->mp4a
+[1793769453] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769453] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3747)
+[1793769453] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] audio: AVAudioSession setActive 1 st=1
+[1793769456] audio: AVSampleBufferRenderSynchronizer init 0x2828e5fc0
+[1793769456] asbr: enqueue called sbuf=0x113022400 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3825
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3825)
+[1793769456] audio: dec pkts=10
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] audio: decoded 10240 frames
+[1793769456] asbr: enqueue called sbuf=0x14c860600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3866)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x14c85f200 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3532)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x111fa7400 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3705)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x111fa5400 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3736)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x111e16200 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3665)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x1168f7600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3838)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x111f68600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3857)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x11401e000 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] asr: sending 161282 bytes (16k_multi_lang)
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3634)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x11400d600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3545)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x14c864800 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3630)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x114014600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3802)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x14c864800 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3831)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x14c864800 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3905)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x112018200 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3488)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x111a6da00 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3716)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x14c884600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3746)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x1168f0400 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3682)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x111750400 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3709)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769456] asbr: enqueue called sbuf=0x113034400 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769456] audio: dec normalize aac->mp4a
+[1793769456] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769456] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3748)
+[1793769456] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769457] asr: empty result ({
+    Response =     {
+        AudioDuration = 5038;
+        RequestId = "72c8613f-0ab6-4b92-a05b-397cc2f8c01f";
+        Result = "";
+        WordList = "<null>";
+        WordSize = 0;
+    };
+})
+[1793769457] asbr: enqueue called sbuf=0x114062000 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769457] audio: dec normalize aac->mp4a
+[1793769457] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769457] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3576)
+[1793769457] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769457] asbr: enqueue called sbuf=0x113240c00 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769457] audio: dec normalize aac->mp4a
+[1793769457] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769457] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3724)
+[1793769457] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769457] asbr: enqueue called sbuf=0x112121200 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769457] audio: dec normalize aac->mp4a
+[1793769457] audio: dec head[16]: 21 00 05 00 a0 1d 21 10 05 00 a0 1b ff c0 00 00 
+[1793769457] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769457] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3339)
+[1793769457] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769457] asbr: enqueue called sbuf=0x11686a600 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769457] audio: dec normalize aac->mp4a
+[1793769457] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769457] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3715)
+[1793769457] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769458] asbr: enqueue called sbuf=0x11686b200 self=<AVSampleBufferAudioRenderer: 0x2828ecd80> cmd=enqueueSampleBuffer:
+[1793769458] audio: dec normalize aac->mp4a
+[1793769458] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769458] audio: dec built 9 pkt descs from 9 sizes (eff=9, dataLen=3344)
+[1793769458] audio: dec req pkts=9216 realFrames=9216 cap=73728
+[1793769461] translate: RAW len=616 head=[{"id":"f8bd0c9e74d24d4fab4622f91739a912","created":1793769460,"model":"agnes-2.5-flash","object":"chat.completion","choices":[{"finish_reason":"stop","index":0,"message":{"content":"\n\n‰Ω†Â•ΩÔºÅÊúâ‰ªÄ‰πàÊàëÂèØ‰ª•Â∏Æ‰Ω†ÁöÑÂêóÔºü","role":"assistant","reasoning_content":"The user said \"Hey\". I should respond in a friendly manner.\n"},"provider_specific_fields":{"matched_stop":248046}}],"usage":{"completion_tokens":26,"prompt_tokens":333,"total_tokens":359,"completion_tokens_details":{"reasoning_tokens":16,"text_tokens":10},"prompt_tokens_details":{"cached_tokens":256}},"metadata":{"weight_version":"default"}}]
+[1793769461] translate: content len=16 bytes=[
+
+‚Ä∞Œ©‚Ä†√Ç‚Ä¢Œ©√î¬∫√Ö√ä√∫√¢‚Ä∞¬™]
+[1793769461] translate: openai response len=14 text=[‰Ω†Â•ΩÔºÅÊúâ‰ªÄ‰πàÊàëÂèØ‰ª•Â∏Æ‰Ω†ÁöÑÂêóÔºü]
+[1793769461] translate: provider 'agnes' WON len=14
+[1793769461] overlay: showPair seq=1 origin=[Hey] trans=[‰Ω†Â•ΩÔºÅÊúâ‰ªÄ‰πàÊàëÂèØ‰ª•Â∏Æ‰Ω†ÁöÑÂêóÔºü] transLen=14
+[1793769461] overlay: layout c=(6,277,381,61) oLbl=(10,10,h=19) tLbl=(10,33,h=18) oh=19.1 th=17.9 super={{0, 0}, {393, 852}}
+[1793769461] overlay: tLbl text=[‰Ω†Â•ΩÔºÅÊúâ‰ªÄ‰πàÊàëÂèØ‰ª•Â∏Æ‰Ω†ÁöÑÂêóÔºü] hidden=0 alpha=1.00 superHidden=0
+[1793769461] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769463] audio: AVSampleBufferRenderSynchronizer init 0x28289a500
+[1793769463] audio: AVSampleBufferRenderSynchronizer init 0x28289a200
+[1793769463] audio: AVSampleBufferAudioRenderer init 0x2828c2f80
+[1793769463] asbr: enqueue called sbuf=0x111dda000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769463] audio: AVAudioSession setActive 1 st=1
+[1793769463] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769463] audio: dec normalize aac->mp4a
+[1793769463] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4054
+[1793769463] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769463] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4054)
+[1793769463] audio: dec pkts=10
+[1793769463] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769463] audio: decoded 10240 frames
+[1793769463] asbr: enqueue called sbuf=0x111f80800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769463] audio: dec normalize aac->mp4a
+[1793769463] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769463] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3889)
+[1793769463] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769463] asbr: enqueue called sbuf=0x112137600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769463] audio: dec normalize aac->mp4a
+[1793769463] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769463] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3609)
+[1793769463] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769463] asbr: enqueue called sbuf=0x11140c000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769463] audio: dec normalize aac->mp4a
+[1793769463] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769463] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3621)
+[1793769463] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769463] asbr: enqueue called sbuf=0x111f6cc00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769463] audio: dec normalize aac->mp4a
+[1793769463] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769463] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3622)
+[1793769463] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769463] asr: sending 162768 bytes (16k_multi_lang)
+[1793769464] asr: text [Hey, hey]
+[1793769464] overlay: layout c=(6,285,381,39) oLbl=(10,10,h=19) tLbl=(0,0,h=0) oh=19.1 th=0.0 super={{0, 0}, {393, 852}}
+[1793769464] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769464] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769464] overlay: pending seq=2 origin=[Hey, hey]
+[1793769464] translate: race -> agnes model=agnes-2.5-flash
+[1793769464] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769464] translate: race -> mymemory
+[1793769464] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Hey,%20hey&langpair=en%7Czh-CN
+[1793769464] asbr: enqueue called sbuf=0x112151000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4054)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111e12600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3889)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111773c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3609)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111320400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3621)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111df0e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3622)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111b4f800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3718)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x1117bf200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3603)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111b4fe00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3857)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111b50400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3779)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111b50400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3670)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fcd800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3881)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fcde00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3611)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fce400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4064)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fd5600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3279)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111110a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3630)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fcea00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3874)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x113249a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3729)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fcea00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3920)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fac000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3685)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111fd5e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3454)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x1117d9a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3873)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asbr: enqueue called sbuf=0x111511200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769464] audio: dec normalize aac->mp4a
+[1793769464] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769464] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3805)
+[1793769464] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769464] asr: sending 163512 bytes (16k_multi_lang)
+[1793769465] translate: content len=38 bytes=[
+
+Hey there! How can I help you today?]
+[1793769465] translate: openai response len=36 text=[Hey there! How can I help you today?]
+[1793769465] translate: provider 'agnes' unusable (ÂéüÊñáÂõûÊòæÊàñÊó†‰∏≠Êñá)
+[1793769465] asbr: enqueue called sbuf=0x111fa2600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769465] audio: dec normalize aac->mp4a
+[1793769465] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769465] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3634)
+[1793769465] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769465] asbr: enqueue called sbuf=0x113226400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769465] audio: dec normalize aac->mp4a
+[1793769465] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769465] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3611)
+[1793769465] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769465] asr: text [Hey, hey, hey! welcome back everyone! hello! hello! we are so happy]
+[1793769465] asbr: enqueue called sbuf=0x11691d000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769465] overlay: layout c=(6,278,381,58) oLbl=(10,10,h=38) tLbl=(0,0,h=0) oh=38.2 th=0.0 super={{0, 0}, {393, 852}}
+[1793769465] audio: dec normalize aac->mp4a
+[1793769465] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769465] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769465] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769465] overlay: pending seq=3 origin=[Hey, hey, hey! welcome back everyone! hello! hello! we are so happy]
+[1793769465] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3883)
+[1793769465] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769465] drag: begin center=(196.5,306.9)
+[1793769465] asbr: enqueue called sbuf=0x112150a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769465] audio: dec normalize aac->mp4a
+[1793769465] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769465] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3580)
+[1793769465] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769466] asbr: enqueue called sbuf=0x116931400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769466] audio: dec normalize aac->mp4a
+[1793769466] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769466] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3772)
+[1793769466] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769466] translate: mymemory response status=200 content=[Âòø Âòø]
+[1793769466] translate: provider 'mymemory' WON len=3
+[1793769466] translate: race -> agnes model=agnes-2.5-flash
+[1793769466] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769466] overlay: drop stale pair seq=2 (displayed=3) origin=[Hey, hey]
+[1793769466] translate: race -> mymemory
+[1793769466] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Hey,%20hey,%20hey!%20welcome%20back%20everyone!%20hello!%20hello!%20we%20are%20so%20happy&langpair=en%7Czh-CN
+[1793769466] asbr: enqueue called sbuf=0x113227800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769466] audio: dec normalize aac->mp4a
+[1793769466] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769466] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3589)
+[1793769466] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769466] drag: end center=(202.5,329.3)
+[1793769466] pos: global write failed, saved to sandbox /var/mobile/Containers/Data/Application/C7E7F401-7808-465F-8787-F05AE203D242/Documents/livecap_positions.plist
+[1793769466] pos: saved for com.google.ios.youtube x=1.00 y=0.38 ok=0
+[1793769466] asbr: enqueue called sbuf=0x11324ae00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769466] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769466] audio: dec normalize aac->mp4a
+[1793769466] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3724
+[1793769466] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769466] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3724)
+[1793769466] audio: dec pkts=10
+[1793769466] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769466] audio: decoded 10240 frames
+[1793769466] asbr: enqueue called sbuf=0x11324ae00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769466] audio: dec normalize aac->mp4a
+[1793769466] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769466] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3582)
+[1793769466] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769466] asbr: enqueue called sbuf=0x11691d000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769466] audio: dec normalize aac->mp4a
+[1793769466] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769466] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3967)
+[1793769466] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769467] translate: mymemory response status=200 content=[Âó®ÔºåÂó®ÔºåÂó®ÔºÅÊ¨¢ËøéÂ§ßÂÆ∂ÂõûÊù•ÔºÅÂó®ÔºÅÂó®ÔºÅÊàë‰ª¨ÂæàÈ´òÂÖ¥]
+[1793769467] translate: provider 'mymemory' WON len=22
+[1793769467] overlay: showPair seq=3 origin=[Hey, hey, hey! welcome back everyone! hello! hello! we are so happy] trans=[Âó®ÔºåÂó®ÔºåÂó®ÔºÅÊ¨¢ËøéÂ§ßÂÆ∂ÂõûÊù•ÔºÅÂó®ÔºÅÂó®ÔºÅÊàë‰ª¨ÂæàÈ´òÂÖ¥] transLen=22
+[1793769467] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=38) tLbl=(10,52,h=36) oh=38.2 th=35.8 super={{0, 0}, {393, 852}}
+[1793769467] overlay: tLbl text=[Âó®ÔºåÂó®ÔºåÂó®ÔºÅÊ¨¢ËøéÂ§ßÂÆ∂ÂõûÊù•ÔºÅÂó®ÔºÅÂó®ÔºÅÊàë‰ª¨ÂæàÈ´òÂÖ¥] hidden=0 alpha=1.00 superHidden=0
+[1793769467] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769467] asbr: enqueue called sbuf=0x114086000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769467] audio: dec normalize aac->mp4a
+[1793769467] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769467] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3510)
+[1793769467] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769467] asbr: enqueue called sbuf=0x113227200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769467] audio: dec normalize aac->mp4a
+[1793769467] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769467] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3733)
+[1793769467] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769467] asbr: enqueue called sbuf=0x11323ca00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769467] audio: dec normalize aac->mp4a
+[1793769467] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769467] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4096)
+[1793769467] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769467] asbr: enqueue called sbuf=0x11413f600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769467] audio: dec normalize aac->mp4a
+[1793769467] audio: dec head[16]: 21 2a 94 2d c1 8c 85 60 a0 99 28 30 00 ba 63 43 
+[1793769467] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769467] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3563)
+[1793769467] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769468] translate: content len=28 bytes=[
+
+√Ç√≤√∏√î¬∫√•√Ç√≤√∏√î¬∫√•√Ç√≤√∏√î¬∫√Ö√ä¬®¬¢√ã√∏√©√Ç¬ß]
+[1793769468] translate: openai response len=26 text=[ÂòøÔºåÂòøÔºåÂòøÔºÅÊ¨¢ËøéÂ§ßÂÆ∂ÂõûÊù•ÔºÅ‰Ω†Â•ΩÔºÅ‰Ω†Â•ΩÔºÅÊàë‰ª¨Â§™ÂºÄÂøÉ‰∫ÜÔºÅ]
+[1793769468] translate: provider 'agnes' unusable (ÂéüÊñáÂõûÊòæÊàñÊó†‰∏≠Êñá)
+[1793769468] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769468] audio: dec normalize aac->mp4a
+[1793769468] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769468] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3533)
+[1793769468] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769468] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769468] audio: dec normalize aac->mp4a
+[1793769468] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769468] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3798)
+[1793769468] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769468] asbr: enqueue called sbuf=0x1168efe00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769468] audio: dec normalize aac->mp4a
+[1793769468] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769468] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3625)
+[1793769468] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769468] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769468] audio: dec normalize aac->mp4a
+[1793769468] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769468] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3805)
+[1793769468] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769469] asbr: enqueue called sbuf=0x114148200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769469] audio: dec normalize aac->mp4a
+[1793769469] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769469] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3500)
+[1793769469] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769469] asbr: enqueue called sbuf=0x114148200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769469] audio: dec normalize aac->mp4a
+[1793769469] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769469] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3678)
+[1793769469] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769469] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769469] audio: dec normalize aac->mp4a
+[1793769469] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769469] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3736)
+[1793769469] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769469] asbr: enqueue called sbuf=0x1168efe00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769469] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769469] audio: dec normalize aac->mp4a
+[1793769469] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=4211
+[1793769469] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769469] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4211)
+[1793769469] audio: dec pkts=10
+[1793769469] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769469] audio: decoded 10240 frames
+[1793769469] asbr: enqueue called sbuf=0x11212f600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769469] audio: dec normalize aac->mp4a
+[1793769469] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769469] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3344)
+[1793769469] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769469] asr: sending 163512 bytes (16k_multi_lang)
+[1793769470] asbr: enqueue called sbuf=0x11406d600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769470] audio: dec normalize aac->mp4a
+[1793769470] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769470] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3736)
+[1793769470] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769470] asbr: enqueue called sbuf=0x116930e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769470] audio: dec normalize aac->mp4a
+[1793769470] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769470] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3680)
+[1793769470] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769470] asr: text [You are here today? Okay, so I have a question for you. A big question. Ooh, I love big question]
+[1793769470] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(0,0,h=0) oh=57.3 th=0.0 super={{0, 0}, {393, 852}}
+[1793769470] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769470] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769470] overlay: pending seq=4 origin=[You are here today? Okay, so I have a question for you. A big question. Ooh, I love big question]
+[1793769470] translate: race -> agnes model=agnes-2.5-flash
+[1793769470] translate: PAYLOAD len=512 head=[{"messages":[{"content":"Translate to zh-CN. Output ONLY the translation: no quotes, no explanation. The input may be a noisy speech-to-text fragment: infer the meaning and output Chinese. NEVER echo the English input; the output MUST contain Chinese characters.","role":"system"},{"content":"You are here today? Okay, so I have a question for you. A big question. Ooh, I love big question","role":"user"}],"temperature":0.29999999999999999,"model":"agnes-2.5-flash","top_p":0.59999999999999998,"max_]
+[1793769470] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769470] translate: race -> mymemory
+[1793769470] translate: mymemory request url=https://api.mymemory.translated.net/get?q=You%20are%20here%20today?%20Okay,%20so%20I%20have%20a%20question%20for%20you.%20A%20big%20question.%20Ooh,%20I%20love%20big%20question&langpair=en%7Czh-CN
+[1793769470] asbr: enqueue called sbuf=0x113227600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769470] audio: dec normalize aac->mp4a
+[1793769470] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769470] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3656)
+[1793769470] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769470] asbr: enqueue called sbuf=0x11413f600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769470] audio: dec normalize aac->mp4a
+[1793769470] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769470] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3849)
+[1793769470] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769471] asbr: enqueue called sbuf=0x111a82a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769471] audio: dec normalize aac->mp4a
+[1793769471] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769471] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3736)
+[1793769471] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769471] translate: mymemory response status=200 content=[‰Ω†‰ªäÂ§©Âú®ËøôÈáåÔºüÂ•ΩÂêßÔºåÊàëÊúâ‰∏™ÈóÆÈ¢òË¶ÅÈóÆ‰Ω†„ÄÇ‰∏Ä‰∏™Â§ßÈóÆÈ¢ò„ÄÇÂì¶ÔºåÊàëÂñúÊ¨¢Â§ßÈóÆÈ¢ò]
+[1793769471] translate: provider 'mymemory' WON len=33
+[1793769471] overlay: showPair seq=4 origin=[You are here today? Okay, so I have a question for you. A big question. Ooh, I love big question] trans=[‰Ω†‰ªäÂ§©Âú®ËøôÈáåÔºüÂ•ΩÂêßÔºåÊàëÊúâ‰∏™ÈóÆÈ¢òË¶ÅÈóÆ‰Ω†„ÄÇ‰∏Ä‰∏™Â§ßÈóÆÈ¢ò„ÄÇÂì¶ÔºåÊàëÂñúÊ¨¢Â§ßÈóÆÈ¢ò] transLen=33
+[1793769471] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(10,71,h=36) oh=57.3 th=35.8 super={{0, 0}, {393, 852}}
+[1793769471] overlay: tLbl text=[‰Ω†‰ªäÂ§©Âú®ËøôÈáåÔºüÂ•ΩÂêßÔºåÊàëÊúâ‰∏™ÈóÆÈ¢òË¶ÅÈóÆ‰Ω†„ÄÇ‰∏Ä‰∏™Â§ßÈóÆÈ¢ò„ÄÇÂì¶ÔºåÊàëÂñúÊ¨¢Â§ßÈóÆÈ¢ò] hidden=0 alpha=1.00 superHidden=0
+[1793769471] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769471] asbr: enqueue called sbuf=0x113282600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769471] audio: dec normalize aac->mp4a
+[1793769471] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769471] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3717)
+[1793769471] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769471] asbr: enqueue called sbuf=0x113282600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769471] audio: dec normalize aac->mp4a
+[1793769471] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769471] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3908)
+[1793769471] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769471] asbr: enqueue called sbuf=0x1168efe00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769471] audio: dec normalize aac->mp4a
+[1793769471] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769471] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3500)
+[1793769471] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769471] asbr: enqueue called sbuf=0x111589c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769471] audio: dec normalize aac->mp4a
+[1793769471] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769471] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3950)
+[1793769471] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769472] asbr: enqueue called sbuf=0x114141e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769472] audio: dec normalize aac->mp4a
+[1793769472] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769472] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3490)
+[1793769472] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769472] asbr: enqueue called sbuf=0x114141e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769472] audio: dec normalize aac->mp4a
+[1793769472] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769472] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3658)
+[1793769472] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769472] asbr: enqueue called sbuf=0x114141e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769472] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769472] audio: dec normalize aac->mp4a
+[1793769472] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3705
+[1793769472] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769472] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3705)
+[1793769472] audio: dec pkts=10
+[1793769472] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769472] audio: decoded 10240 frames
+[1793769472] asbr: enqueue called sbuf=0x11316c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769472] audio: dec normalize aac->mp4a
+[1793769472] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769472] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4237)
+[1793769472] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769473] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769473] audio: dec normalize aac->mp4a
+[1793769473] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769473] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3512)
+[1793769473] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769473] asbr: enqueue called sbuf=0x1168efe00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769473] audio: dec normalize aac->mp4a
+[1793769473] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769473] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3571)
+[1793769473] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769473] asbr: enqueue called sbuf=0x1168efe00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769473] audio: dec normalize aac->mp4a
+[1793769473] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769473] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3724)
+[1793769473] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769473] asbr: enqueue called sbuf=0x11693c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769473] audio: dec normalize aac->mp4a
+[1793769473] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769473] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3572)
+[1793769473] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769474] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769474] audio: dec normalize aac->mp4a
+[1793769474] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769474] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3725)
+[1793769474] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769474] asbr: enqueue called sbuf=0x11693c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769474] audio: dec normalize aac->mp4a
+[1793769474] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769474] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4065)
+[1793769474] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769474] asbr: enqueue called sbuf=0x1141a3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769474] audio: dec normalize aac->mp4a
+[1793769474] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769474] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3355)
+[1793769474] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769474] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769474] audio: dec normalize aac->mp4a
+[1793769474] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769474] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3727)
+[1793769474] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769475] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769475] audio: dec normalize aac->mp4a
+[1793769475] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769475] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3984)
+[1793769475] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769475] asr: sending 163512 bytes (16k_multi_lang)
+[1793769475] asbr: enqueue called sbuf=0x11693c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769475] audio: dec normalize aac->mp4a
+[1793769475] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769475] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3580)
+[1793769475] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769475] asbr: enqueue called sbuf=0x11401bc00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769475] audio: dec normalize aac->mp4a
+[1793769475] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769475] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3907)
+[1793769475] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769475] asbr: enqueue called sbuf=0x11693c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769475] audio: dec normalize aac->mp4a
+[1793769475] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769475] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3447)
+[1793769475] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769475] asr: text [What is it? Have you ever talked to yourself? Oh no, are we starting with]
+[1793769475] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=38) tLbl=(0,0,h=0) oh=38.2 th=0.0 super={{0, 0}, {393, 852}}
+[1793769475] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769475] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769475] overlay: pending seq=5 origin=[What is it? Have you ever talked to yourself? Oh no, are we starting with]
+[1793769475] translate: race -> agnes model=agnes-2.5-flash
+[1793769475] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769475] translate: race -> mymemory
+[1793769475] translate: mymemory request url=https://api.mymemory.translated.net/get?q=What%20is%20it?%20Have%20you%20ever%20talked%20to%20yourself?%20Oh%20no,%20are%20we%20starting%20with&langpair=en%7Czh-CN
+[1793769476] asbr: enqueue called sbuf=0x11693c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769476] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769476] audio: dec normalize aac->mp4a
+[1793769476] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3565
+[1793769476] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769476] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3565)
+[1793769476] audio: dec pkts=10
+[1793769476] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769476] audio: decoded 10240 frames
+[1793769476] asbr: enqueue called sbuf=0x113257e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769476] audio: dec normalize aac->mp4a
+[1793769476] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769476] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3832)
+[1793769476] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769476] translate: RAW len=1049 head=[{"id":"888168db291c4bbc90d41e51f4fe1f4c","created":1793769476,"model":"agnes-2.5-flash","object":"chat.completion","choices":[{"finish_reason":"stop","index":0,"message":{"content":"\n\n‰Ω†‰ªäÂ§©Âú®ËøôÈáåÂêóÔºüÂ•ΩÁöÑÔºåÊàëÊúâ‰∏Ä‰∏™ÈóÆÈ¢òË¶ÅÈóÆ‰Ω†Ôºå‰∏Ä‰∏™ÈùûÂ∏∏ÈáçË¶ÅÁöÑÈóÆÈ¢ò„ÄÇÂì¶ÔºåÊàëÂñúÊ¨¢Â§ßÈóÆÈ¢òÔºÅ","role":"assistant","reasoning_content":"The user is speaking in English and seems to be engaging in a casual conversation. They're asking if I'm here today and mentioning they have a big question for me.\n\nThis appears to be a casual, conversational input - possibly from a speech-to-text system given the informal nature with interjections like \"Ooh.\" The user wants m]
+[1793769476] translate: content len=42 bytes=[
+
+‚Ä∞Œ©‚Ä†‚Ä∞¬™√§√Ç¬ß¬©√Ç√∫¬Æ√ã√∏√¥√à√°√•√Ç√™√≥√î¬∫√º√Ç‚Ä¢Œ©√Å√∂√ë√î¬∫√•√ä√†√´√ä√∫√¢‚Ä∞]
+[1793769476] translate: openai response len=40 text=[‰Ω†‰ªäÂ§©Âú®ËøôÈáåÂêóÔºüÂ•ΩÁöÑÔºåÊàëÊúâ‰∏Ä‰∏™ÈóÆÈ¢òË¶ÅÈóÆ‰Ω†Ôºå‰∏Ä‰∏™ÈùûÂ∏∏ÈáçË¶ÅÁöÑÈóÆÈ¢ò„ÄÇÂì¶ÔºåÊàëÂñúÊ¨¢Â§ßÈóÆÈ¢òÔºÅ]
+[1793769476] translate: provider 'agnes' unusable (ÂéüÊñáÂõûÊòæÊàñÊó†‰∏≠Êñá)
+[1793769476] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769476] audio: dec normalize aac->mp4a
+[1793769476] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769476] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3804)
+[1793769476] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769476] translate: mymemory response status=200 content=[ÊÄé‰πà‰∫ÜÔºå‰Ω†Ëá™Ë®ÄËá™ËØ≠ËøáÂêóÔºüÂì¶Ôºå‰∏çÔºåÊàë‰ª¨ÊòØÂê¶‰ªé]
+[1793769476] translate: provider 'mymemory' WON len=21
+[1793769476] overlay: showPair seq=5 origin=[What is it? Have you ever talked to yourself? Oh no, are we starting with] trans=[ÊÄé‰πà‰∫ÜÔºå‰Ω†Ëá™Ë®ÄËá™ËØ≠ËøáÂêóÔºüÂì¶Ôºå‰∏çÔºåÊàë‰ª¨ÊòØÂê¶‰ªé] transLen=21
+[1793769476] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=38) tLbl=(10,52,h=18) oh=38.2 th=17.9 super={{0, 0}, {393, 852}}
+[1793769476] overlay: tLbl text=[ÊÄé‰πà‰∫ÜÔºå‰Ω†Ëá™Ë®ÄËá™ËØ≠ËøáÂêóÔºüÂì¶Ôºå‰∏çÔºåÊàë‰ª¨ÊòØÂê¶‰ªé] hidden=0 alpha=1.00 superHidden=0
+[1793769476] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769476] asbr: enqueue called sbuf=0x1168efe00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769476] audio: dec normalize aac->mp4a
+[1793769476] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769476] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3575)
+[1793769476] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769476] asbr: enqueue called sbuf=0x113257e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769476] audio: dec normalize aac->mp4a
+[1793769476] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769476] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3682)
+[1793769476] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769477] asbr: enqueue called sbuf=0x113227600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769477] audio: dec normalize aac->mp4a
+[1793769477] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769477] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3684)
+[1793769477] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769477] asbr: enqueue called sbuf=0x11401ca00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769477] audio: dec normalize aac->mp4a
+[1793769477] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769477] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3754)
+[1793769477] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769477] asbr: enqueue called sbuf=0x11691d000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769477] audio: dec normalize aac->mp4a
+[1793769477] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769477] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3711)
+[1793769477] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769477] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769477] audio: dec normalize aac->mp4a
+[1793769477] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769477] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3759)
+[1793769477] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769477] translate: content len=27 bytes=[
+
+√ä√≤√ò‚Ä∞¬™√Ñ‚Ä∞œÄ√†√î¬∫√º‚Ä∞Œ©‚Ä†√ä√∫√¢√ä‚â§¬∞√ä√∫√¢√ã]
+[1793769477] translate: openai response len=25 text=[ÊòØ‰ªÄ‰πàÔºü‰Ω†ÊúâÊ≤°ÊúâËá™Â∑±Ë∑üËá™Â∑±ËØ¥ËøáËØùÔºüÂì¶‰∏çÔºåÊàë‰ª¨ÊòØË¶Å‰ªé]
+[1793769477] translate: provider 'agnes' unusable (ÂéüÊñáÂõûÊòæÊàñÊó†‰∏≠Êñá)
+[1793769478] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769478] audio: dec normalize aac->mp4a
+[1793769478] audio: dec head[16]: 21 1a 94 6d a2 3e 35 79 f6 76 38 e2 6d 55 d2 d5 
+[1793769478] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769478] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3867)
+[1793769478] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769478] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769478] audio: dec normalize aac->mp4a
+[1793769478] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769478] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3674)
+[1793769478] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769478] asbr: enqueue called sbuf=0x116937c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769478] audio: dec normalize aac->mp4a
+[1793769478] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769478] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3740)
+[1793769478] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769478] asbr: enqueue called sbuf=0x11401ca00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769478] audio: dec normalize aac->mp4a
+[1793769478] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769478] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3650)
+[1793769478] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769478] asbr: enqueue called sbuf=0x11401ca00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769478] audio: dec normalize aac->mp4a
+[1793769478] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769478] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3581)
+[1793769478] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769479] asbr: enqueue called sbuf=0x11401c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769479] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769479] audio: dec normalize aac->mp4a
+[1793769479] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3849
+[1793769479] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769479] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3849)
+[1793769479] audio: dec pkts=10
+[1793769479] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769479] audio: decoded 10240 frames
+[1793769479] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769479] audio: dec normalize aac->mp4a
+[1793769479] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769479] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3679)
+[1793769479] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769479] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769479] audio: dec normalize aac->mp4a
+[1793769479] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769479] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3577)
+[1793769479] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769479] asbr: enqueue called sbuf=0x116930600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769479] audio: dec normalize aac->mp4a
+[1793769479] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769479] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3642)
+[1793769479] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769480] asbr: enqueue called sbuf=0x11401ca00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769480] audio: dec normalize aac->mp4a
+[1793769480] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769480] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4122)
+[1793769480] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769480] asr: sending 163512 bytes (16k_multi_lang)
+[1793769480] asbr: enqueue called sbuf=0x112163400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769480] audio: dec normalize aac->mp4a
+[1793769480] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769480] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3485)
+[1793769480] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769480] asbr: enqueue called sbuf=0x116930e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769480] audio: dec normalize aac->mp4a
+[1793769480] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769480] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3980)
+[1793769480] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769480] asbr: enqueue called sbuf=0x116930600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769480] audio: dec normalize aac->mp4a
+[1793769480] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769480] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3444)
+[1793769480] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769481] asbr: enqueue called sbuf=0x116930600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769481] audio: dec normalize aac->mp4a
+[1793769481] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769481] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3817)
+[1793769481] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769481] asr: text [This I'm serious. Have you ever looked in the mirror and said something to yourself? Okay, okay, yeah]
+[1793769481] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(0,0,h=0) oh=57.3 th=0.0 super={{0, 0}, {393, 852}}
+[1793769481] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769481] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769481] overlay: pending seq=6 origin=[This I'm serious. Have you ever looked in the mirror and said something to yourself? Okay, okay, yeah]
+[1793769481] translate: race -> agnes model=agnes-2.5-flash
+[1793769481] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769481] translate: race -> mymemory
+[1793769481] translate: mymemory request url=https://api.mymemory.translated.net/get?q=This%20I'm%20serious.%20Have%20you%20ever%20looked%20in%20the%20mirror%20and%20said%20something%20to%20yourself?%20Okay,%20okay,%20yeah&langpair=en%7Czh-CN
+[1793769481] asbr: enqueue called sbuf=0x1141a5c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769481] audio: dec normalize aac->mp4a
+[1793769481] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769481] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3515)
+[1793769481] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769481] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769481] audio: dec normalize aac->mp4a
+[1793769481] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769481] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3693)
+[1793769481] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769481] asbr: enqueue called sbuf=0x1120f9800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769481] audio: dec normalize aac->mp4a
+[1793769481] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769481] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3885)
+[1793769481] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769482] asbr: enqueue called sbuf=0x1120f9800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769482] audio: dec normalize aac->mp4a
+[1793769482] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769482] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3775)
+[1793769482] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769482] translate: mymemory response status=200 content=[ÊàëÊòØËÆ§ÁúüÁöÑ„ÄÇÊÇ®ÊòØÂê¶ÊõæÁªèÁÖßËøáÈïúÂ≠êÔºåÂØπËá™Â∑±ËØ¥Ëøá‰ªÄ‰πàÔºüÂ•ΩÔºåÂ•ΩÔºåÂ•Ω]
+[1793769482] translate: provider 'mymemory' WON len=29
+[1793769482] overlay: showPair seq=6 origin=[This I'm serious. Have you ever looked in the mirror and said something to yourself? Okay, okay, yeah] trans=[ÊàëÊòØËÆ§ÁúüÁöÑ„ÄÇÊÇ®ÊòØÂê¶ÊõæÁªèÁÖßËøáÈïúÂ≠êÔºåÂØπËá™Â∑±ËØ¥Ëøá‰ªÄ‰πàÔºüÂ•ΩÔºåÂ•ΩÔºåÂ•Ω] transLen=29
+[1793769482] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(10,71,h=36) oh=57.3 th=35.8 super={{0, 0}, {393, 852}}
+[1793769482] overlay: tLbl text=[ÊàëÊòØËÆ§ÁúüÁöÑ„ÄÇÊÇ®ÊòØÂê¶ÊõæÁªèÁÖßËøáÈïúÂ≠êÔºåÂØπËá™Â∑±ËØ¥Ëøá‰ªÄ‰πàÔºüÂ•ΩÔºåÂ•ΩÔºåÂ•Ω] hidden=0 alpha=1.00 superHidden=0
+[1793769482] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769482] asbr: enqueue called sbuf=0x116930600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769482] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769482] audio: dec normalize aac->mp4a
+[1793769482] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3586
+[1793769482] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769482] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3586)
+[1793769482] audio: dec pkts=10
+[1793769482] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769482] audio: decoded 10240 frames
+[1793769482] asbr: enqueue called sbuf=0x116930600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769482] audio: dec normalize aac->mp4a
+[1793769482] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769482] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3809)
+[1793769482] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769482] translate: content len=31 bytes=[
+
+√ä√†√´√ä√≤√ò√ã√Ü¬ß√Å√∫√º√Å√∂√ë‚Äû√Ñ√á‚Ä∞Œ©‚Ä†√ä√∫√¢√ä‚â§¬∞√ä√∫]
+[1793769482] translate: openai response len=29 text=[ÊàëÊòØËÆ§ÁúüÁöÑ„ÄÇ‰Ω†ÊúâÊ≤°ÊúâÂØπÁùÄÈïúÂ≠êË∑üËá™Â∑±ËØ¥ËøáËØùÔºüÂ•ΩÂï¶Â•ΩÂï¶ÔºåÊòØÁöÑ„ÄÇ]
+[1793769482] translate: provider 'agnes' unusable (ÂéüÊñáÂõûÊòæÊàñÊó†‰∏≠Êñá)
+[1793769482] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769482] audio: dec normalize aac->mp4a
+[1793769482] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769482] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3613)
+[1793769482] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769482] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769482] audio: dec normalize aac->mp4a
+[1793769482] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769482] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3744)
+[1793769482] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769483] asbr: enqueue called sbuf=0x116930600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769483] audio: dec normalize aac->mp4a
+[1793769483] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769483] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3714)
+[1793769483] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769483] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769483] audio: dec normalize aac->mp4a
+[1793769483] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769483] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3660)
+[1793769483] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769483] asbr: enqueue called sbuf=0x1141a9800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769483] audio: dec normalize aac->mp4a
+[1793769483] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769483] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4201)
+[1793769483] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769483] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769483] audio: dec normalize aac->mp4a
+[1793769483] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769483] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3569)
+[1793769483] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769484] asbr: enqueue called sbuf=0x1140ce400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769484] audio: dec normalize aac->mp4a
+[1793769484] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769484] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3483)
+[1793769484] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769484] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769484] audio: dec normalize aac->mp4a
+[1793769484] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769484] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3737)
+[1793769484] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769484] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769484] audio: dec normalize aac->mp4a
+[1793769484] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769484] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3613)
+[1793769484] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769484] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769484] audio: dec normalize aac->mp4a
+[1793769484] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769484] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3868)
+[1793769484] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769485] asbr: enqueue called sbuf=0x116936200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769485] audio: dec normalize aac->mp4a
+[1793769485] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769485] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3633)
+[1793769485] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769485] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769485] audio: dec normalize aac->mp4a
+[1793769485] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769485] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3722)
+[1793769485] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769485] asr: sending 163512 bytes (16k_multi_lang)
+[1793769485] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769485] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769485] audio: dec normalize aac->mp4a
+[1793769485] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3778
+[1793769485] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769485] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3778)
+[1793769485] audio: dec pkts=10
+[1793769485] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769485] audio: decoded 10240 frames
+[1793769485] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769485] audio: dec normalize aac->mp4a
+[1793769485] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769485] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3896)
+[1793769485] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769485] asbr: enqueue called sbuf=0x113026000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769485] audio: dec normalize aac->mp4a
+[1793769485] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769485] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3507)
+[1793769485] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769486] asbr: enqueue called sbuf=0x113026000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769486] audio: dec normalize aac->mp4a
+[1793769486] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769486] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4016)
+[1793769486] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769486] asbr: enqueue called sbuf=0x1140ce400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769486] audio: dec normalize aac->mp4a
+[1793769486] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769486] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3362)
+[1793769486] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769486] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769486] audio: dec normalize aac->mp4a
+[1793769486] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769486] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3541)
+[1793769486] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769486] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769486] audio: dec normalize aac->mp4a
+[1793769486] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769486] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3852)
+[1793769486] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769487] asbr: enqueue called sbuf=0x1140ce400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769487] audio: dec normalize aac->mp4a
+[1793769487] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769487] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3628)
+[1793769487] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769487] asr: text [Yes, yes I have maybe more than I want to say good because today we're going to]
+[1793769487] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=38) tLbl=(0,0,h=0) oh=38.2 th=0.0 super={{0, 0}, {393, 852}}
+[1793769487] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769487] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769487] overlay: pending seq=7 origin=[Yes, yes I have maybe more than I want to say good because today we're going to]
+[1793769487] translate: race -> agnes model=agnes-2.5-flash
+[1793769487] translate: PAYLOAD len=495 head=[{"messages":[{"content":"Translate to zh-CN. Output ONLY the translation: no quotes, no explanation. The input may be a noisy speech-to-text fragment: infer the meaning and output Chinese. NEVER echo the English input; the output MUST contain Chinese characters.","role":"system"},{"content":"Yes, yes I have maybe more than I want to say good because today we're going to","role":"user"}],"temperature":0.29999999999999999,"model":"agnes-2.5-flash","top_p":0.59999999999999998,"max_tokens":256}]
+[1793769487] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769487] translate: race -> mymemory
+[1793769487] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Yes,%20yes%20I%20have%20maybe%20more%20than%20I%20want%20to%20say%20good%20because%20today%20we're%20going%20to&langpair=en%7Czh-CN
+[1793769487] asbr: enqueue called sbuf=0x113265400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769487] audio: dec normalize aac->mp4a
+[1793769487] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769487] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4120)
+[1793769487] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769487] asbr: enqueue called sbuf=0x113227600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769487] audio: dec normalize aac->mp4a
+[1793769487] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769487] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3559)
+[1793769487] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769487] asbr: enqueue called sbuf=0x116930c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769487] audio: dec normalize aac->mp4a
+[1793769487] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769487] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3577)
+[1793769487] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769488] translate: mymemory response status=200 content=[ÊòØÁöÑÔºåÊòØÁöÑÔºåÊàëÂèØËÉΩÊúâÊØîÊàëÊÉ≥ËØ¥ÁöÑÊõ¥Â§öÁöÑ‰∏úË•øÔºåÂõ†‰∏∫‰ªäÂ§©Êàë‰ª¨Ë¶Å]
+[1793769488] translate: provider 'mymemory' WON len=28
+[1793769488] overlay: showPair seq=7 origin=[Yes, yes I have maybe more than I want to say good because today we're going to] trans=[ÊòØÁöÑÔºåÊòØÁöÑÔºåÊàëÂèØËÉΩÊúâÊØîÊàëÊÉ≥ËØ¥ÁöÑÊõ¥Â§öÁöÑ‰∏úË•øÔºåÂõ†‰∏∫‰ªäÂ§©Êàë‰ª¨Ë¶Å] transLen=28
+[1793769488] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=38) tLbl=(10,52,h=36) oh=38.2 th=35.8 super={{0, 0}, {393, 852}}
+[1793769488] overlay: tLbl text=[ÊòØÁöÑÔºåÊòØÁöÑÔºåÊàëÂèØËÉΩÊúâÊØîÊàëÊÉ≥ËØ¥ÁöÑÊõ¥Â§öÁöÑ‰∏úË•øÔºåÂõ†‰∏∫‰ªäÂ§©Êàë‰ª¨Ë¶Å] hidden=0 alpha=1.00 superHidden=0
+[1793769488] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769488] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769488] audio: dec normalize aac->mp4a
+[1793769488] audio: dec head[16]: 21 1a 94 e5 b2 8e c5 81 b0 50 4c 2a 23 15 42 00 
+[1793769488] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769488] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3666)
+[1793769488] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769488] asbr: enqueue called sbuf=0x113257e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769488] audio: dec normalize aac->mp4a
+[1793769488] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769488] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3931)
+[1793769488] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769488] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769488] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769488] audio: dec normalize aac->mp4a
+[1793769488] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3677
+[1793769488] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769488] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3677)
+[1793769488] audio: dec pkts=10
+[1793769488] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769488] audio: decoded 10240 frames
+[1793769488] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769488] audio: dec normalize aac->mp4a
+[1793769488] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769488] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3821)
+[1793769488] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769488] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769488] audio: dec normalize aac->mp4a
+[1793769488] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769488] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3421)
+[1793769488] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769489] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769489] audio: dec normalize aac->mp4a
+[1793769489] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769489] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3860)
+[1793769489] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769489] asbr: enqueue called sbuf=0x11326c600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769489] audio: dec normalize aac->mp4a
+[1793769489] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769489] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3577)
+[1793769489] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769489] asbr: enqueue called sbuf=0x1140a9600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769489] audio: dec normalize aac->mp4a
+[1793769489] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769489] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3644)
+[1793769489] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769489] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769489] audio: dec normalize aac->mp4a
+[1793769489] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769489] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3769)
+[1793769489] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769490] asbr: enqueue called sbuf=0x1140a9600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769490] audio: dec normalize aac->mp4a
+[1793769490] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769490] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3992)
+[1793769490] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769490] asbr: enqueue called sbuf=0x113257e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769490] audio: dec normalize aac->mp4a
+[1793769490] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769490] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3498)
+[1793769490] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769490] asr: sending 163512 bytes (16k_multi_lang)
+[1793769490] asbr: enqueue called sbuf=0x113257e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769490] audio: dec normalize aac->mp4a
+[1793769490] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769490] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3580)
+[1793769490] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769490] translate: content len=36 bytes=[
+
+√ä√≤√ò√Å√∂√ë√î¬∫√•√Ç√ñ‚àÇ√Ç√Ü√ª√ä√†√´√ä√©√•√ä√®¬∞√Å√π√Ñ√ä√ò√Æ√ä√ë√∏√ä]
+[1793769490] translate: openai response len=34 text=[ÊòØÁöÑÔºåÂÖ∂ÂÆûÊàëÊéåÊè°ÁùÄÊØîÊÑøÊÑèÈÄèÈú≤ÁöÑÊõ¥Â§öÁöÑ‰ø°ÊÅØÔºåÂõ†‰∏∫‰ªäÂ§©Êàë‰ª¨Ë¶ÅËøõË°åÁöÑÊ¥ªÂä®„ÄÇ]
+[1793769490] translate: provider 'agnes' unusable (ÂéüÊñáÂõûÊòæÊàñÊó†‰∏≠Êñá)
+[1793769490] asbr: enqueue called sbuf=0x1120f9800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769490] audio: dec normalize aac->mp4a
+[1793769490] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769490] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3670)
+[1793769490] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769491] asbr: enqueue called sbuf=0x113257e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769491] audio: dec normalize aac->mp4a
+[1793769491] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769491] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3779)
+[1793769491] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769491] asbr: enqueue called sbuf=0x1140a9600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769491] audio: dec normalize aac->mp4a
+[1793769491] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769491] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3974)
+[1793769491] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769491] asbr: enqueue called sbuf=0x113257e00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769491] audio: dec normalize aac->mp4a
+[1793769491] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769491] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3763)
+[1793769491] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769491] asbr: enqueue called sbuf=0x1140a9600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769491] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769491] audio: dec normalize aac->mp4a
+[1793769491] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(0,0,h=0) oh=57.3 th=0.0 super={{0, 0}, {393, 852}}
+[1793769491] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3728
+[1793769491] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769491] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769491] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769491] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3728)
+[1793769491] overlay: pending seq=8 origin=[Talk about something very powerful, something that can change your life and we mean that we]
+[1793769491] audio: dec pkts=10
+[1793769491] translate: race -> agnes model=agnes-2.5-flash
+[1793769491] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769491] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769491] audio: decoded 10240 frames
+[1793769491] translate: race -> mymemory
+[1793769491] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Talk%20about%20something%20very%20powerful,%20something%20that%20can%20change%20your%20life%20and%20we%20mean%20that%20we&langpair=en%7Czh-CN
+[1793769492] asbr: enqueue called sbuf=0x116930c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769492] translate: RAW len=223 head=[{"error":{"code":"","message":"ÊÇ®Â∑≤ËææÂà∞ÂÖçË¥πÁî®Êà∑ÁöÑ API ÈÄüÁéáÈôêÂà∂„ÄÇÂçáÁ∫ß Token Plan Âç≥ÂèØËß£ÈîÅÊõ¥È´òÈôêÈ¢ùÔºåÁªßÁª≠‰∏çÈó¥Êñ≠‰ΩøÁî® API„ÄÇ (request id: 20261104051811991875988uKoCX3eR)","type":"AgnesAI_error"}}]
+[1793769492] audio: dec normalize aac->mp4a
+[1793769492] translate: openai no choices ({
+    error =     {
+        code = "";
+        message = "\U60a8\U5df2\U8fbe\U5230\U514d\U8d39\U7528\U6237\U7684 API \U901f\U7387\U9650\U5236\U3002\U5347\U7ea7 Token Plan \U5373\U53ef\U89e3\U9501\U66f4\U9ad8\U9650\U989d\Uff0c\U7ee7\U7eed\U4e0d\U95f4\U65ad\U4f7f\U7528 API\U3002 (request id: 20261104051811991875988uKoCX3eR)";
+        type = "AgnesAI_error";
+    };
+})
+[1793769492] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769492] translate: provider 'agnes' failed
+[1793769492] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3534)
+[1793769492] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769492] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769492] audio: dec normalize aac->mp4a
+[1793769492] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769492] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3749)
+[1793769492] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769492] asbr: enqueue called sbuf=0x1140a9600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769492] audio: dec normalize aac->mp4a
+[1793769492] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769492] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3932)
+[1793769492] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769492] translate: mymemory response status=200 content=[Ë∞àËÆ∫‰∏Ä‰∫õÈùûÂ∏∏Âº∫Â§ßÁöÑ‰∫ãÊÉÖÔºå‰∏Ä‰∫õÂèØ‰ª•ÊîπÂèò‰Ω†ÁîüÊ¥ªÁöÑ‰∫ãÊÉÖÔºåÊàë‰ª¨ÁöÑÊÑèÊÄùÊòØÔºåÊàë‰ª¨]
+[1793769492] translate: provider 'mymemory' WON len=34
+[1793769492] overlay: showPair seq=8 origin=[Talk about something very powerful, something that can change your life and we mean that we] trans=[Ë∞àËÆ∫‰∏Ä‰∫õÈùûÂ∏∏Âº∫Â§ßÁöÑ‰∫ãÊÉÖÔºå‰∏Ä‰∫õÂèØ‰ª•ÊîπÂèò‰Ω†ÁîüÊ¥ªÁöÑ‰∫ãÊÉÖÔºåÊàë‰ª¨ÁöÑÊÑèÊÄùÊòØÔºåÊàë‰ª¨] transLen=34
+[1793769492] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(10,71,h=36) oh=57.3 th=35.8 super={{0, 0}, {393, 852}}
+[1793769492] overlay: tLbl text=[Ë∞àËÆ∫‰∏Ä‰∫õÈùûÂ∏∏Âº∫Â§ßÁöÑ‰∫ãÊÉÖÔºå‰∏Ä‰∫õÂèØ‰ª•ÊîπÂèò‰Ω†ÁîüÊ¥ªÁöÑ‰∫ãÊÉÖÔºåÊàë‰ª¨ÁöÑÊÑèÊÄùÊòØÔºåÊàë‰ª¨] hidden=0 alpha=1.00 superHidden=0
+[1793769492] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769492] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769492] audio: dec normalize aac->mp4a
+[1793769492] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769492] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3543)
+[1793769492] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769492] asbr: enqueue called sbuf=0x11692ce00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769492] audio: dec normalize aac->mp4a
+[1793769492] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769492] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3492)
+[1793769492] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769493] asbr: enqueue called sbuf=0x113261600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769493] audio: dec normalize aac->mp4a
+[1793769493] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769493] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3726)
+[1793769493] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769493] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769493] audio: dec normalize aac->mp4a
+[1793769493] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769493] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3816)
+[1793769493] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769493] asbr: enqueue called sbuf=0x114141600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769493] audio: dec normalize aac->mp4a
+[1793769493] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769493] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3801)
+[1793769493] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769493] asbr: enqueue called sbuf=0x113265400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769493] audio: dec normalize aac->mp4a
+[1793769493] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769493] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3792)
+[1793769493] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769494] asbr: enqueue called sbuf=0x113265400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769494] audio: dec normalize aac->mp4a
+[1793769494] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769494] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3423)
+[1793769494] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769494] asbr: enqueue called sbuf=0x1120f3800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769494] audio: dec normalize aac->mp4a
+[1793769494] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769494] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3847)
+[1793769494] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769494] asbr: enqueue called sbuf=0x113265400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769494] audio: dec normalize aac->mp4a
+[1793769494] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769494] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3615)
+[1793769494] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769494] asbr: enqueue called sbuf=0x11692ce00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769494] audio: dec normalize aac->mp4a
+[1793769494] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769494] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3652)
+[1793769494] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769495] asbr: enqueue called sbuf=0x1120f9800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769495] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769495] audio: dec normalize aac->mp4a
+[1793769495] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3861
+[1793769495] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769495] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3861)
+[1793769495] audio: dec pkts=10
+[1793769495] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769495] audio: decoded 10240 frames
+[1793769495] asbr: enqueue called sbuf=0x114141600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769495] audio: dec normalize aac->mp4a
+[1793769495] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769495] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3629)
+[1793769495] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769495] asbr: enqueue called sbuf=0x1168f8200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769495] audio: dec normalize aac->mp4a
+[1793769495] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769495] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4040)
+[1793769495] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769495] asr: sending 163512 bytes (16k_multi_lang)
+[1793769495] asbr: enqueue called sbuf=0x1132a2000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769495] audio: dec normalize aac->mp4a
+[1793769495] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769495] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3422)
+[1793769495] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769495] asbr: enqueue called sbuf=0x1140f7000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769495] audio: dec normalize aac->mp4a
+[1793769495] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769495] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3654)
+[1793769495] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769496] asbr: enqueue called sbuf=0x1168ad800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769496] audio: dec normalize aac->mp4a
+[1793769496] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769496] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3854)
+[1793769496] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769496] asbr: enqueue called sbuf=0x1140f7000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769496] audio: dec normalize aac->mp4a
+[1793769496] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769496] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3706)
+[1793769496] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769496] asbr: enqueue called sbuf=0x1140f7000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769496] audio: dec normalize aac->mp4a
+[1793769496] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769496] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3906)
+[1793769496] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769496] asr: text [Really mean that we're going to talk about how you talk to yourself, the words you use in]
+[1793769496] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(0,0,h=0) oh=57.3 th=0.0 super={{0, 0}, {393, 852}}
+[1793769496] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769496] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769496] overlay: pending seq=9 origin=[Really mean that we're going to talk about how you talk to yourself, the words you use in]
+[1793769496] translate: race -> agnes model=agnes-2.5-flash
+[1793769496] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769496] translate: race -> mymemory
+[1793769496] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Really%20mean%20that%20we're%20going%20to%20talk%20about%20how%20you%20talk%20to%20yourself,%20the%20words%20you%20use%20in&langpair=en%7Czh-CN
+[1793769496] asbr: enqueue called sbuf=0x11319ea00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769496] audio: dec normalize aac->mp4a
+[1793769496] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769496] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3558)
+[1793769496] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769497] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769497] audio: dec normalize aac->mp4a
+[1793769497] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769497] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3829)
+[1793769497] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769497] asbr: enqueue called sbuf=0x1120bd800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769497] audio: dec normalize aac->mp4a
+[1793769497] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769497] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3504)
+[1793769497] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769497] translate: mymemory response status=200 content=[ÁúüÁöÑÊÑèÂë≥ÁùÄÊàë‰ª¨Â∞ÜËÆ®ËÆ∫‰Ω†Â¶Ç‰ΩïËá™Ë®ÄËá™ËØ≠Ôºå‰Ω†‰ΩøÁî®ÁöÑËØçËØ≠]
+[1793769497] translate: provider 'mymemory' WON len=24
+[1793769497] overlay: showPair seq=9 origin=[Really mean that we're going to talk about how you talk to yourself, the words you use in] trans=[ÁúüÁöÑÊÑèÂë≥ÁùÄÊàë‰ª¨Â∞ÜËÆ®ËÆ∫‰Ω†Â¶Ç‰ΩïËá™Ë®ÄËá™ËØ≠Ôºå‰Ω†‰ΩøÁî®ÁöÑËØçËØ≠] transLen=24
+[1793769497] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(10,71,h=36) oh=57.3 th=35.8 super={{0, 0}, {393, 852}}
+[1793769497] overlay: tLbl text=[ÁúüÁöÑÊÑèÂë≥ÁùÄÊàë‰ª¨Â∞ÜËÆ®ËÆ∫‰Ω†Â¶Ç‰ΩïËá™Ë®ÄËá™ËØ≠Ôºå‰Ω†‰ΩøÁî®ÁöÑËØçËØ≠] hidden=0 alpha=1.00 superHidden=0
+[1793769497] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769497] asbr: enqueue called sbuf=0x1131c1600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769497] audio: dec normalize aac->mp4a
+[1793769497] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769497] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3775)
+[1793769497] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769497] translate: openai no choices ({
+    error =     {
+        code = "";
+        message = "\U60a8\U5df2\U8fbe\U5230\U514d\U8d39\U7528\U6237\U7684 API \U901f\U7387\U9650\U5236\U3002\U5347\U7ea7 Token Plan \U5373\U53ef\U89e3\U9501\U66f4\U9ad8\U9650\U989d\Uff0c\U7ee7\U7eed\U4e0d\U95f4\U65ad\U4f7f\U7528 API\U3002 (request id: 2026110405181712911802L8VFrLKE)";
+        type = "AgnesAI_error";
+    };
+})
+[1793769497] translate: provider 'agnes' failed
+[1793769497] asbr: enqueue called sbuf=0x11401cc00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769497] audio: dec normalize aac->mp4a
+[1793769497] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769497] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3912)
+[1793769497] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769498] asbr: enqueue called sbuf=0x1168e2400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769498] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769498] audio: dec normalize aac->mp4a
+[1793769498] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3631
+[1793769498] audio: dec head[16]: 21 1a 95 05 b6 14 81 a2 a0 a0 6c 64 12 70 99 05 
+[1793769498] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769498] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3631)
+[1793769498] audio: dec pkts=10
+[1793769498] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769498] audio: decoded 10240 frames
+[1793769498] asbr: enqueue called sbuf=0x1131c1600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769498] audio: dec normalize aac->mp4a
+[1793769498] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769498] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3599)
+[1793769498] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769498] asbr: enqueue called sbuf=0x1120f9800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769498] audio: dec normalize aac->mp4a
+[1793769498] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769498] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3674)
+[1793769498] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769498] asbr: enqueue called sbuf=0x1168ade00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769498] audio: dec normalize aac->mp4a
+[1793769498] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769498] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3827)
+[1793769498] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769498] asbr: enqueue called sbuf=0x11207c400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769498] audio: dec normalize aac->mp4a
+[1793769498] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769498] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3927)
+[1793769498] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769499] asbr: enqueue called sbuf=0x113169200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769499] audio: dec normalize aac->mp4a
+[1793769499] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769499] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3413)
+[1793769499] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769499] asbr: enqueue called sbuf=0x11691d000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769499] audio: dec normalize aac->mp4a
+[1793769499] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769499] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3867)
+[1793769499] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769499] asbr: enqueue called sbuf=0x11401cc00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769499] audio: dec normalize aac->mp4a
+[1793769499] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769499] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3484)
+[1793769499] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769499] asbr: enqueue called sbuf=0x1168ade00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769499] audio: dec normalize aac->mp4a
+[1793769499] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769499] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3650)
+[1793769499] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769500] asbr: enqueue called sbuf=0x11401cc00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769500] audio: dec normalize aac->mp4a
+[1793769500] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769500] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3864)
+[1793769500] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769500] asbr: enqueue called sbuf=0x11401cc00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769500] audio: dec normalize aac->mp4a
+[1793769500] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769500] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4058)
+[1793769500] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769500] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769500] audio: dec normalize aac->mp4a
+[1793769500] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769500] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3442)
+[1793769500] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769500] asr: sending 163512 bytes (16k_multi_lang)
+[1793769500] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769500] audio: dec normalize aac->mp4a
+[1793769500] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769500] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3711)
+[1793769500] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769501] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769501] audio: dec normalize aac->mp4a
+[1793769501] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769501] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3608)
+[1793769501] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769501] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769501] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769501] audio: dec normalize aac->mp4a
+[1793769501] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3879
+[1793769501] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769501] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3879)
+[1793769501] audio: dec pkts=10
+[1793769501] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769501] audio: decoded 10240 frames
+[1793769501] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769501] audio: dec normalize aac->mp4a
+[1793769501] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769501] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3539)
+[1793769501] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769501] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769501] audio: dec normalize aac->mp4a
+[1793769501] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769501] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3773)
+[1793769501] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769501] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769501] audio: dec normalize aac->mp4a
+[1793769501] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769501] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3595)
+[1793769501] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769502] asr: text [Inside your head, the things you say to yourself every single day and how those words can]
+[1793769502] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(0,0,h=0) oh=57.3 th=0.0 super={{0, 0}, {393, 852}}
+[1793769502] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769502] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769502] overlay: pending seq=10 origin=[Inside your head, the things you say to yourself every single day and how those words can]
+[1793769502] translate: race -> agnes model=agnes-2.5-flash
+[1793769502] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769502] translate: race -> mymemory
+[1793769502] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Inside%20your%20head,%20the%20things%20you%20say%20to%20yourself%20every%20single%20day%20and%20how%20those%20words%20can&langpair=en%7Czh-CN
+[1793769502] asbr: enqueue called sbuf=0x1168e2a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769502] audio: dec normalize aac->mp4a
+[1793769502] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769502] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4069)
+[1793769502] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769502] asbr: enqueue called sbuf=0x1168ade00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769502] audio: dec normalize aac->mp4a
+[1793769502] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769502] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3532)
+[1793769502] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769502] translate: openai no choices ({
+    error =     {
+        code = "";
+        message = "\U60a8\U5df2\U8fbe\U5230\U514d\U8d39\U7528\U6237\U7684 API \U901f\U7387\U9650\U5236\U3002\U5347\U7ea7 Token Plan \U5373\U53ef\U89e3\U9501\U66f4\U9ad8\U9650\U989d\Uff0c\U7ee7\U7eed\U4e0d\U95f4\U65ad\U4f7f\U7528 API\U3002 (request id: 202611040518222362978808w2ov5WO)";
+        type = "AgnesAI_error";
+    };
+})
+[1793769502] translate: provider 'agnes' failed
+[1793769502] translate: mymemory response status=200 content=[Âú®‰Ω†ÁöÑËÑëÊµ∑‰∏≠Ôºå‰Ω†ÊØèÂ§©ÂØπËá™Â∑±ËØ¥ÁöÑËØùÔºå‰ª•ÂèäËøô‰∫õËØùÂ¶Ç‰Ωï]
+[1793769502] translate: provider 'mymemory' WON len=24
+[1793769502] overlay: showPair seq=10 origin=[Inside your head, the things you say to yourself every single day and how those words can] trans=[Âú®‰Ω†ÁöÑËÑëÊµ∑‰∏≠Ôºå‰Ω†ÊØèÂ§©ÂØπËá™Â∑±ËØ¥ÁöÑËØùÔºå‰ª•ÂèäËøô‰∫õËØùÂ¶Ç‰Ωï] transLen=24
+[1793769502] overlay: layout c=(12,300,381,58) oLbl=(10,10,h=57) tLbl=(10,71,h=36) oh=57.3 th=35.8 super={{0, 0}, {393, 852}}
+[1793769502] overlay: tLbl text=[Âú®‰Ω†ÁöÑËÑëÊµ∑‰∏≠Ôºå‰Ω†ÊØèÂ§©ÂØπËá™Â∑±ËØ¥ÁöÑËØùÔºå‰ª•ÂèäËøô‰∫õËØùÂ¶Ç‰Ωï] hidden=0 alpha=1.00 superHidden=0
+[1793769502] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769502] asbr: enqueue called sbuf=0x11401cc00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769502] audio: dec normalize aac->mp4a
+[1793769502] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769502] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3748)
+[1793769502] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769502] asbr: enqueue called sbuf=0x1168f7c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769502] audio: dec normalize aac->mp4a
+[1793769502] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769502] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3697)
+[1793769502] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769503] asbr: enqueue called sbuf=0x1120c8600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769503] audio: dec normalize aac->mp4a
+[1793769503] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769503] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3748)
+[1793769503] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769503] asbr: enqueue called sbuf=0x1141c8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769503] audio: dec normalize aac->mp4a
+[1793769503] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769503] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3661)
+[1793769503] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769503] asbr: enqueue called sbuf=0x1168e2400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769503] audio: dec normalize aac->mp4a
+[1793769503] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769503] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3795)
+[1793769503] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769503] asbr: enqueue called sbuf=0x1140f7000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769503] audio: dec normalize aac->mp4a
+[1793769503] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769503] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3750)
+[1793769503] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769504] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769504] audio: dec normalize aac->mp4a
+[1793769504] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769504] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3437)
+[1793769504] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769504] asbr: enqueue called sbuf=0x1168ece00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769504] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769504] audio: dec normalize aac->mp4a
+[1793769504] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3804
+[1793769504] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769504] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3804)
+[1793769504] audio: dec pkts=10
+[1793769504] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769504] audio: decoded 10240 frames
+[1793769504] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769504] audio: dec normalize aac->mp4a
+[1793769504] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769504] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3930)
+[1793769504] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769504] drag: begin center=(202.5,329.3)
+[1793769504] asbr: enqueue called sbuf=0x1168e2400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769504] audio: dec normalize aac->mp4a
+[1793769504] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769504] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3609)
+[1793769504] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769504] asbr: enqueue called sbuf=0x1120c8600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769504] audio: dec normalize aac->mp4a
+[1793769504] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769504] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3786)
+[1793769504] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769505] asbr: enqueue called sbuf=0x1120c8600 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769505] audio: dec normalize aac->mp4a
+[1793769505] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769505] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3489)
+[1793769505] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769505] asbr: enqueue called sbuf=0x1168ece00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769505] audio: dec normalize aac->mp4a
+[1793769505] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769505] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3674)
+[1793769505] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769505] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769505] audio: dec normalize aac->mp4a
+[1793769505] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769505] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4133)
+[1793769505] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769505] asr: sending 163512 bytes (16k_multi_lang)
+[1793769505] drag: end center=(188.5,328.9)
+[1793769505] pos: global write failed, saved to sandbox /var/mobile/Containers/Data/Application/C7E7F401-7808-465F-8787-F05AE203D242/Documents/livecap_positions.plist
+[1793769505] pos: saved for com.google.ios.youtube x=0.00 y=0.38 ok=0
+[1793769505] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769505] audio: dec normalize aac->mp4a
+[1793769505] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769505] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3406)
+[1793769505] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769506] asbr: enqueue called sbuf=0x1168e2400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769506] audio: dec normalize aac->mp4a
+[1793769506] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769506] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3835)
+[1793769506] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769506] asbr: enqueue called sbuf=0x112053200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769506] audio: dec normalize aac->mp4a
+[1793769506] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769506] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4027)
+[1793769506] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769506] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769506] audio: dec normalize aac->mp4a
+[1793769506] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769506] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3524)
+[1793769506] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769506] asbr: enqueue called sbuf=0x113169200 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769506] audio: dec normalize aac->mp4a
+[1793769506] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769506] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3481)
+[1793769506] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769507] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769507] audio: dec normalize aac->mp4a
+[1793769507] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769507] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3950)
+[1793769507] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769507] asbr: enqueue called sbuf=0x1168ade00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769507] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769507] audio: dec normalize aac->mp4a
+[1793769507] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3454
+[1793769507] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769507] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3454)
+[1793769507] audio: dec pkts=10
+[1793769507] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769507] audio: decoded 10240 frames
+[1793769507] asbr: enqueue called sbuf=0x1141c8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769507] audio: dec normalize aac->mp4a
+[1793769507] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769507] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4184)
+[1793769507] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769507] asbr: enqueue called sbuf=0x11319ba00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769507] audio: dec normalize aac->mp4a
+[1793769507] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769507] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3464)
+[1793769507] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769508] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769508] audio: dec normalize aac->mp4a
+[1793769508] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769508] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3487)
+[1793769508] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769508] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769508] audio: dec normalize aac->mp4a
+[1793769508] audio: dec head[16]: 21 1a 94 c5 ae 9d 02 40 b1 28 90 54 08 d8 10 61 
+[1793769508] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769508] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3646)
+[1793769508] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769508] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769508] audio: dec normalize aac->mp4a
+[1793769508] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769508] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3726)
+[1793769508] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769508] asbr: enqueue called sbuf=0x1141c8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769508] audio: dec normalize aac->mp4a
+[1793769508] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769508] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3952)
+[1793769508] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769508] asbr: enqueue called sbuf=0x1168f8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769508] audio: dec normalize aac->mp4a
+[1793769508] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769508] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3546)
+[1793769508] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769509] asbr: enqueue called sbuf=0x114106c00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769509] audio: dec normalize aac->mp4a
+[1793769509] asr: text [You get what you want in life. This is called manifestation, manifestation]
+[1793769509] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769509] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3686)
+[1793769509] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769509] overlay: layout c=(-2,300,381,58) oLbl=(10,10,h=38) tLbl=(0,0,h=0) oh=38.2 th=0.0 super={{0, 0}, {393, 852}}
+[1793769509] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769509] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769509] overlay: pending seq=11 origin=[You get what you want in life. This is called manifestation, manifestation]
+[1793769509] translate: race -> agnes model=agnes-2.5-flash
+[1793769509] translate: PAYLOAD len=490 head=[{"messages":[{"content":"Translate to zh-CN. Output ONLY the translation: no quotes, no explanation. The input may be a noisy speech-to-text fragment: infer the meaning and output Chinese. NEVER echo the English input; the output MUST contain Chinese characters.","role":"system"},{"content":"You get what you want in life. This is called manifestation, manifestation","role":"user"}],"temperature":0.29999999999999999,"model":"agnes-2.5-flash","top_p":0.59999999999999998,"max_tokens":256}]
+[1793769509] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769509] translate: race -> mymemory
+[1793769509] translate: mymemory request url=https://api.mymemory.translated.net/get?q=You%20get%20what%20you%20want%20in%20life.%20This%20is%20called%20manifestation,%20manifestation&langpair=en%7Czh-CN
+[1793769509] asbr: enqueue called sbuf=0x1141c8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769509] audio: dec normalize aac->mp4a
+[1793769509] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769509] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3819)
+[1793769509] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769509] asbr: enqueue called sbuf=0x1168f8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769509] audio: dec normalize aac->mp4a
+[1793769509] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769509] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3673)
+[1793769509] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769509] translate: RAW len=223 head=[{"error":{"code":"","message":"ÊÇ®Â∑≤ËææÂà∞ÂÖçË¥πÁî®Êà∑ÁöÑ API ÈÄüÁéáÈôêÂà∂„ÄÇÂçáÁ∫ß Token Plan Âç≥ÂèØËß£ÈîÅÊõ¥È´òÈôêÈ¢ùÔºåÁªßÁª≠‰∏çÈó¥Êñ≠‰ΩøÁî® API„ÄÇ (request id: 20261104051829694043463ULeQMfUl)","type":"AgnesAI_error"}}]
+[1793769509] translate: openai no choices ({
+    error =     {
+        code = "";
+        message = "\U60a8\U5df2\U8fbe\U5230\U514d\U8d39\U7528\U6237\U7684 API \U901f\U7387\U9650\U5236\U3002\U5347\U7ea7 Token Plan \U5373\U53ef\U89e3\U9501\U66f4\U9ad8\U9650\U989d\Uff0c\U7ee7\U7eed\U4e0d\U95f4\U65ad\U4f7f\U7528 API\U3002 (request id: 20261104051829694043463ULeQMfUl)";
+        type = "AgnesAI_error";
+    };
+})
+[1793769509] translate: provider 'agnes' failed
+[1793769509] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769509] audio: dec normalize aac->mp4a
+[1793769509] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769509] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3643)
+[1793769509] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769509] translate: mymemory response status=200 content=[‰Ω†ÂæóÂà∞‰∫Ü‰Ω†Âú®ÁîüÊ¥ª‰∏≠ÊÉ≥Ë¶ÅÁöÑ‰∏úË•ø„ÄÇËøôÂ∞±ÊòØÊâÄË∞ìÁöÑË°®Áé∞ÔºåË°®Áé∞]
+[1793769509] translate: provider 'mymemory' WON len=26
+[1793769509] overlay: showPair seq=11 origin=[You get what you want in life. This is called manifestation, manifestation] trans=[‰Ω†ÂæóÂà∞‰∫Ü‰Ω†Âú®ÁîüÊ¥ª‰∏≠ÊÉ≥Ë¶ÅÁöÑ‰∏úË•ø„ÄÇËøôÂ∞±ÊòØÊâÄË∞ìÁöÑË°®Áé∞ÔºåË°®Áé∞] transLen=26
+[1793769509] overlay: layout c=(-2,300,381,58) oLbl=(10,10,h=38) tLbl=(10,52,h=36) oh=38.2 th=35.8 super={{0, 0}, {393, 852}}
+[1793769509] overlay: tLbl text=[‰Ω†ÂæóÂà∞‰∫Ü‰Ω†Âú®ÁîüÊ¥ª‰∏≠ÊÉ≥Ë¶ÅÁöÑ‰∏úË•ø„ÄÇËøôÂ∞±ÊòØÊâÄË∞ìÁöÑË°®Áé∞ÔºåË°®Áé∞] hidden=0 alpha=1.00 superHidden=0
+[1793769509] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769510] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769510] audio: dec normalize aac->mp4a
+[1793769510] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769510] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3704)
+[1793769510] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769510] asbr: enqueue called sbuf=0x11319ba00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769510] audio: dec normalize aac->mp4a
+[1793769510] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769510] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4055)
+[1793769510] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769510] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769510] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769510] audio: dec normalize aac->mp4a
+[1793769510] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3994
+[1793769510] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769510] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3994)
+[1793769510] audio: dec pkts=10
+[1793769510] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769510] audio: decoded 10240 frames
+[1793769510] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769510] audio: dec normalize aac->mp4a
+[1793769510] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769510] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3313)
+[1793769510] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769510] asr: sending 163512 bytes (16k_multi_lang)
+[1793769511] asbr: enqueue called sbuf=0x1168f8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769511] audio: dec normalize aac->mp4a
+[1793769511] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769511] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3561)
+[1793769511] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769511] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769511] audio: dec normalize aac->mp4a
+[1793769511] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769511] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3677)
+[1793769511] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769511] asbr: enqueue called sbuf=0x1131c4000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769511] audio: dec normalize aac->mp4a
+[1793769511] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769511] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3952)
+[1793769511] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769511] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769511] audio: dec normalize aac->mp4a
+[1793769511] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769511] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3526)
+[1793769511] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769511] asbr: enqueue called sbuf=0x1168e2400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769511] audio: dec normalize aac->mp4a
+[1793769511] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769511] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4230)
+[1793769511] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769512] asbr: enqueue called sbuf=0x1168e2400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769512] audio: dec normalize aac->mp4a
+[1793769512] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769512] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3315)
+[1793769512] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769512] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769512] audio: dec normalize aac->mp4a
+[1793769512] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769512] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3674)
+[1793769512] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769512] asbr: enqueue called sbuf=0x1168e2400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769512] audio: dec normalize aac->mp4a
+[1793769512] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769512] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3558)
+[1793769512] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769512] asbr: enqueue called sbuf=0x1168f8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769512] audio: dec normalize aac->mp4a
+[1793769512] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769512] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4038)
+[1793769512] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769513] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769513] audio: dec normalize aac->mp4a
+[1793769513] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769513] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3853)
+[1793769513] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769513] asbr: enqueue called sbuf=0x1120cd400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769513] audio: dec normalize aac->mp4a
+[1793769513] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769513] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3406)
+[1793769513] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769513] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769513] asbr: got buffer sr=44100 ch=2 fmt=0x61616320 (AAC) frames=10
+[1793769513] audio: dec normalize aac->mp4a
+[1793769513] audio: dec in sr=44100 fmt=0x61616320 ch=2 fpp=1024 len=3797
+[1793769513] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769513] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3797)
+[1793769513] audio: dec pkts=10
+[1793769513] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769513] audio: decoded 10240 frames
+[1793769513] asbr: enqueue called sbuf=0x1168f8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769513] audio: dec normalize aac->mp4a
+[1793769513] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769513] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3574)
+[1793769513] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769514] asbr: enqueue called sbuf=0x1168f8400 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769514] audio: dec normalize aac->mp4a
+[1793769514] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769514] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4027)
+[1793769514] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769514] asr: text [Let's say that again, manifestation, say it with us, man]
+[1793769514] overlay: layout c=(-2,300,381,58) oLbl=(10,10,h=38) tLbl=(0,0,h=0) oh=38.2 th=0.0 super={{0, 0}, {393, 852}}
+[1793769514] overlay: tLbl text=[] hidden=1 alpha=1.00 superHidden=0
+[1793769514] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769514] overlay: pending seq=12 origin=[Let's say that again, manifestation, say it with us, man]
+[1793769514] translate: race -> agnes model=agnes-2.5-flash
+[1793769514] translate: openai request url=https://apihub.agnes-ai.cn/v1/chat/completions model=agnes-2.5-flash attempt=0
+[1793769514] translate: race -> mymemory
+[1793769514] translate: mymemory request url=https://api.mymemory.translated.net/get?q=Let's%20say%20that%20again,%20manifestation,%20say%20it%20with%20us,%20man&langpair=en%7Czh-CN
+[1793769514] asbr: enqueue called sbuf=0x1168e2a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769514] audio: dec normalize aac->mp4a
+[1793769514] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769514] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3439)
+[1793769514] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769514] translate: openai no choices ({
+    error =     {
+        code = "";
+        message = "\U60a8\U5df2\U8fbe\U5230\U514d\U8d39\U7528\U6237\U7684 API \U901f\U7387\U9650\U5236\U3002\U5347\U7ea7 Token Plan \U5373\U53ef\U89e3\U9501\U66f4\U9ad8\U9650\U989d\Uff0c\U7ee7\U7eed\U4e0d\U95f4\U65ad\U4f7f\U7528 API\U3002 (request id: 20261104051834413273366vPU5FmDe)";
+        type = "AgnesAI_error";
+    };
+})
+[1793769514] translate: provider 'agnes' failed
+[1793769514] asbr: enqueue called sbuf=0x1168e2a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769514] audio: dec normalize aac->mp4a
+[1793769514] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769514] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3803)
+[1793769514] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769514] asbr: enqueue called sbuf=0x1168e2a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769514] audio: dec normalize aac->mp4a
+[1793769514] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769514] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3602)
+[1793769514] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769514] asbr: enqueue called sbuf=0x1140ee800 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769514] audio: dec normalize aac->mp4a
+[1793769514] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769514] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3692)
+[1793769514] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769515] asbr: enqueue called sbuf=0x1131baa00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769515] audio: dec normalize aac->mp4a
+[1793769515] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769515] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=4020)
+[1793769515] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769515] translate: mymemory response status=200 content=[ËÆ©Êàë‰ª¨ÂÜçËØ¥‰∏ÄÈÅçÔºåÊòæÂåñÔºåÂíåÊàë‰ª¨‰∏ÄËµ∑ËØ¥ÂêßÔºå‰ºôËÆ°]
+[1793769515] translate: provider 'mymemory' WON len=21
+[1793769515] overlay: showPair seq=12 origin=[Let's say that again, manifestation, say it with us, man] trans=[ËÆ©Êàë‰ª¨ÂÜçËØ¥‰∏ÄÈÅçÔºåÊòæÂåñÔºåÂíåÊàë‰ª¨‰∏ÄËµ∑ËØ¥ÂêßÔºå‰ºôËÆ°] transLen=21
+[1793769515] overlay: layout c=(-2,300,381,58) oLbl=(10,10,h=38) tLbl=(10,52,h=18) oh=38.2 th=17.9 super={{0, 0}, {393, 852}}
+[1793769515] overlay: tLbl text=[ËÆ©Êàë‰ª¨ÂÜçËØ¥‰∏ÄÈÅçÔºåÊòæÂåñÔºåÂíåÊàë‰ª¨‰∏ÄËµ∑ËØ¥ÂêßÔºå‰ºôËÆ°] hidden=0 alpha=1.00 superHidden=0
+[1793769515] overlay: handle frame={{351, 4}, {26, 26}} hidden=0 superHidden=0 clips=0 containerClips=1
+[1793769515] asbr: enqueue called sbuf=0x112165a00 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769515] audio: dec normalize aac->mp4a
+[1793769515] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769515] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3684)
+[1793769515] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769515] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769515] audio: dec normalize aac->mp4a
+[1793769515] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769515] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3953)
+[1793769515] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769515] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769515] audio: dec normalize aac->mp4a
+[1793769515] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769515] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3217)
+[1793769515] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769515] asr: sending 163512 bytes (16k_multi_lang)
+[1793769516] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769516] audio: dec normalize aac->mp4a
+[1793769516] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769516] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3765)
+[1793769516] audio: dec req pkts=10240 realFrames=10240 cap=81920
+[1793769516] asbr: enqueue called sbuf=0x114093000 self=<AVSampleBufferAudioRenderer: 0x2828c2f80> cmd=enqueueSampleBuffer:
+[1793769516] audio: dec normalize aac->mp4a
+[1793769516] audio: dec cookie synthesized sr=44100 srIdx=4 ch=2
+[1793769516] audio: dec built 10 pkt descs from 10 sizes (eff=10, dataLen=3879)
+[1793769516] audio: dec req pkts=10240 realFrames=10240 cap=81920

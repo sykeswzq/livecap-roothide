@@ -2,3 +2,7 @@
 build/
 pkg/
 verify/
+
+# 含真实腾讯云密钥的本地配置，禁止入库
+dev_cfg.xml
+dev_cfg_fixed.xml
