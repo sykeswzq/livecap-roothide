@@ -1080,7 +1080,21 @@ def check_v87_fixes(src, panel_src=None):
             "v1.0.87 回归: checkConfigChange 没有调用 renderCurrent —— "
             "字号变了但画面不重绘，等于没生效。")
 
-    # ---- 6) 面板必须提供真正的字号 UI ----
+    # ---- 7) C 函数不得在定义之前被调用（v1.0.87 首次 CI 失败就是这个）----
+    # CI 实证：
+    #   LiveCap.m:274: error: call to undeclared function 'LCLogF'
+    #   LiveCap.m:377: error: static declaration of 'LCLogF' follows non-static declaration
+    # 根因：新的 AAC 编码器（位于文件靠前）里调了 LCLogF，
+    #       而 LCLogF 的定义在文件更靠后 —— C 语言没有前向查找。
+    m_def = re.search(r"static\s+void\s+LCLogF\s*\(", code)
+    m_use = re.search(r"\bLCLogF\s*\(", code)
+    if m_def and m_use and m_use.start() < m_def.start():
+        errors.append(
+            "v1.0.87 回归: LCLogF 在其定义之前就被调用 —— "
+            "CI 会报 call to undeclared function 'LCLogF'。"
+            "要么把调用挪到定义之后，要么在文件靠前加前向声明。")
+
+    # ---- 8) 面板必须提供真正的字号 UI ----
     if panel_src is None:
         warnings.append("v1.0.87: 未读取面板源码，跳过字号 UI 检查")
     else:

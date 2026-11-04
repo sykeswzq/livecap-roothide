@@ -244,9 +244,25 @@ print("  [B11] 面板字号默认值回到 28 -> %s"
 if not hit:
     sys.exit(1)
 
+# ---- B12: 在 LCLogF 定义之前调用它（v1.0.87 首次 CI 失败的根因）----
+bad = mutate(
+    BASE_SRC,
+    """    // 注意：这里【不能】打日志 —— LCLogF 的定义在本函数之后（文件里更靠后），
+    // 在此处调用会报 "call to undeclared function 'LCLogF'"（CI 实证）。
+    // 调用方（processChunk: / processChunk16:）会打 "asr: sending N bytes"，信息足够。
+    (void)frames;
+    return out;""",
+    """    LCLogF(@"asr: aac-adts frames=%d bytes=%lu", frames, (unsigned long)out.length);
+    return out;""",
+    "B12")
+errs = run_check(bad, BASE_PANEL)
+hit = [e for e in errs if "LCLogF" in e]
+print("  [B12] 在 LCLogF 定义之前调用它 -> %s"
+      % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
+if not hit:
+    sys.exit(1)
+
 print("")
-print("=" * 70)
-print("C. 反向：合法写法不得误报")
 print("=" * 70)
 errs = run_check(BASE_SRC, BASE_PANEL)
 if errs:

@@ -271,7 +271,10 @@ static NSData *LCAACEncodeADTSFramed(NSData *pcm16) {
     // 编码失败或输出过短 → 返回 nil 让调用方回退 WAV
     if (frames <= 0) return nil;
     if (out.length < 512) return nil;
-    LCLogF(@"asr: aac-adts frames=%d bytes=%lu", frames, (unsigned long)out.length);
+    // 注意：这里【不能】打日志 —— LCLogF 的定义在本函数之后（文件里更靠后），
+    // 在此处调用会报 "call to undeclared function 'LCLogF'"（CI 实证）。
+    // 调用方（processChunk: / processChunk16:）会打 "asr: sending N bytes"，信息足够。
+    (void)frames;
     return out;
 }
 
