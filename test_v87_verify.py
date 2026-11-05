@@ -166,12 +166,12 @@ if not hit:
 # ---- B7: 字号改回读启动缓存（改了不生效）----
 bad = mutate(
     BASE_SRC,
-    """    NSDictionary *fresh = [NSDictionary dictionaryWithContentsOfFile:p];
-    if (fresh) {
-        id v = fresh[key];
-        if (v) return v;
-    }
-    return _d[key];""",
+    "    NSDictionary *fresh = [NSDictionary dictionaryWithContentsOfFile:p];\n"
+    "    if (fresh) {\n"
+    "        id v = fresh[key];\n"
+    "        if (v) return v;\n"
+    "    }\n"
+    "    return _d[key];",
     "    return _d[key];",
     "B7")
 errs = run_check(bad, BASE_PANEL)
@@ -184,9 +184,9 @@ if not hit:
 # ---- B8: 监听到字号变化但不重绘 ----
 bad = mutate(
     BASE_SRC,
-    """        LCLogF(@"overlay: fontSize changed %.0f -> %.0f, re-render", old, fs);
-        [self renderCurrent];""",
-    """        LCLogF(@"overlay: fontSize changed %.0f -> %.0f, re-render", old, fs);""",
+    "        LCLogF(@\"overlay: fontSize changed %.0f -> %.0f, re-render\", old, fs);\n"
+    "        [self renderCurrent];",
+    "        LCLogF(@\"overlay: fontSize changed %.0f -> %.0f, re-render\", old, fs);",
     "B8")
 errs = run_check(bad, BASE_PANEL)
 hit = [e for e in errs if "renderCurrent" in e]
@@ -267,8 +267,8 @@ if not hit:
 #       此时 [[LCFontSizeController alloc] 会报
 #       "receiver for class message is a forward declaration"。
 bad_panel = BASE_PANEL
-_i = bad_panel.find("#pragma mark - v1.0.87：字幕字号选择器（滑块 + 实时预览）")
-_j = bad_panel.find("@interface LCRootListController : PSViewController")
+_i = bad_panel.find(r'#pragma mark - v1.0.87\uff1a\u5b57\u5e55\u5b57\u53f7\u9009\u62e9\u5668\uff08\u6ed1\u5757 + \u5b9e\u65f6\u9884\u89c8\uff09')
+_j = bad_panel.find('@interface LCRootListController : PSViewController')
 assert _i > 0 and _j > _i
 bad_panel = (bad_panel[:_i]
              + "@class LCFontSizeController;\n\n"
