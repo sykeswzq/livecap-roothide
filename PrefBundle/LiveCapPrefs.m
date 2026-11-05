@@ -355,7 +355,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     if (section == 2)
         return @"字幕可长按拖动，位置按 App 记忆（重开 App 回到上次位置）。背景样式：无背景描边 / 半透明黑 / 实黑 / 半透明白 / 毛玻璃。\n点「字幕字号」可用滑块调整大小，改完立即生效，无需重启 App。\n默认只显示中文译文一行；打开「显示英文原文」可恢复上下两行（英文在上、中文在下）。";
     if (section == 3)
-        return @"目标 App 需在 Dopamine Inject Manager 白名单勾选；完全退出目标 App 再打开生效。长按桌面 App 图标可快捷开关实时字幕翻译。";
+        return @"目标 App 需在 Dopamine Inject Manager（或 Filza/真皮）白名单勾选；完全退出目标 App 再打开生效。长按桌面 App 图标可快捷开关实时字幕翻译。";
     return nil;
 }
 

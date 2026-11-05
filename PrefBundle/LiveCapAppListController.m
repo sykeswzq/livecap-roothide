@@ -235,16 +235,19 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     // 真实注入集合 = LiveCap 白名单 ∩ Inject Manager 允许列表 ∩ 已安装
+    // 若 InjectManager 不存在，则只用 LiveCap Bundle 白名单
     NSArray *filter = LCReadFilterBundles();
     NSArray *white  = LCReadInjectManagerWhitelist();
     NSUInteger realN = [LCReallyInjectedIDs() count];
 
     NSMutableString *s = [NSMutableString stringWithFormat:@"已注入 %lu 个 App", (unsigned long)realN];
-    if (white.count > 0)
+    if (white) {
         [s appendFormat:@"（白名单 %lu · Inject Manager 允许 %lu）",
                        (unsigned long)filter.count, (unsigned long)white.count];
-    else
-        [s appendString:@"（未读到 Inject Manager 允许列表）"];
+    } else {
+        [s appendFormat:@"（白名单 %lu · 未检测到 Inject Manager，使用 Filza 白名单）",
+                       (unsigned long)filter.count];
+    }
     [s appendString:@" · 注销后生效"];
     if (!_filterWriteOK)
         [s appendString:@" · 写入注入配置失败"];
@@ -272,7 +275,7 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 
     // 标注是否真会注入：需同时满足「已勾选」+「Inject Manager 允许」，否则不会被注入
     NSArray<NSString *> *white = [self lc_injectWhitelist];
-    if (white.count > 0 && bid.length) {
+    if (white && white.count > 0 && bid.length) {
         BOOL allowed = [white containsObject:bid];
         BOOL picked  = [[self lc_selected] containsObject:bid];
         if (picked && !allowed) {
@@ -283,6 +286,13 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
             cell.detailTextLabel.text = [NSString stringWithFormat:
                 @"%@ · Inject Manager 已允许，未勾选", bid];
             cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+        }
+    } else {
+        // InjectManager 不存在 → 只依赖 LiveCap Bundle 白名单
+        BOOL picked = [[self lc_selected] containsObject:bid];
+        if (!picked) {
+            cell.detailTextLabel.text = [NSString stringWithFormat:
+                @"%@ · 未勾选（需在设置面板勾选）", bid];
         }
     }
 
