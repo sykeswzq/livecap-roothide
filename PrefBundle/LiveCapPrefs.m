@@ -1,22 +1,22 @@
-// LiveCapPrefs.m —— 设置面板主控制器（LCRootListController）
-// 范式：完全对齐 XL-Roothide（XLRootListController）——
-//   PSViewController + 手写 grouped UITableView，不用 specifiers / Root.plist。
-// 配置读写：CFPreferences 显式指定 appID = com.sykes.livecap（与 tweak 读取的
-//   /var/mobile/Library/Preferences/com.sykes.livecap.plist 同一份，面板在"设置"进程，
-//   默认域会是 bundle id com.sykes.livecap.prefs，必须显式指定否则 tweak 读不到）。
+// LiveCapPrefs.m \u2014\u2014 \u8bbe\u7f6e\u9762\u677f\u4e3b\u63a7\u5236\u5668\uff08LCRootListController\uff09
+// \u8303\u5f0f\uff1a\u5b8c\u5168\u5bf9\u9f50 XL-Roothide\uff08XLRootListController\uff09\u2014\u2014
+//   PSViewController + \u624b\u5199 grouped UITableView\uff0c\u4e0d\u7528 specifiers / Root.plist\u3002
+// \u914d\u7f6e\u8bfb\u5199\uff1aCFPreferences \u663e\u5f0f\u6307\u5b9a appID = com.sykes.livecap\uff08\u4e0e tweak \u8bfb\u53d6\u7684
+//   /var/mobile/Library/Preferences/com.sykes.livecap.plist \u540c\u4e00\u4efd\uff0c\u9762\u677f\u5728"\u8bbe\u7f6e"\u8fdb\u7a0b\uff0c
+//   \u9ed8\u8ba4\u57df\u4f1a\u662f bundle id com.sykes.livecap.prefs\uff0c\u5fc5\u987b\u663e\u5f0f\u6307\u5b9a\u5426\u5219 tweak \u8bfb\u4e0d\u5230\uff09\u3002
 #import <UIKit/UIKit.h>
 #import "LCPrivate.h"
 
-#pragma mark - 配置读写（com.sykes.livecap 域）
+#pragma mark - \u914d\u7f6e\u8bfb\u5199\uff08com.sykes.livecap \u57df\uff09
 
 static NSString *LCAppID = @"com.sykes.livecap";
 
-// v1.0.83：配置读写统一走【plist 文件】。
-// 背景：面板原来用 CFPreferences 写、tweak 用文件直写同一个 plist，
-//       两套机制互相覆盖 → 实测 showEnglish 写好的 false 被覆写成 true。
-// 现在面板与 tweak 用完全相同的通道读写同一个文件，状态永远一致。
+// v1.0.83\uff1a\u914d\u7f6e\u8bfb\u5199\u7edf\u4e00\u8d70\u3010plist \u6587\u4ef6\u3011\u3002
+// \u80cc\u666f\uff1a\u9762\u677f\u539f\u6765\u7528 CFPreferences \u5199\u3001tweak \u7528\u6587\u4ef6\u76f4\u5199\u540c\u4e00\u4e2a plist\uff0c
+//       \u4e24\u5957\u673a\u5236\u4e92\u76f8\u8986\u76d6 \u2192 \u5b9e\u6d4b showEnglish \u5199\u597d\u7684 false \u88ab\u8986\u5199\u6210 true\u3002
+// \u73b0\u5728\u9762\u677f\u4e0e tweak \u7528\u5b8c\u5168\u76f8\u540c\u7684\u901a\u9053\u8bfb\u5199\u540c\u4e00\u4e2a\u6587\u4ef6\uff0c\u72b6\u6001\u6c38\u8fdc\u4e00\u81f4\u3002
 static NSString *LCConfigPath(void) {
-    // 与 tweak 的 LCJBRootPath 保持一致：roothide 下需经 jbroot 解析
+    // \u4e0e tweak \u7684 LCJBRootPath \u4fdd\u6301\u4e00\u81f4\uff1aroothide \u4e0b\u9700\u7ecf jbroot \u89e3\u6790
     return LCJbRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
 }
 
@@ -39,7 +39,7 @@ static void LCSet(id value, NSString *key) {
             d[key] = value;
         }
         [d writeToFile:LCConfigPath() atomically:YES];
-        // 同步 cfprefsd，避免它用内存里的旧值把文件覆盖回去
+        // \u540c\u6b65 cfprefsd\uff0c\u907f\u514d\u5b83\u7528\u5185\u5b58\u91cc\u7684\u65e7\u503c\u628a\u6587\u4ef6\u8986\u76d6\u56de\u53bb
         CFPreferencesAppSynchronize((__bridge CFStringRef)LCAppID);
     } @catch (NSException *e) {}
 }
@@ -50,11 +50,11 @@ static NSString *LCStr(NSString *key, NSString *fallback) {
         ? (NSString *)v : fallback;
 }
 
-// ===== v1.0.87：安全的数值/布尔读取 =====
-// 背景：postinst 写入的是 <string>16</string>（字符串），
-// 面板却用 [(NSNumber *)LCGet(@"fontSize") doubleValue] 强转 —— 类型不匹配，
-// 遇到字符串时是「未定义行为」（运气好能跑，运气不好直接崩）。
-// 现在统一兼容 NSNumber / NSString 两种存法，和 tweak 侧读取逻辑保持一致。
+// ===== v1.0.87\uff1a\u5b89\u5168\u7684\u6570\u503c/\u5e03\u5c14\u8bfb\u53d6 =====
+// \u80cc\u666f\uff1apostinst \u5199\u5165\u7684\u662f <string>16</string>\uff08\u5b57\u7b26\u4e32\uff09\uff0c
+// \u9762\u677f\u5374\u7528 [(NSNumber *)LCGet(@"fontSize") doubleValue] \u5f3a\u8f6c \u2014\u2014 \u7c7b\u578b\u4e0d\u5339\u914d\uff0c
+// \u9047\u5230\u5b57\u7b26\u4e32\u65f6\u662f\u300c\u672a\u5b9a\u4e49\u884c\u4e3a\u300d\uff08\u8fd0\u6c14\u597d\u80fd\u8dd1\uff0c\u8fd0\u6c14\u4e0d\u597d\u76f4\u63a5\u5d29\uff09\u3002
+// \u73b0\u5728\u7edf\u4e00\u517c\u5bb9 NSNumber / NSString \u4e24\u79cd\u5b58\u6cd5\uff0c\u548c tweak \u4fa7\u8bfb\u53d6\u903b\u8f91\u4fdd\u6301\u4e00\u81f4\u3002
 static double LCGetNum(NSString *key, double fallback) {
     id v = LCGet(key);
     if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v doubleValue];
@@ -69,16 +69,16 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     return fallback;
 }
 
-#pragma mark - 主控制器
+#pragma mark - \u4e3b\u63a7\u5236\u5668
 
-#pragma mark - v1.0.87：字幕字号选择器（滑块 + 实时预览）
+#pragma mark - v1.0.87\uff1a\u5b57\u5e55\u5b57\u53f7\u9009\u62e9\u5668\uff08\u6ed1\u5757 + \u5b9e\u65f6\u9884\u89c8\uff09
 
-// 设计要点：
-//   ① 滑块 10~40，与 tweak 侧 fontSize 的取值范围完全一致
-//   ② 拖动时实时改预览文字（所见即所得）
-//   ③ 数值变化即写入配置（tweak 实时读盘 + 0.4s 监听）→ 字幕当场变大/变小
-//   ④ 快捷档位按钮（小/标准/大/特大），单手可点
-//   ⑤ 默认值 16，与 tweak 实际默认一致（原来面板显示 28、实际 16，两边对不上）
+// \u8bbe\u8ba1\u8981\u70b9\uff1a
+//   \u2460 \u6ed1\u5757 10~40\uff0c\u4e0e tweak \u4fa7 fontSize \u7684\u53d6\u503c\u8303\u56f4\u5b8c\u5168\u4e00\u81f4
+//   \u2461 \u62d6\u52a8\u65f6\u5b9e\u65f6\u6539\u9884\u89c8\u6587\u5b57\uff08\u6240\u89c1\u5373\u6240\u5f97\uff09
+//   \u2462 \u6570\u503c\u53d8\u5316\u5373\u5199\u5165\u914d\u7f6e\uff08tweak \u5b9e\u65f6\u8bfb\u76d8 + 0.4s \u76d1\u542c\uff09\u2192 \u5b57\u5e55\u5f53\u573a\u53d8\u5927/\u53d8\u5c0f
+//   \u2463 \u5feb\u6377\u6863\u4f4d\u6309\u94ae\uff08\u5c0f/\u6807\u51c6/\u5927/\u7279\u5927\uff09\uff0c\u5355\u624b\u53ef\u70b9
+//   \u2464 \u9ed8\u8ba4\u503c 16\uff0c\u4e0e tweak \u5b9e\u9645\u9ed8\u8ba4\u4e00\u81f4\uff08\u539f\u6765\u9762\u677f\u663e\u793a 28\u3001\u5b9e\u9645 16\uff0c\u4e24\u8fb9\u5bf9\u4e0d\u4e0a\uff09
 @interface LCFontSizeController : UIViewController
 @end
 
@@ -92,21 +92,21 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"字幕字号";
+    self.title = @"\u5b57\u5e55\u5b57\u53f7";
     self.view.backgroundColor = [UIColor systemBackgroundColor];
 
     _value = [self lc_currentFontSize];
     _lastWritten = _value;
 
     self.navigationItem.rightBarButtonItem =
-        [[UIBarButtonItem alloc] initWithTitle:@"完成"
+        [[UIBarButtonItem alloc] initWithTitle:@"\u5b8c\u6210"
                                          style:UIBarButtonItemStyleDone
                                         target:self
                                         action:@selector(lc_done)];
 
-    // 说明文字
+    // \u8bf4\u660e\u6587\u5b57
     UILabel *desc = [[UILabel alloc] init];
-    desc.text = @"拖动滑块调整字幕字号，设置后立即生效，无需重启 App";
+    desc.text = @"\u62d6\u52a8\u6ed1\u5757\u8c03\u6574\u5b57\u5e55\u5b57\u53f7\uff0c\u8bbe\u7f6e\u540e\u7acb\u5373\u751f\u6548\uff0c\u65e0\u9700\u91cd\u542f App";
     desc.font = [UIFont systemFontOfSize:13];
     desc.textColor = [UIColor secondaryLabelColor];
     desc.numberOfLines = 0;
@@ -114,7 +114,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     desc.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:desc];
 
-    // 当前数值
+    // \u5f53\u524d\u6570\u503c
     _valueLabel = [[UILabel alloc] init];
     _valueLabel.text = [NSString stringWithFormat:@"%.0f", _value];
     _valueLabel.font = [UIFont systemFontOfSize:36 weight:UIFontWeightBold];
@@ -122,7 +122,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     _valueLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_valueLabel];
 
-    // 滑块
+    // \u6ed1\u5757
     _slider = [[UISlider alloc] init];
     _slider.minimumValue = 10.0;
     _slider.maximumValue = 40.0;
@@ -134,9 +134,9 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     _slider.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_slider];
 
-    // 预览（模拟字幕样式：白字深色底）
+    // \u9884\u89c8\uff08\u6a21\u62df\u5b57\u5e55\u6837\u5f0f\uff1a\u767d\u5b57\u6df1\u8272\u5e95\uff09
     _preview = [[UILabel alloc] init];
-    _preview.text = @"这是字幕预览效果 Example 123";
+    _preview.text = @"\u8fd9\u662f\u5b57\u5e55\u9884\u89c8\u6548\u679c Example 123";
     _preview.numberOfLines = 0;
     _preview.textAlignment = NSTextAlignmentCenter;
     _preview.textColor = [UIColor whiteColor];
@@ -147,12 +147,12 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     _preview.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_preview];
 
-    // 快捷档位
+    // \u5feb\u6377\u6863\u4f4d
     UIStackView *presets = [[UIStackView alloc] init];
     presets.axis = UILayoutConstraintAxisHorizontal;
     presets.distribution = UIStackViewDistributionFillEqually;
     presets.spacing = 8.0;
-    NSArray *names = @[@"小 14", @"标准 18", @"大 24", @"特大 30"];
+    NSArray *names = @[@"\u5c0f 14", @"\u6807\u51c6 18", @"\u5927 24", @"\u7279\u5927 30"];
     NSArray *vals = @[@14, @18, @24, @30];
     for (NSUInteger i = 0; i < names.count; i++) {
         UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -170,7 +170,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     presets.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:presets];
 
-    // 布局
+    // \u5e03\u5c40
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
         [desc.topAnchor constraintEqualToAnchor:safe.topAnchor constant:18],
@@ -197,7 +197,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     ]];
 }
 
-// 当前字号（与 tweak 侧范围一致：10~40，默认 16）
+// \u5f53\u524d\u5b57\u53f7\uff08\u4e0e tweak \u4fa7\u8303\u56f4\u4e00\u81f4\uff1a10~40\uff0c\u9ed8\u8ba4 16\uff09
 - (double)lc_currentFontSize {
     double fs = LCGetNum(@"fontSize", 16.0);
     if (fs < 10.0 || fs > 40.0) fs = 16.0;
@@ -206,7 +206,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (void)lc_sliderChanged:(UISlider *)slider {
     double v = (double)slider.value;
-    // 取整（字号没必要有小数）
+    // \u53d6\u6574\uff08\u5b57\u53f7\u6ca1\u5fc5\u8981\u6709\u5c0f\u6570\uff09
     v = (double)(long long)(v + 0.5);
     if (v < 10.0) v = 10.0;
     if (v > 40.0) v = 40.0;
@@ -221,7 +221,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     [self lc_sliderChanged:_slider];
 }
 
-// 写入配置：字号是整数，值没变就不写盘（拖动时不做无意义的文件写入）
+// \u5199\u5165\u914d\u7f6e\uff1a\u5b57\u53f7\u662f\u6574\u6570\uff0c\u503c\u6ca1\u53d8\u5c31\u4e0d\u5199\u76d8\uff08\u62d6\u52a8\u65f6\u4e0d\u505a\u65e0\u610f\u4e49\u7684\u6587\u4ef6\u5199\u5165\uff09
 - (void)applyValue:(double)v {
     if ((v - _lastWritten) < 0.5 && (_lastWritten - v) < 0.5) return;
     _lastWritten = v;
@@ -245,12 +245,12 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"实时字幕翻译";
+    self.title = @"\u5b9e\u65f6\u5b57\u5e55\u7ffb\u8bd1";
     self.view.backgroundColor = [UIColor systemBackgroundColor];
 
     if (!(self.navigationController && self.navigationController.viewControllers.count > 1)) {
         self.navigationItem.leftBarButtonItem =
-            [[UIBarButtonItem alloc] initWithTitle:@"完成"
+            [[UIBarButtonItem alloc] initWithTitle:@"\u5b8c\u6210"
                                              style:UIBarButtonItemStyleDone
                                             target:self
                                             action:@selector(lc_done)];
@@ -284,85 +284,85 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (UITableView *)lc_tv { return (UITableView *)[self.view viewWithTag:100]; }
 
-#pragma mark - 展示值
+#pragma mark - \u5c55\u793a\u503c
 
 - (NSString *)lc_sourceLangTitle {
     NSString *v = LCStr(@"sourceLang", @"en-US");
-    if ([v isEqualToString:@"en-US"]) return @"英语";
-    if ([v isEqualToString:@"ja-JP"]) return @"日语";
-    if ([v isEqualToString:@"ko-KR"]) return @"韩语";
-    if ([v isEqualToString:@"zh-CN"]) return @"中文";
+    if ([v isEqualToString:@"en-US"]) return @"\u82f1\u8bed";
+    if ([v isEqualToString:@"ja-JP"]) return @"\u65e5\u8bed";
+    if ([v isEqualToString:@"ko-KR"]) return @"\u97e9\u8bed";
+    if ([v isEqualToString:@"zh-CN"]) return @"\u4e2d\u6587";
     return v;
 }
 
 - (NSString *)lc_targetLangTitle {
     NSString *v = LCStr(@"targetLang", @"zh-Hans");
-    if ([v isEqualToString:@"zh-Hans"]) return @"简体中文";
-    if ([v isEqualToString:@"zh-Hant"]) return @"繁体中文";
-    if ([v isEqualToString:@"en"]) return @"英语";
+    if ([v isEqualToString:@"zh-Hans"]) return @"\u7b80\u4f53\u4e2d\u6587";
+    if ([v isEqualToString:@"zh-Hant"]) return @"\u7e41\u4f53\u4e2d\u6587";
+    if ([v isEqualToString:@"en"]) return @"\u82f1\u8bed";
     return v;
 }
 
 - (NSString *)lc_bgStyleTitle {
     NSString *v = LCStr(@"backgroundStyle", @"frost");
-    if ([v isEqualToString:@"none"]) return @"无背景描边";
-    if ([v isEqualToString:@"darktrans"]) return @"半透明黑";
-    if ([v isEqualToString:@"darksolid"]) return @"实黑";
-    if ([v isEqualToString:@"lighttrans"]) return @"半透明白";
-    return @"毛玻璃";
+    if ([v isEqualToString:@"none"]) return @"\u65e0\u80cc\u666f\u63cf\u8fb9";
+    if ([v isEqualToString:@"darktrans"]) return @"\u534a\u900f\u660e\u9ed1";
+    if ([v isEqualToString:@"darksolid"]) return @"\u5b9e\u9ed1";
+    if ([v isEqualToString:@"lighttrans"]) return @"\u534a\u900f\u660e\u767d";
+    return @"\u6bdb\u73bb\u7483";
 }
 
 - (NSString *)lc_colorTitle {
     NSString *hex = LCStr(@"textColorHex", @"#FFFFFFFF");
     if ([hex caseInsensitiveCompare:@"#FFFFFFFF"] == NSOrderedSame ||
-        [hex caseInsensitiveCompare:@"#FFFFFF"] == NSOrderedSame) return @"白色（默认）";
+        [hex caseInsensitiveCompare:@"#FFFFFF"] == NSOrderedSame) return @"\u767d\u8272\uff08\u9ed8\u8ba4\uff09";
     return hex;
 }
 
 - (NSString *)lc_apiKeyTitle {
     NSString *k = LCStr(@"apiKey", @"");
-    return (k.length == 0) ? @"未设置" : @"已设置";
+    return (k.length == 0) ? @"\u672a\u8bbe\u7f6e" : @"\u5df2\u8bbe\u7f6e";
 }
 
 - (NSString *)lc_tencentSecretTitle {
     NSString *k = LCStr(@"tencentSecretId", @"");
-    return (k.length == 0) ? @"未设置" : @"已设置";
+    return (k.length == 0) ? @"\u672a\u8bbe\u7f6e" : @"\u5df2\u8bbe\u7f6e";
 }
 
 - (NSString *)lc_tencentSecretKeyTitle {
     NSString *k = LCStr(@"tencentSecretKey", @"");
-    return (k.length == 0) ? @"未设置" : @"已设置";
+    return (k.length == 0) ? @"\u672a\u8bbe\u7f6e" : @"\u5df2\u8bbe\u7f6e";
 }
 
-#pragma mark - 表格
+#pragma mark - \u8868\u683c
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 4; // 0 基本 / 1 翻译 API / 2 字幕显示 / 3 说明
+    return 4; // 0 \u57fa\u672c / 1 \u7ffb\u8bd1 API / 2 \u5b57\u5e55\u663e\u793a / 3 \u8bf4\u660e
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    if (section == 0) return @"基本";
-    if (section == 1) return @"腾讯云语音识别（在线）";
-    if (section == 2) return @"字幕显示";
+    if (section == 0) return @"\u57fa\u672c";
+    if (section == 1) return @"\u817e\u8baf\u4e91\u8bed\u97f3\u8bc6\u522b\uff08\u5728\u7ebf\uff09";
+    if (section == 2) return @"\u5b57\u5e55\u663e\u793a";
     return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0)
-        return @"识别语言会按 App 记忆（例如 A 软件英语、B 软件日语），也可长按桌面 App 图标快捷切换。";
+        return @"\u8bc6\u522b\u8bed\u8a00\u4f1a\u6309 App \u8bb0\u5fc6\uff08\u4f8b\u5982 A \u8f6f\u4ef6\u82f1\u8bed\u3001B \u8f6f\u4ef6\u65e5\u8bed\uff09\uff0c\u4e5f\u53ef\u957f\u6309\u684c\u9762 App \u56fe\u6807\u5feb\u6377\u5207\u6362\u3002";
     if (section == 1)
-        return @"在线语音识别无需 iOS 授权，任何 App 通用。腾讯云一句话识别每月免费 5000 次，密钥在控制台→访问管理→API 密钥管理获取。翻译使用内置 AI 服务。";
+        return @"\u5728\u7ebf\u8bed\u97f3\u8bc6\u522b\u65e0\u9700 iOS \u6388\u6743\uff0c\u4efb\u4f55 App \u901a\u7528\u3002\u817e\u8baf\u4e91\u4e00\u53e5\u8bdd\u8bc6\u522b\u6bcf\u6708\u514d\u8d39 5000 \u6b21\uff0c\u5bc6\u94a5\u5728\u63a7\u5236\u53f0\u2192\u8bbf\u95ee\u7ba1\u7406\u2192API \u5bc6\u94a5\u7ba1\u7406\u83b7\u53d6\u3002\u7ffb\u8bd1\u4f7f\u7528\u5185\u7f6e AI \u670d\u52a1\u3002";
     if (section == 2)
-        return @"字幕可长按拖动，位置按 App 记忆（重开 App 回到上次位置）。背景样式：无背景描边 / 半透明黑 / 实黑 / 半透明白 / 毛玻璃。\n点「字幕字号」可用滑块调整大小，改完立即生效，无需重启 App。\n默认只显示中文译文一行；打开「显示英文原文」可恢复上下两行（英文在上、中文在下）。";
+        return @"\u5b57\u5e55\u53ef\u957f\u6309\u62d6\u52a8\uff0c\u4f4d\u7f6e\u6309 App \u8bb0\u5fc6\uff08\u91cd\u5f00 App \u56de\u5230\u4e0a\u6b21\u4f4d\u7f6e\uff09\u3002\u80cc\u666f\u6837\u5f0f\uff1a\u65e0\u80cc\u666f\u63cf\u8fb9 / \u534a\u900f\u660e\u9ed1 / \u5b9e\u9ed1 / \u534a\u900f\u660e\u767d / \u6bdb\u73bb\u7483\u3002\n\u70b9\u300c\u5b57\u5e55\u5b57\u53f7\u300d\u53ef\u7528\u6ed1\u5757\u8c03\u6574\u5927\u5c0f\uff0c\u6539\u5b8c\u7acb\u5373\u751f\u6548\uff0c\u65e0\u9700\u91cd\u542f App\u3002\n\u9ed8\u8ba4\u53ea\u663e\u793a\u4e2d\u6587\u8bd1\u6587\u4e00\u884c\uff1b\u6253\u5f00\u300c\u663e\u793a\u82f1\u6587\u539f\u6587\u300d\u53ef\u6062\u590d\u4e0a\u4e0b\u4e24\u884c\uff08\u82f1\u6587\u5728\u4e0a\u3001\u4e2d\u6587\u5728\u4e0b\uff09\u3002";
     if (section == 3)
-        return @"目标 App 需在 Dopamine Inject Manager（或 Filza/真皮）白名单勾选；完全退出目标 App 再打开生效。长按桌面 App 图标可快捷开关实时字幕翻译。";
+        return @"\u76ee\u6807 App \u9700\u5728 Dopamine Inject Manager\uff08\u6216 Filza/\u771f\u76ae\uff09\u767d\u540d\u5355\u52fe\u9009\uff1b\u5b8c\u5168\u9000\u51fa\u76ee\u6807 App \u518d\u6253\u5f00\u751f\u6548\u3002\u957f\u6309\u684c\u9762 App \u56fe\u6807\u53ef\u5feb\u6377\u5f00\u5173\u5b9e\u65f6\u5b57\u5e55\u7ffb\u8bd1\u3002";
     return nil;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) return 4;
-    if (section == 1) return 2;  // 腾讯云 SecretId / SecretKey
-    if (section == 2) return 6;  // 字号 / 粗体 / 文字颜色 / 背景样式 / 识别分片 / 显示英文原文
+    if (section == 1) return 2;  // \u817e\u8baf\u4e91 SecretId / SecretKey
+    if (section == 2) return 6;  // \u5b57\u53f7 / \u7c97\u4f53 / \u6587\u5b57\u989c\u8272 / \u80cc\u666f\u6837\u5f0f / \u8bc6\u522b\u5206\u7247 / \u663e\u793a\u82f1\u6587\u539f\u6587
     return 0;
 }
 
@@ -376,24 +376,24 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
     if (indexPath.section == 0) {
         if (indexPath.row == 0) {
-            cell.textLabel.text = @"实时字幕翻译";
+            cell.textLabel.text = @"\u5b9e\u65f6\u5b57\u5e55\u7ffb\u8bd1";
             UISwitch *sw = [[UISwitch alloc] init];
             sw.on = LCGetBool(@"enabled", YES);
             [sw addTarget:self action:@selector(lc_enabledChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else if (indexPath.row == 1) {
-            cell.textLabel.text = @"注入目标 App";
-            // 与「选择注入 App」页口径一致：真实注入 = 白名单 ∩ Inject Manager 允许 ∩ 已安装
+            cell.textLabel.text = @"\u6ce8\u5165\u76ee\u6807 App";
+            // \u4e0e\u300c\u9009\u62e9\u6ce8\u5165 App\u300d\u9875\u53e3\u5f84\u4e00\u81f4\uff1a\u771f\u5b9e\u6ce8\u5165 = \u767d\u540d\u5355 \u2229 Inject Manager \u5141\u8bb8 \u2229 \u5df2\u5b89\u88c5
             NSUInteger n = [LCReallyInjectedIDs() count];
-            cell.detailTextLabel.text = [NSString stringWithFormat:@"已注入 %lu 个", (unsigned long)n];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"\u5df2\u6ce8\u5165 %lu \u4e2a", (unsigned long)n];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 2) {
-            cell.textLabel.text = @"识别语言（按 App 记忆）";
+            cell.textLabel.text = @"\u8bc6\u522b\u8bed\u8a00\uff08\u6309 App \u8bb0\u5fc6\uff09";
             cell.detailTextLabel.text = [self lc_sourceLangTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else {
-            cell.textLabel.text = @"翻译成";
+            cell.textLabel.text = @"\u7ffb\u8bd1\u6210";
             cell.detailTextLabel.text = [self lc_targetLangTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         }
@@ -411,43 +411,43 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     }
     else {
         if (indexPath.row == 0) {
-            // v1.0.87：字号行 → 点开滑块选择器（不再是数字键盘输入）
-            cell.textLabel.text = @"字幕字号";
-            // 默认值与 tweak 保持一致（16）。原来这里写 28，
-            // 与 tweak 实际的默认 16 不一致 → 用户看到「28」但画面是 16，误以为没生效。
+            // v1.0.87\uff1a\u5b57\u53f7\u884c \u2192 \u70b9\u5f00\u6ed1\u5757\u9009\u62e9\u5668\uff08\u4e0d\u518d\u662f\u6570\u5b57\u952e\u76d8\u8f93\u5165\uff09
+            cell.textLabel.text = @"\u5b57\u5e55\u5b57\u53f7";
+            // \u9ed8\u8ba4\u503c\u4e0e tweak \u4fdd\u6301\u4e00\u81f4\uff0816\uff09\u3002\u539f\u6765\u8fd9\u91cc\u5199 28\uff0c
+            // \u4e0e tweak \u5b9e\u9645\u7684\u9ed8\u8ba4 16 \u4e0d\u4e00\u81f4 \u2192 \u7528\u6237\u770b\u5230\u300c28\u300d\u4f46\u753b\u9762\u662f 16\uff0c\u8bef\u4ee5\u4e3a\u6ca1\u751f\u6548\u3002
             CGFloat fs = LCGetNum(@"fontSize", 16.0);
             if (fs < 10 || fs > 40) fs = 16.0;
             cell.detailTextLabel.text = [NSString stringWithFormat:@"%.0f", fs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 1) {
-            cell.textLabel.text = @"粗体";
+            cell.textLabel.text = @"\u7c97\u4f53";
             UISwitch *sw = [[UISwitch alloc] init];
             sw.on = LCGetBool(@"boldText", NO);
             [sw addTarget:self action:@selector(lc_boldChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else if (indexPath.row == 2) {
-            cell.textLabel.text = @"文字颜色";
+            cell.textLabel.text = @"\u6587\u5b57\u989c\u8272";
             cell.detailTextLabel.text = [self lc_colorTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 3) {
-            cell.textLabel.text = @"背景样式";
+            cell.textLabel.text = @"\u80cc\u666f\u6837\u5f0f";
             cell.detailTextLabel.text = [self lc_bgStyleTitle];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 4) {
-            // v1.0.84：ASR 分片时长（秒）—— 直接影响字幕延迟
-            cell.textLabel.text = @"识别分片";
+            // v1.0.84\uff1aASR \u5206\u7247\u65f6\u957f\uff08\u79d2\uff09\u2014\u2014 \u76f4\u63a5\u5f71\u54cd\u5b57\u5e55\u5ef6\u8fdf
+            cell.textLabel.text = @"\u8bc6\u522b\u5206\u7247";
             double cs = LCGetNum(@"asrChunkSeconds", 2.5);
             if (cs < 1.0 || cs > 8.0) cs = 2.5;
-            cell.detailTextLabel.text = [NSString stringWithFormat:@"%.1f 秒", cs];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"%.1f \u79d2", cs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else {
-            // row == 5：显示英文原文
-            // v1.0.82：默认只显示中文一行；打开后恢复「英文原文 + 中文翻译」两行
-            cell.textLabel.text = @"显示英文原文";
+            // row == 5\uff1a\u663e\u793a\u82f1\u6587\u539f\u6587
+            // v1.0.82\uff1a\u9ed8\u8ba4\u53ea\u663e\u793a\u4e2d\u6587\u4e00\u884c\uff1b\u6253\u5f00\u540e\u6062\u590d\u300c\u82f1\u6587\u539f\u6587 + \u4e2d\u6587\u7ffb\u8bd1\u300d\u4e24\u884c
+            cell.textLabel.text = @"\u663e\u793a\u82f1\u6587\u539f\u6587";
             UISwitch *sw = [[UISwitch alloc] init];
-            // v1.0.83：只认 showBilingual（默认 NO = 只显示中文一行）。
-            // 老键 showEnglish 语义相反且会被覆写，已废弃不用。
+            // v1.0.83\uff1a\u53ea\u8ba4 showBilingual\uff08\u9ed8\u8ba4 NO = \u53ea\u663e\u793a\u4e2d\u6587\u4e00\u884c\uff09\u3002
+            // \u8001\u952e showEnglish \u8bed\u4e49\u76f8\u53cd\u4e14\u4f1a\u88ab\u8986\u5199\uff0c\u5df2\u5e9f\u5f03\u4e0d\u7528\u3002
             sw.on = LCGetBool(@"showBilingual", NO);
             [sw addTarget:self action:@selector(lc_showEnglishChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
@@ -473,10 +473,10 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         } @catch (NSException *e) {}
     }
     else if (indexPath.section == 0 && indexPath.row == 2) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"识别语言"
-                                                                       message:@"默认值；可按 App 记忆，长按图标可快速切换"
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"\u8bc6\u522b\u8bed\u8a00"
+                                                                       message:@"\u9ed8\u8ba4\u503c\uff1b\u53ef\u6309 App \u8bb0\u5fc6\uff0c\u957f\u6309\u56fe\u6807\u53ef\u5feb\u901f\u5207\u6362"
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
-        NSArray *items = @[@"英语 en-US", @"日语 ja-JP", @"韩语 ko-KR", @"中文 zh-CN"];
+        NSArray *items = @[@"\u82f1\u8bed en-US", @"\u65e5\u8bed ja-JP", @"\u97e9\u8bed ko-KR", @"\u4e2d\u6587 zh-CN"];
         for (NSString *s in items) {
             [alert addAction:[UIAlertAction actionWithTitle:s style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
                 NSString *code = [s componentsSeparatedByString:@" "].lastObject;
@@ -484,28 +484,28 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
                 [self.lc_tv reloadData];
             }]];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u53d6\u6d88" style:UIAlertActionStyleCancel handler:nil]];
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 0 && indexPath.row == 3) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"翻译成"
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"\u7ffb\u8bd1\u6210"
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
-        NSArray *items = @[@"简体中文 zh-Hans", @"繁体中文 zh-Hant", @"英语 en"];
+        NSArray *items = @[@"\u7b80\u4f53\u4e2d\u6587 zh-Hans", @"\u7e41\u4f53\u4e2d\u6587 zh-Hant", @"\u82f1\u8bed en"];
         for (NSString *s in items) {
             [alert addAction:[UIAlertAction actionWithTitle:s style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
                 LCSet([s componentsSeparatedByString:@" "].lastObject, @"targetLang");
                 [self.lc_tv reloadData];
             }]];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u53d6\u6d88" style:UIAlertActionStyleCancel handler:nil]];
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 1) {
         NSString *key = nil, *title = nil, *cur = nil, *ph = nil;
         BOOL secure = NO;
         if (indexPath.row == 0) { key = @"tencentSecretId"; title = @"SecretId"; cur = LCStr(key, @""); ph = @"AKID..."; }
-        else { key = @"tencentSecretKey"; title = @"SecretKey"; cur = LCStr(key, @""); ph = @"腾讯云 API 密钥管理"; secure = YES; }
+        else { key = @"tencentSecretKey"; title = @"SecretKey"; cur = LCStr(key, @""); ph = @"\u817e\u8baf\u4e91 API \u5bc6\u94a5\u7ba1\u7406"; secure = YES; }
 
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
                                                                        message:nil
@@ -517,8 +517,8 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             tf.secureTextEntry = secure;
             if (!secure) tf.autocorrectionType = UITextAutocorrectionTypeNo;
         }];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u53d6\u6d88" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u786e\u5b9a" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             NSString *v = alert.textFields.firstObject.text;
             if (v == nil) v = @"";
             v = [v stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -528,11 +528,11 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 2 && indexPath.row == 0) {
-        // ===== v1.0.87：字号选择器（滑块 + 实时预览）=====
-        // 原来是一个数字键盘输入框：要先点「字号」→ 弹键盘 → 输入 → 确定，
-        // 步骤多、而且看不到效果，改完还要退出 App 才生效（tweak 侧读的是启动时缓存）。
-        // 现在：独立的滑块页面，拖动即改、即时预览、即时写入，
-        // tweak 侧改为实时读盘 + 0.4s 监听 → 字幕大小当场变化，不用重启 App。
+        // ===== v1.0.87\uff1a\u5b57\u53f7\u9009\u62e9\u5668\uff08\u6ed1\u5757 + \u5b9e\u65f6\u9884\u89c8\uff09=====
+        // \u539f\u6765\u662f\u4e00\u4e2a\u6570\u5b57\u952e\u76d8\u8f93\u5165\u6846\uff1a\u8981\u5148\u70b9\u300c\u5b57\u53f7\u300d\u2192 \u5f39\u952e\u76d8 \u2192 \u8f93\u5165 \u2192 \u786e\u5b9a\uff0c
+        // \u6b65\u9aa4\u591a\u3001\u800c\u4e14\u770b\u4e0d\u5230\u6548\u679c\uff0c\u6539\u5b8c\u8fd8\u8981\u9000\u51fa App \u624d\u751f\u6548\uff08tweak \u4fa7\u8bfb\u7684\u662f\u542f\u52a8\u65f6\u7f13\u5b58\uff09\u3002
+        // \u73b0\u5728\uff1a\u72ec\u7acb\u7684\u6ed1\u5757\u9875\u9762\uff0c\u62d6\u52a8\u5373\u6539\u3001\u5373\u65f6\u9884\u89c8\u3001\u5373\u65f6\u5199\u5165\uff0c
+        // tweak \u4fa7\u6539\u4e3a\u5b9e\u65f6\u8bfb\u76d8 + 0.4s \u76d1\u542c \u2192 \u5b57\u5e55\u5927\u5c0f\u5f53\u573a\u53d8\u5316\uff0c\u4e0d\u7528\u91cd\u542f App\u3002
         @try {
             LCFontSizeController *vc = [[LCFontSizeController alloc] init];
             UINavigationController *nav =
@@ -544,15 +544,15 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         }
     }
     else if (indexPath.section == 2 && indexPath.row == 4) {
-        // v1.0.84：ASR 分片时长选择
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"识别分片时长"
-                                                                       message:@"分片越短字幕延迟越低，但句子越容易被切断"
+        // v1.0.84\uff1aASR \u5206\u7247\u65f6\u957f\u9009\u62e9
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"\u8bc6\u522b\u5206\u7247\u65f6\u957f"
+                                                                       message:@"\u5206\u7247\u8d8a\u77ed\u5b57\u5e55\u5ef6\u8fdf\u8d8a\u4f4e\uff0c\u4f46\u53e5\u5b50\u8d8a\u5bb9\u6613\u88ab\u5207\u65ad"
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
         NSArray *opts = @[@1.5, @2.5, @3.5, @5.0];
         for (NSNumber *v in opts) {
             double s = [v doubleValue];
-            NSString *title = [NSString stringWithFormat:@"%.1f 秒%@", s,
-                               (s == 2.5 ? @"（推荐）" : @"")];
+            NSString *title = [NSString stringWithFormat:@"%.1f \u79d2%@", s,
+                               (s == 2.5 ? @"\uff08\u63a8\u8350\uff09" : @"")];
             [alert addAction:[UIAlertAction actionWithTitle:title
                                                       style:UIAlertActionStyleDefault
                                                     handler:^(UIAlertAction *a) {
@@ -560,51 +560,51 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
                 [self.lc_tv reloadData];
             }]];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u53d6\u6d88" style:UIAlertActionStyleCancel handler:nil]];
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 2 && indexPath.row == 2) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"文字颜色"
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"\u6587\u5b57\u989c\u8272"
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
-        [alert addAction:[UIAlertAction actionWithTitle:@"白色（默认）" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u767d\u8272\uff08\u9ed8\u8ba4\uff09" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             LCSet(@"#FFFFFFFF", @"textColorHex");
             [self.lc_tv reloadData];
         }]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"自定义颜色" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u81ea\u5b9a\u4e49\u989c\u8272" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             self.colorKey = @"textColorHex";
             UIColorPickerViewController *p = [[UIColorPickerViewController alloc] init];
             p.delegate = self;
             p.selectedColor = [self lc_colorFromHex:LCStr(@"textColorHex", @"#FFFFFFFF")] ?: [UIColor whiteColor];
             [self presentViewController:p animated:YES completion:nil];
         }]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u53d6\u6d88" style:UIAlertActionStyleCancel handler:nil]];
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 2 && indexPath.row == 3) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景样式"
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"\u80cc\u666f\u6837\u5f0f"
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
-        NSArray *items = @[@"无背景描边 none", @"半透明黑 darktrans", @"实黑 darksolid",
-                           @"半透明白 lighttrans", @"毛玻璃 frost"];
+        NSArray *items = @[@"\u65e0\u80cc\u666f\u63cf\u8fb9 none", @"\u534a\u900f\u660e\u9ed1 darktrans", @"\u5b9e\u9ed1 darksolid",
+                           @"\u534a\u900f\u660e\u767d lighttrans", @"\u6bdb\u73bb\u7483 frost"];
         for (NSString *s in items) {
             [alert addAction:[UIAlertAction actionWithTitle:s style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
                 LCSet([s componentsSeparatedByString:@" "].lastObject, @"backgroundStyle");
                 [self.lc_tv reloadData];
             }]];
         }
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"\u53d6\u6d88" style:UIAlertActionStyleCancel handler:nil]];
         [self presentViewController:alert animated:YES completion:nil];
     }
 }
 
-#pragma mark - 开关
+#pragma mark - \u5f00\u5173
 
 - (void)lc_enabledChanged:(UISwitch *)sw { LCSet(@(sw.on), @"enabled"); }
 - (void)lc_boldChanged:(UISwitch *)sw { LCSet(@(sw.on), @"boldText"); }
 - (void)lc_showEnglishChanged:(UISwitch *)sw { LCSet(@(sw.on), @"showBilingual"); }
 
-#pragma mark - 颜色
+#pragma mark - \u989c\u8272
 
 - (UIColor *)lc_colorFromHex:(NSString *)hex {
     if (!hex || hex.length < 7) return nil;
