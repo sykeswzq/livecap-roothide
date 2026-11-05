@@ -1,6 +1,6 @@
-// LiveCapAppListController.m \u2014\u2014 \u6ce8\u5165\u76ee\u6807 App \u5217\u8868\uff08\u641c\u7d22\u6846 + \u9010\u4e2a\u5f00\u5173\uff09
-// \u6539\u7f16\u81ea XL-Roothide \u7684 XLAppListController\uff1a\u52fe\u9009\u76f4\u63a5\u6539\u5199\u6ce8\u5165 filter plist\uff08LiveCap.plist\uff09\uff0c\u6ce8\u9500/\u91cd\u542f App \u751f\u6548
-// \u8868\u5934\u7684\u201c\u5df2\u6ce8\u5165\u4e2a\u6570\u201d\u6309\u771f\u5b9e\u6ce8\u5165\u96c6\u5408\u7b97\uff1aLiveCap \u767d\u540d\u5355 \u2229 Inject Manager \u5141\u8bb8\u5217\u8868 \u2229 \u5df2\u5b89\u88c5
+// LiveCapAppListController.m —— 注入目标 App 列表（搜索框 + 逐个开关）
+// 改编自 XL-Roothide 的 XLAppListController：勾选直接改写注入 filter plist（LiveCap.plist），注销/重启 App 生效
+// 表头的“已注入个数”按真实注入集合算：LiveCap 白名单 ∩ Inject Manager 允许列表 ∩ 已安装
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
 #import <spawn.h>
@@ -8,7 +8,7 @@
 #import <mach-o/dyld.h>
 #import "LCPrivate.h"
 
-#pragma mark - filter \u5199\u5165\uff08\u8def\u5f84/\u8bfb\u53d6\u5b9e\u73b0\u89c1 LCPrivate.h\uff09
+#pragma mark - filter 写入（路径/读取实现见 LCPrivate.h）
 
 static NSString *LCAppID = @"com.sykes.livecap";
 
@@ -55,14 +55,14 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
         if (![data writeToFile:path atomically:YES]) return NO;
 
         NSArray *back = LCReadFilterBundles();
-        // \u4e0d\u5728\u6b64\u5904\u81ea\u52a8 killall runningboardd\uff08\u90a3\u7b49\u540c\u4e8e\u81ea\u52a8\u6ce8\u9500\uff09\uff1a\u7531\u7528\u6237\u624b\u52a8\u6ce8\u9500\u540e\u751f\u6548
+        // 不在此处自动 killall runningboardd（那等同于自动注销）：由用户手动注销后生效
         return (back.count == bundles.count);
     } @catch (NSException *e) {
         return NO;
     }
 }
 
-#pragma mark - \u63a7\u5236\u5668
+#pragma mark - 控制器
 
 @interface LiveCapAppListController : PSViewController <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate>
 @end
@@ -88,7 +88,7 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     return _injectWhite ?: @[];
 }
 
-// Inject Manager \u53ef\u80fd\u5728 Dopamine \u91cc\u88ab\u6539\u8fc7\uff0c\u56de\u5230\u672c\u9875\u65f6\u91cd\u65b0\u8bfb\u53d6
+// Inject Manager 可能在 Dopamine 里被改过，回到本页时重新读取
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     _injectWhite = nil;
@@ -97,12 +97,12 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"\u9009\u62e9\u6ce8\u5165 App";
+    self.title = @"选择注入 App";
     _filterWriteOK = YES;
 
     if (!(self.navigationController && self.navigationController.viewControllers.count > 1)) {
         self.navigationItem.leftBarButtonItem =
-            [[UIBarButtonItem alloc] initWithTitle:@"\u5b8c\u6210"
+            [[UIBarButtonItem alloc] initWithTitle:@"完成"
                                              style:UIBarButtonItemStyleDone
                                             target:self
                                             action:@selector(lc_close)];
@@ -112,7 +112,7 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     if (b.size.width <= 0) b = CGRectMake(0, 0, 375, 667);
 
     _searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, b.size.width, 44.0)];
-    _searchBar.placeholder = @"\u641c\u7d22 App \u540d\u79f0\u6216 Bundle ID";
+    _searchBar.placeholder = @"搜索 App 名称或 Bundle ID";
     _searchBar.delegate = self;
     _searchBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 
@@ -234,23 +234,23 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    // \u771f\u5b9e\u6ce8\u5165\u96c6\u5408 = LiveCap \u767d\u540d\u5355 \u2229 Inject Manager \u5141\u8bb8\u5217\u8868 \u2229 \u5df2\u5b89\u88c5
-    // \u82e5 InjectManager \u4e0d\u5b58\u5728\uff0c\u5219\u53ea\u7528 LiveCap Bundle \u767d\u540d\u5355
+    // 真实注入集合 = LiveCap 白名单 ∩ Inject Manager 允许列表 ∩ 已安装
+    // 若 InjectManager 不存在，则只用 LiveCap Bundle 白名单
     NSArray *filter = LCReadFilterBundles();
     NSArray *white  = LCReadInjectManagerWhitelist();
     NSUInteger realN = [LCReallyInjectedIDs() count];
 
-    NSMutableString *s = [NSMutableString stringWithFormat:@"\u5df2\u6ce8\u5165 %lu \u4e2a App", (unsigned long)realN];
+    NSMutableString *s = [NSMutableString stringWithFormat:@"已注入 %lu 个 App", (unsigned long)realN];
     if (white) {
-        [s appendFormat:@"\uff08\u767d\u540d\u5355 %lu \u00b7 Inject Manager \u5141\u8bb8 %lu\uff09",
+        [s appendFormat:@"（白名单 %lu · Inject Manager 允许 %lu）",
                        (unsigned long)filter.count, (unsigned long)white.count];
     } else {
-        [s appendFormat:@"\uff08\u767d\u540d\u5355 %lu \u00b7 \u672a\u68c0\u6d4b\u5230 Inject Manager\uff0c\u4f7f\u7528 Filza \u767d\u540d\u5355\uff09",
+        [s appendFormat:@"（白名单 %lu · 未检测到 Inject Manager，使用 Filza 白名单）",
                        (unsigned long)filter.count];
     }
-    [s appendString:@" \u00b7 \u6ce8\u9500\u540e\u751f\u6548"];
+    [s appendString:@" · 注销后生效"];
     if (!_filterWriteOK)
-        [s appendString:@" \u00b7 \u5199\u5165\u6ce8\u5165\u914d\u7f6e\u5931\u8d25"];
+        [s appendString:@" · 写入注入配置失败"];
     return s;
 }
 
@@ -261,7 +261,7 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
     if (_shown.count == 0) {
-        cell.textLabel.text = @"\u672a\u627e\u5230\u5339\u914d\u7684 App";
+        cell.textLabel.text = @"未找到匹配的 App";
         cell.detailTextLabel.text = nil;
         cell.accessoryView = nil;
         return cell;
@@ -273,26 +273,26 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     cell.detailTextLabel.text = bid;
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
 
-    // \u6807\u6ce8\u662f\u5426\u771f\u4f1a\u6ce8\u5165\uff1a\u9700\u540c\u65f6\u6ee1\u8db3\u300c\u5df2\u52fe\u9009\u300d+\u300cInject Manager \u5141\u8bb8\u300d\uff0c\u5426\u5219\u4e0d\u4f1a\u88ab\u6ce8\u5165
+    // 标注是否真会注入：需同时满足「已勾选」+「Inject Manager 允许」，否则不会被注入
     NSArray<NSString *> *white = [self lc_injectWhitelist];
     if (white && white.count > 0 && bid.length) {
         BOOL allowed = [white containsObject:bid];
         BOOL picked  = [[self lc_selected] containsObject:bid];
         if (picked && !allowed) {
             cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ \u00b7 \u672a\u5728 Inject Manager \u5141\u8bb8\uff0c\u4e0d\u4f1a\u6ce8\u5165", bid];
+                @"%@ · 未在 Inject Manager 允许，不会注入", bid];
             cell.detailTextLabel.textColor = [UIColor systemRedColor];
         } else if (!picked && allowed) {
             cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ \u00b7 Inject Manager \u5df2\u5141\u8bb8\uff0c\u672a\u52fe\u9009", bid];
+                @"%@ · Inject Manager 已允许，未勾选", bid];
             cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
         }
     } else {
-        // InjectManager \u4e0d\u5b58\u5728 \u2192 \u53ea\u4f9d\u8d56 LiveCap Bundle \u767d\u540d\u5355
+        // InjectManager 不存在 → 只依赖 LiveCap Bundle 白名单
         BOOL picked = [[self lc_selected] containsObject:bid];
         if (!picked) {
             cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ \u00b7 \u672a\u52fe\u9009\uff08\u9700\u5728\u8bbe\u7f6e\u9762\u677f\u52fe\u9009\uff09", bid];
+                @"%@ · 未勾选（需在设置面板勾选）", bid];
         }
     }
 
