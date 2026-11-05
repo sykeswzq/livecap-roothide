@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=1.0.88
+VER=1.0.89
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -29,7 +29,7 @@ mkdir -p "$STAGE/Library/PreferenceLoader/Preferences"
 
 echo "[1/4] compile tweak dylib (arm64e)"
 xcrun --sdk iphoneos clang \
-  -dynamiclib -fobjc-arc \
+  -dynamiclib -fobjc-arc -finput-charset=UTF-8 -fexec-charset=UTF-8 \
   -undefined dynamic_lookup \
   -install_name "$NEWID" \
   -framework UIKit -framework Foundation -framework AVFoundation \
@@ -47,7 +47,8 @@ chmod 666 "$STAGE/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
 
 echo "[2/4] compile preference bundle (arm64 + arm64e)"
 xcrun --sdk iphoneos clang \
-  -bundle -fobjc-arc -undefined dynamic_lookup \
+  -bundle -fobjc-arc -finput-charset=UTF-8 -fexec-charset=UTF-8 \
+  -undefined dynamic_lookup \
   -framework Foundation -framework UIKit -framework CoreGraphics \
   -arch arm64 -arch arm64e \
   -mios-version-min=13.0 \
