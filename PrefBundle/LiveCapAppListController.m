@@ -1,6 +1,6 @@
 // LiveCapAppListController.m —— 注入目标 App 列表（搜索框 + 逐个开关）
 // 改编自 XL-Roothide 的 XLAppListController：勾选直接改写注入 filter plist（LiveCap.plist），注销/重启 App 生效
-// 表头的“已注入个数”按真实注入集合算：LiveCap 白名单 ∩ Inject Manager 允许列表 ∩ 已安装
+// 表头的"已注入个数"按真实注入集合算：LiveCap 白名单 ∩ roothide 白名单 ∩ 已安装
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
 #import <spawn.h>
@@ -84,14 +84,13 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 
 - (NSArray<NSString *> *)lc_injectWhitelist {
     if (_injectWhite) return _injectWhite;
-    _injectWhite = LCReadInjectManagerWhitelist();
+    _injectWhite = LCReadRoothideWhitelist();
     return _injectWhite ?: @[];
 }
 
 // Inject Manager 可能在 Dopamine 里被改过，回到本页时重新读取
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    _injectWhite = nil;
     [_tv reloadData];
 }
 
@@ -234,20 +233,12 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    // 真实注入集合 = LiveCap 白名单 ∩ Inject Manager 允许列表 ∩ 已安装
-    // 若 InjectManager 不存在，则只用 LiveCap Bundle 白名单
+    // 真实注入集合 = LiveCap 白名单 ∩ 已安装
     NSArray *filter = LCReadFilterBundles();
-    NSArray *white  = LCReadInjectManagerWhitelist();
     NSUInteger realN = [LCReallyInjectedIDs() count];
 
     NSMutableString *s = [NSMutableString stringWithFormat:@"已注入 %lu 个 App", (unsigned long)realN];
-    if (white) {
-        [s appendFormat:@"（白名单 %lu · Inject Manager 允许 %lu）",
-                       (unsigned long)filter.count, (unsigned long)white.count];
-    } else {
-        [s appendFormat:@"（白名单 %lu · 未检测到 Inject Manager，使用 Filza 白名单）",
-                       (unsigned long)filter.count];
-    }
+    [s appendFormat:@"（白名单 %lu · roothide 白名单）", (unsigned long)filter.count];
     [s appendString:@" · 注销后生效"];
     if (!_filterWriteOK)
         [s appendString:@" · 写入注入配置失败"];
@@ -273,31 +264,16 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     cell.detailTextLabel.text = bid;
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
 
-    // 标注是否真会注入：需同时满足「已勾选」+「Inject Manager 允许」，否则不会被注入
-    NSArray<NSString *> *white = [self lc_injectWhitelist];
-    if (white && white.count > 0 && bid.length) {
-        BOOL allowed = [white containsObject:bid];
-        BOOL picked  = [[self lc_selected] containsObject:bid];
-        if (picked && !allowed) {
-            cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ · 未在 Inject Manager 允许，不会注入", bid];
-            cell.detailTextLabel.textColor = [UIColor systemRedColor];
-        } else if (!picked && allowed) {
-            cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ · Inject Manager 已允许，未勾选", bid];
-            cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-        }
-    } else {
-        // InjectManager 不存在 → 只依赖 LiveCap Bundle 白名单
-        BOOL picked = [[self lc_selected] containsObject:bid];
-        if (!picked) {
-            cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ · 未勾选（需在设置面板勾选）", bid];
-        }
+    // 标注是否真会注入：需满足「已勾选」，否则不会被注入
+    BOOL picked = [[self lc_selected] containsObject:bid];
+    if (!picked) {
+        cell.detailTextLabel.text = [NSString stringWithFormat:
+            @"%@ · 未勾选（需在设置面板勾选）", bid];
+        cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
     }
 
     UISwitch *sw = [[UISwitch alloc] init];
-    sw.on = [[self lc_selected] containsObject:bid];
+    sw.on = picked;
     sw.tag = (NSInteger)indexPath.row;
     [sw addTarget:self action:@selector(lc_switchChanged:) forControlEvents:UIControlEventValueChanged];
     cell.accessoryView = sw;
