@@ -91,20 +91,24 @@ static inline NSArray *LCReadFilterBundles(void) {
     return @[];
 }
 
-// XL-Roothide 白名单允许列表：决定某个 App 是否真的会被注入
-// 注意：如果文件不存在，返回 nil 表示"不强制白名单检查"
+// roothide 白名单允许列表：决定某个 App 是否真的会被注入
+// 载体文件：/var/jb/Library/Preferences/com.dopamine2.InjectManager.plist
+//   （roothide 3.x 白名单版本沿用 Dopamine 命名，实际就是 roothide 白名单）
+// 注意：如果文件不存在（如仅用 Filza/真皮管理白名单），返回 nil 表示"不强制 roothide 白名单"
 static inline NSArray *LCReadRoothideWhitelist(void) {
     @try {
         NSMutableArray *cands = [NSMutableArray array];
         const char *env = getenv("JBROOT");
         if (env && env[0]) {
             [cands addObject:[[NSString stringWithUTF8String:env]
-                stringByAppendingPathComponent:@"Library/Preferences/com.xl.roothide.plist"]];
+                stringByAppendingPathComponent:@"Library/Preferences/com.dopamine2.InjectManager.plist"]];
         }
-        [cands addObject:LCJbRootPath(@"/var/jb/Library/Preferences/com.xl.roothide.plist")];
-        [cands addObject:@"/var/jb/Library/Preferences/com.xl.roothide.plist"];
+        [cands addObject:LCJbRootPath(@"/var/jb/Library/Preferences/com.dopamine2.InjectManager.plist")];
+        [cands addObject:@"/var/jb/Library/Preferences/com.dopamine2.InjectManager.plist"];
+        [cands addObject:@"/var/mobile/Library/Preferences/com.dopamine2.InjectManager.plist"];
         for (NSString *p in cands) {
             if (!p.length) continue;
+            // 文件不存在 → 返回 nil（不强制 roothide 白名单）
             if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
             NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:p];
             id w = d[@"Whitelist"];
@@ -117,7 +121,7 @@ static inline NSArray *LCReadRoothideWhitelist(void) {
             if (out.count) return out;
         }
     } @catch (NSException *e) {}
-    return nil;  // 文件不存在或为空 → 不强制白名单检查
+    return nil;  // 文件不存在或为空 → 不强制 roothide 白名单
 }
 
 // 设备上已安装的 bundle id
@@ -155,17 +159,20 @@ static inline NSSet *LCInstalledAppIDs(void) {
 }
 
 // 真正会被注入 LiveCap 的 bundle 集合
-// 逻辑：LiveCap Bundle 白名单 ∩ 已安装 App
-// 不检查 InjectManager/roothide 白名单，因为 LiveCap 面板自己就是白名单管理器
+// 逻辑：LiveCap Bundle 白名单 ∩ roothide 白名单 ∩ 已安装 App
+// 只有三者同时满足，roothide 才会往该 App 注入 LiveCap.dylib
 static inline NSSet *LCReallyInjectedIDs(void) {
     NSMutableSet *out = [NSMutableSet set];
     @try {
+        NSArray *white = LCReadRoothideWhitelist();
         NSSet *installed = LCInstalledAppIDs();
         for (id b in LCReadFilterBundles()) {
             if (![b isKindOfClass:[NSString class]]) continue;
             NSString *bid = (NSString *)b;
             if (!bid.length) continue;
             if ([bid hasSuffix:@".disabled"]) continue;   // 未勾选时的哨兵值
+            // 只有 roothide 白名单存在且非空时，才检查是否在其中
+            if (white && white.count > 0 && ![white containsObject:bid]) continue;
             if (![installed containsObject:bid]) continue;
             [out addObject:bid];
         }
