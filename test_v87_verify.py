@@ -267,7 +267,7 @@ if not hit:
 #       此时 [[LCFontSizeController alloc] 会报
 #       "receiver for class message is a forward declaration"。
 bad_panel = BASE_PANEL
-_i = bad_panel.find('#pragma mark - v1.0.87：字幕字号选择器（滑块 + 实时预览）')
+_i = bad_panel.find('#pragma mark - v1.0.87\\uff1a\\u5b57\\u5e55\\u5b57\\u53f7\\u9009\\u62e9\\u5668\\uff08\\u6ed1\\u5757 + \\u5b9e\\u65f6\\u9884\\u89c8\\uff09')
 _j = bad_panel.find('@interface LCRootListController : PSViewController')
 assert _i > 0 and _j > _i
 bad_panel = (bad_panel[:_i]
