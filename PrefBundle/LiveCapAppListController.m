@@ -272,11 +272,12 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     cell.detailTextLabel.text = bid;
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
 
+    BOOL picked = [[self lc_selected] containsObject:bid];
+
     // 标注是否真会注入：需同时满足「已勾选」+「roothide 白名单」，否则不会被注入
     NSArray<NSString *> *white = [self lc_injectWhitelist];
     if (white.count > 0 && bid.length) {
         BOOL allowed = [white containsObject:bid];
-        BOOL picked  = [[self lc_selected] containsObject:bid];
         if (picked && !allowed) {
             cell.detailTextLabel.text = [NSString stringWithFormat:
                 @"%@ · 未进 roothide 白名单，不会注入", bid];
@@ -288,7 +289,6 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
         }
     } else {
         // roothide 白名单不存在 → 只依赖 LiveCap Bundle 白名单
-        BOOL picked = [[self lc_selected] containsObject:bid];
         if (!picked) {
             cell.detailTextLabel.text = [NSString stringWithFormat:
                 @"%@ · 未勾选（需在设置面板勾选）", bid];
