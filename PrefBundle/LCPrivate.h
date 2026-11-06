@@ -29,11 +29,12 @@
 - (NSArray *)allApplications;
 @end
 
-#pragma mark - 注入判定（真实注入 = LiveCap 白名单 ∩ 已安装）
+#pragma mark - 注入判定（真实注入 = LiveCap 白名单 ∩ roothide 白名单 ∩ 已安装）
 //
 // 依据（已在设备实测确认）：
 //   · LiveCap 白名单  = /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist → Filter/Bundles
-//   · 真正被注入的 App = LiveCap 白名单 ∩ 设备上已安装的 App
+//   · roothide 白名单 = /var/mobile/Library/RootHide/cn.zqbb.inject.plist（XL-Roothide 面板管理）
+//   · 真正被注入的 App = LiveCap 白名单 ∩ roothide 白名单 ∩ 设备上已安装的 App
 // 用户通过 XL-Roothide 面板勾选 App，roothide 白名单机制决定注入
 
 // roothide: /var/jb 是符号链接，jbroot() 可把 jbroot 路径转成真实 rootfs 路径
@@ -92,36 +93,52 @@ static inline NSArray *LCReadFilterBundles(void) {
 }
 
 // roothide 白名单允许列表：决定某个 App 是否真的会被注入
-// 载体文件：/var/jb/Library/Preferences/com.dopamine2.InjectManager.plist
-//   （roothide 3.x 白名单版本沿用 Dopamine 命名，实际就是 roothide 白名单）
-// 注意：如果文件不存在（如仅用 Filza/真皮管理白名单），返回 nil 表示"不强制 roothide 白名单"
-static inline NSArray *LCReadRoothideWhitelist(void) {
+// 载体文件：/var/mobile/Library/RootHide/cn.zqbb.inject.plist（XL-Roothide 面板管理）
+// 格式：dict<executableName:bool>，如 @"YouTube": @(YES)
+// 注意：key 是执行名（Executable Name），不是 bundle ID；需要映射关系来判断
+// 如果文件不存在，返回 nil 表示"不强制 roothide 白名单"
+static inline NSDictionary *LCReadXLRootHideWhitelist(void) {
     @try {
-        NSMutableArray *cands = [NSMutableArray array];
-        const char *env = getenv("JBROOT");
-        if (env && env[0]) {
-            [cands addObject:[[NSString stringWithUTF8String:env]
-                stringByAppendingPathComponent:@"Library/Preferences/com.dopamine2.InjectManager.plist"]];
-        }
-        [cands addObject:LCJbRootPath(@"/var/jb/Library/Preferences/com.dopamine2.InjectManager.plist")];
-        [cands addObject:@"/var/jb/Library/Preferences/com.dopamine2.InjectManager.plist"];
-        [cands addObject:@"/var/mobile/Library/Preferences/com.dopamine2.InjectManager.plist"];
-        for (NSString *p in cands) {
-            if (!p.length) continue;
-            // 文件不存在 → 返回 nil（不强制 roothide 白名单）
+        NSString *paths[] = {
+            @"/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
+            @"/var/jb/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
+        };
+        for (NSString *p in paths) {
             if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
             NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:p];
-            id w = d[@"Whitelist"];
-            if (![w isKindOfClass:[NSArray class]]) continue;
-            NSMutableArray *out = [NSMutableArray array];
-            for (id s in (NSArray *)w) {
-                if ([s isKindOfClass:[NSString class]] && ((NSString *)s).length)
-                    [out addObject:(NSString *)s];
-            }
-            if (out.count) return out;
+            if (![d isKindOfClass:[NSDictionary class]]) continue;
+            if (d.count == 0) continue;
+            return d;
         }
     } @catch (NSException *e) {}
-    return nil;  // 文件不存在或为空 → 不强制 roothide 白名单
+    return nil;
+}
+
+// 判断 bundle ID 是否在 roothide 白名单中
+// 策略：按 . 拆分 bid，取最后一节作为 executable 候选；再尝试常见映射
+static inline BOOL LCBidInXLWhitelist(NSString *bid) {
+    @try {
+        NSDictionary *xl = LCReadXLRootHideWhitelist();
+        if (!xl || xl.count == 0) return YES;  // 无白名单文件 → 不过滤
+        // 取 bundle ID 最后一节（通常是 executable 名）
+        NSString *last = [[bid componentsSeparatedByString:@"."] lastObject];
+        if ([xl objectForKey:last] != nil) return [xl[last] boolValue];
+        // 尝试常见映射：YouTube → com.google.ios.youtube, Animoji 等
+        static NSDictionary *const BID_TO_EXEC = @{
+            @"com.google.ios.youtube":          @"YouTube",
+            @"com.ss.android.ugc.aweme":        @"Aweme",
+            @"com.miHoYo.Yuanshen":            @"Yuanshen",
+            @"com.miHoYo.GenshinImpact":       @"GstarCAD",  // placeholder - no match likely
+            @"com.tencent.jkchess":            @"jkchess",
+            @"com.miHoYo.hkrpg":               @"hkrpg",
+            @"com.tencent.xin":                @"WeChat",
+            @"com.alipay.ip":                  @"AlipayWallet",
+        };
+        NSString *exec = BID_TO_EXEC[bid];
+        if (exec && [xl objectForKey:exec] != nil) return [xl[exec] boolValue];
+        // 默认放行（不过滤）
+        return YES;
+    } @catch (NSException *e) { return YES; }
 }
 
 // 设备上已安装的 bundle id
@@ -159,20 +176,18 @@ static inline NSSet *LCInstalledAppIDs(void) {
 }
 
 // 真正会被注入 LiveCap 的 bundle 集合
-// 逻辑：LiveCap Bundle 白名单 ∩ roothide 白名单 ∩ 已安装 App
-// 只有三者同时满足，roothide 才会往该 App 注入 LiveCap.dylib
+// 逻辑：LiveCap Bundle 白名单 ∩ roothide 白名单(XL) ∩ 已安装 App
 static inline NSSet *LCReallyInjectedIDs(void) {
     NSMutableSet *out = [NSMutableSet set];
     @try {
-        NSArray *white = LCReadRoothideWhitelist();
         NSSet *installed = LCInstalledAppIDs();
         for (id b in LCReadFilterBundles()) {
             if (![b isKindOfClass:[NSString class]]) continue;
             NSString *bid = (NSString *)b;
             if (!bid.length) continue;
-            if ([bid hasSuffix:@".disabled"]) continue;   // 未勾选时的哨兵值
-            // 只有 roothide 白名单存在且非空时，才检查是否在其中
-            if (white && white.count > 0 && ![white containsObject:bid]) continue;
+            if ([bid hasSuffix:@".disabled"]) continue;
+            // 只有 roothide 白名单有效且不允许该 bid 时才跳过
+            if (!LCBidInXLWhitelist(bid)) continue;
             if (![installed containsObject:bid]) continue;
             [out addObject:bid];
         }

@@ -83,9 +83,8 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 }
 
 - (NSArray<NSString *> *)lc_injectWhitelist {
-    if (_injectWhite) return _injectWhite;
-    _injectWhite = LCReadRoothideWhitelist();
-    return _injectWhite ?: @[];
+    // 返回空数组表示"不强制 roothide 白名单检查"，实际判断由 LCBidInXLWhitelist 完成
+    return @[];
 }
 
 // roothide \u767d\u540d\u5355\u53ef\u80fd\u88ab roothide \u9762\u677f\u6539\u8fc7\uff0c\u56de\u5230\u672c\u9875\u65f6\u91cd\u65b0\u8bfb\u53d6
