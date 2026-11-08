@@ -233,22 +233,24 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    // \u771f\u5b9e\u6ce8\u5165\u96c6\u5408 = LiveCap \u767d\u540d\u5355 \u2229 roothide \u767d\u540d\u5355 \u2229 \u5df2\u5b89\u88c5
+    // 真实注入集合 = LiveCap 白名单 ∩ XL Roohhide 白名单 ∩ 已安装
     NSArray *filter = LCReadFilterBundles();
-    NSArray *white  = LCReadRoothideWhitelist();
     NSUInteger realN = [LCReallyInjectedIDs() count];
 
-    NSMutableString *s = [NSMutableString stringWithFormat:@"\u5df2\u6ce8\u5165 %lu \u4e2a App", (unsigned long)realN];
-    if (white) {
-        [s appendFormat:@"\uff08\u52fe\u9009 %lu \u00b7 roothide \u767d\u540d\u5355 %lu\uff09",
-                       (unsigned long)filter.count, (unsigned long)white.count];
+    NSDictionary *xlWhitelist = LCReadXLRootHideWhitelist();
+    NSUInteger xlCount = xlWhitelist ? xlWhitelist.count : 0;
+
+    NSMutableString *s = [NSMutableString stringWithFormat:@"已注入 %lu 个 App", (unsigned long)realN];
+    if (xlWhitelist && xlWhitelist.count > 0) {
+        [s appendFormat:@"（勾选 %lu · XL Roohhide 白名单 %lu）",
+                       (unsigned long)filter.count, (unsigned long)xlCount];
     } else {
-        [s appendFormat:@"\uff08\u52fe\u9009 %lu \u00b7 \u672a\u68c0\u6d4b\u5230 roothide \u767d\u540d\u5355\uff09",
+        [s appendFormat:@"（勾选 %lu · 未检测到 XL Roohhide 白名单）",
                        (unsigned long)filter.count];
     }
-    [s appendString:@" \u00b7 \u6ce8\u9500\u540e\u751f\u6548"];
+    [s appendString:@" · 注销后生效"];
     if (!_filterWriteOK)
-        [s appendString:@" \u00b7 \u5199\u5165\u6ce8\u5165\u914d\u7f6e\u5931\u8d25"];
+        [s appendString:@" · 写入注入配置失败"];
     return s;
 }
 
