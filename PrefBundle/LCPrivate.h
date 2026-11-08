@@ -99,10 +99,10 @@ static inline NSArray *LCReadFilterBundles(void) {
 // 如果文件不存在，返回 nil 表示"不强制 roothide 白名单"
 static inline NSDictionary *LCReadXLRootHideWhitelist(void) {
     @try {
-        NSString *paths[] = {
+        NSArray *paths = @[
             @"/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
             @"/var/jb/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
-        };
+        ];
         for (NSString *p in paths) {
             if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
             NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:p];
