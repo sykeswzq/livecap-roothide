@@ -124,16 +124,21 @@ static inline BOOL LCBidInXLWhitelist(NSString *bid) {
         NSString *last = [[bid componentsSeparatedByString:@"."] lastObject];
         if ([xl objectForKey:last] != nil) return [xl[last] boolValue];
         // 尝试常见映射：YouTube → com.google.ios.youtube, Animoji 等
-        static NSDictionary *const BID_TO_EXEC = @{
-            @"com.google.ios.youtube":          @"YouTube",
-            @"com.ss.android.ugc.aweme":        @"Aweme",
-            @"com.miHoYo.Yuanshen":            @"Yuanshen",
-            @"com.miHoYo.GenshinImpact":       @"GstarCAD",  // placeholder - no match likely
-            @"com.tencent.jkchess":            @"jkchess",
-            @"com.miHoYo.hkrpg":               @"hkrpg",
-            @"com.tencent.xin":                @"WeChat",
-            @"com.alipay.ip":                  @"AlipayWallet",
-        };
+        // 使用静态指针 + dispatch_once 确保只初始化一次
+        static dispatch_once_t onceToken;
+        static NSDictionary *BID_TO_EXEC = nil;
+        dispatch_once(&onceToken, ^{
+            BID_TO_EXEC = @{
+                @"com.google.ios.youtube":          @"YouTube",
+                @"com.ss.android.ugc.aweme":        @"Aweme",
+                @"com.miHoYo.Yuanshen":            @"Yuanshen",
+                @"com.miHoYo.GenshinImpact":       @"GstarCAD",  // placeholder - no match likely
+                @"com.tencent.jkchess":            @"jkchess",
+                @"com.miHoYo.hkrpg":               @"hkrpg",
+                @"com.tencent.xin":                @"WeChat",
+                @"com.alipay.ip":                  @"AlipayWallet",
+            };
+        });
         NSString *exec = BID_TO_EXEC[bid];
         if (exec && [xl objectForKey:exec] != nil) return [xl[exec] boolValue];
         // 默认放行（不过滤）
