@@ -275,24 +275,21 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 
     BOOL picked = [[self lc_selected] containsObject:bid];
 
-    // \u6807\u6ce8\u662f\u5426\u771f\u4f1a\u6ce8\u5165\uff1a\u9700\u540c\u65f6\u6ee1\u8db3\u300c\u5df2\u52fe\u9009\u300d+\u300croothide \u767d\u540d\u5355\u300d\uff0c\u5426\u5219\u4e0d\u4f1a\u88ab\u6ce8\u5165
-    NSArray<NSString *> *white = [self lc_injectWhitelist];
-    if (white.count > 0 && bid.length) {
-        BOOL allowed = [white containsObject:bid];
-        if (picked && !allowed) {
-            cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ \u00b7 \u672a\u8fdb roothide \u767d\u540d\u5355\uff0c\u4e0d\u4f1a\u6ce8\u5165", bid];
-            cell.detailTextLabel.textColor = [UIColor systemRedColor];
-        } else if (!picked && allowed) {
-            cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ \u00b7 roothide \u767d\u540d\u5355\u5df2\u542b\uff0c\u672a\u52fe\u9009", bid];
-            cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-        }
+    // 标注是否真会注入：需同时满足「已勾选」+「XL Roohhide 白名单已含」，否则不会注入
+    BOOL allowed = LCBidInXLWhitelist(bid);
+    if (picked && !allowed) {
+        cell.detailTextLabel.text = [NSString stringWithFormat:
+            @"%@ · 未进 XL Roohhide 白名单，不会注入", bid];
+        cell.detailTextLabel.textColor = [UIColor systemRedColor];
+    } else if (!picked && allowed) {
+        cell.detailTextLabel.text = [NSString stringWithFormat:
+            @"%@ · XL Roohhide 白名单已含，未勾选", bid];
+        cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
     } else {
-        // roothide \u767d\u540d\u5355\u4e0d\u5b58\u5728 \u2192 \u53ea\u4f9d\u8d56 LiveCap Bundle \u767d\u540d\u5355
+        // XL Roohhide 白名单不存在 → 只依赖 LiveCap Bundle 白名单
         if (!picked) {
             cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ \u00b7 \u672a\u52fe\u9009\uff08\u9700\u5728\u8bbe\u7f6e\u9762\u677f\u52fe\u9009\uff09", bid];
+                @"%@ · 未勾选（需在设置面板勾选）", bid];
         }
     }
 
