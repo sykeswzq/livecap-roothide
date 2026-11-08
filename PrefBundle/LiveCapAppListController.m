@@ -324,9 +324,6 @@ static inline void LCWriteToXLWhitelistFile(NSString *bid, BOOL on) {
                                                                       options:0 error:NULL];
             if (!data.length) continue;
             [data writeToFile:p atomically:YES];
-            NSBundle *bundle = [NSBundle bundleForClass:[self class]];
-            NSString *appID = bundle.bundleIdentifier ?: @"com.sykes.livecap";
-            CFPreferencesAppSynchronize((__bridge CFStringRef)appID);
             return;
         }
     } @catch (NSException *e) {}
