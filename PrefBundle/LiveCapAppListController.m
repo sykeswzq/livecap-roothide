@@ -233,20 +233,18 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    // 真实注入集合 = LiveCap 白名单 ∩ XL Roohhide 白名单 ∩ 已安装
-    NSArray *filter = LCReadFilterBundles();
-    NSUInteger realN = [LCReallyInjectedIDs() count];
-
+    // XL 白名单模式：注入目标 = XL Roohhide 白名单 ∩ 已安装 App
+    NSSet *xlInjectedIDs = LCReallyInjectedIDs();
     NSDictionary *xlWhitelist = LCReadXLRootHideWhitelist();
+    NSUInteger realN = [xlInjectedIDs count];
     NSUInteger xlCount = xlWhitelist ? xlWhitelist.count : 0;
 
     NSMutableString *s = [NSMutableString stringWithFormat:@"已注入 %lu 个 App", (unsigned long)realN];
     if (xlWhitelist && xlWhitelist.count > 0) {
-        [s appendFormat:@"（勾选 %lu · XL Roohhide 白名单 %lu）",
-                       (unsigned long)filter.count, (unsigned long)xlCount];
+        [s appendFormat:@"（XL Roohhide 白名单 %lu）", (unsigned long)xlCount];
     } else {
-        [s appendFormat:@"（勾选 %lu · 未检测到 XL Roohhide 白名单）",
-                       (unsigned long)filter.count];
+        NSArray *filter = LCReadFilterBundles();
+        [s appendFormat:@"（LiveCap 勾选 %lu）", (unsigned long)filter.count];
     }
     [s appendString:@" · 注销后生效"];
     if (!_filterWriteOK)
@@ -274,22 +272,27 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
 
     BOOL picked = [[self lc_selected] containsObject:bid];
+    BOOL inXL = LCBidInXLWhitelist(bid);
+    BOOL hasXL = (LCReadXLRootHideWhitelist() != nil);
 
-    // 标注是否真会注入：需同时满足「已勾选」+「XL Roohhide 白名单已含」，否则不会注入
-    BOOL allowed = LCBidInXLWhitelist(bid);
-    if (picked && !allowed) {
-        cell.detailTextLabel.text = [NSString stringWithFormat:
-            @"%@ · 未进 XL Roohhide 白名单，不会注入", bid];
-        cell.detailTextLabel.textColor = [UIColor systemRedColor];
-    } else if (!picked && allowed) {
-        cell.detailTextLabel.text = [NSString stringWithFormat:
-            @"%@ · XL Roohhide 白名单已含，未勾选", bid];
-        cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+    // 标注是否真会注入：有 XL 白名单时以它为准；无时才看 LiveCap 勾选
+    if (hasXL) {
+        // XL 模式：开关直接映射到 XL 白名单状态
+        if (!inXL) {
+            cell.detailTextLabel.text = @"未加入 Roohide 白名单";
+            cell.detailTextLabel.textColor = [UIColor systemRedColor];
+        } else {
+            cell.detailTextLabel.text = @"Roohide 白名单已含";
+            cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+        }
     } else {
-        // XL Roohhide 白名单不存在 → 只依赖 LiveCap Bundle 白名单
-        if (!picked) {
-            cell.detailTextLabel.text = [NSString stringWithFormat:
-                @"%@ · 未勾选（需在设置面板勾选）", bid];
+        // 回退模式：依赖 LiveCap Filter
+        if (picked) {
+            cell.detailTextLabel.text = @"已勾选注入";
+            cell.detailTextLabel.textColor = [UIColor systemGreenColor];
+        } else {
+            cell.detailTextLabel.text = @"未勾选";
+            cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
         }
     }
 
@@ -301,18 +304,52 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     return cell;
 }
 
+// XL 白名单存在时，开关直接读取/写入 XL 白名单文件；
+// 无 XL 白名单时仍回退到 LiveCap Filter 模式。
+static inline void LCWriteToXLWhitelistFile(NSString *bid, BOOL on) {
+    @try {
+        NSArray *paths = @[
+            @"/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
+            @"/var/jb/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
+        ];
+        for (NSString *p in paths) {
+            if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
+            NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:p];
+            if (![dict isKindOfClass:[NSDictionary class]]) continue;
+            NSMutableDictionary *mutable = [dict mutableCopy];
+            NSString *last = [[bid componentsSeparatedByString:@"."] lastObject];
+            mutable[last] = on ? @YES : @NO;
+            NSData *data = [NSPropertyListSerialization dataWithPropertyList:mutable
+                                                                       format:NSPropertyListXMLFormat_v1_0
+                                                                      options:0 error:NULL];
+            if (!data.length) continue;
+            [data writeToFile:p atomically:YES];
+            NSBundle *bundle = [NSBundle bundleForClass:[self class]];
+            NSString *appID = bundle.bundleIdentifier ?: @"com.sykes.livecap";
+            CFPreferencesAppSynchronize((__bridge CFStringRef)appID);
+            return;
+        }
+    } @catch (NSException *e) {}
+}
+
 - (void)lc_switchChanged:(UISwitch *)sw {
     @try {
         NSInteger row = sw.tag;
         if (row < 0 || row >= (NSInteger)_shown.count) return;
         NSString *bid = _shown[(NSUInteger)row][@"id"];
         if (!bid) return;
-        if (sw.on) [[self lc_selected] addObject:bid];
-        else       [[self lc_selected] removeObject:bid];
-        _filterWriteOK = LCWriteFilterBundles(
-            [[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)]);
-        LCSetPref([[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)],
-                  @"injectApps");
+        NSDictionary *xlWhitelist = LCReadXLRootHideWhitelist();
+        BOOL hasXL = (xlWhitelist != nil && xlWhitelist.count > 0);
+        if (hasXL) {
+            LCWriteToXLWhitelistFile(bid, sw.on);
+        } else {
+            if (sw.on) [[self lc_selected] addObject:bid];
+            else       [[self lc_selected] removeObject:bid];
+            _filterWriteOK = LCWriteFilterBundles(
+                [[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)]);
+            LCSetPref([[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)],
+                      @"injectApps");
+        }
         [_tv reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
     } @catch (NSException *e) {}
 }
