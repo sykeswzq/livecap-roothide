@@ -404,13 +404,9 @@ static NSString *LCJBRootPath(NSString *path) {
 @interface LCConfig : NSObject
 + (instancetype)shared;
 @property (readonly) BOOL enabled;
-@property (readonly) NSString *sourceLang;
-@property (readonly) NSString *targetLang;
 @property (readonly) NSString *apiBase;
 @property (readonly) NSString *apiKey;
 @property (readonly) NSString *model;
-@property (readonly) NSString *tencentSecretId;
-@property (readonly) NSString *tencentSecretKey;
 @property (readonly) CGFloat fontSize;
 @property (readonly) BOOL boldText;
 @property (readonly) UIColor *textColor;
@@ -418,10 +414,8 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) BOOL showEnglish;   // 是否同时显示英文原文（默认 NO：只显示中文一行）
 @property (readonly) CGFloat manualX;
 @property (readonly) CGFloat manualY;
-@property (readonly) double asrChunkSeconds;   // v1.0.84：ASR 分片时长（秒）
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y;
 - (void)writeConfig:(NSMutableDictionary *)d;
-- (void)setSourceLang:(NSString *)lang forBundle:(NSString *)bid;
 - (void)reload;
 // v1.0.87：实时读盘取值（面板改完立即生效，不用重启 App）
 - (id)freshValueForKey:(NSString *)key;
@@ -465,28 +459,6 @@ static NSString *LCJBRootPath(NSString *path) {
 - (BOOL)enabled {
     NSNumber *v = _d[@"enabled"];
     return v ? [v boolValue] : YES;
-}
-
-- (NSString *)sourceLang {
-    // 每个 App 单独覆盖：sourceLang_<bundleId> 优先，否则用全局 sourceLang
-    NSString *per = _d[[NSString stringWithFormat:@"sourceLang_%@", self.bundleId]];
-    if (per && per.length) return per;
-    NSString *s = _d[@"sourceLang"];
-    return (s && s.length) ? s : @"en-US";
-}
-
-- (void)setSourceLang:(NSString *)lang forBundle:(NSString *)bid {
-    NSString *path = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
-    NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:path];
-    if (!d) d = [NSMutableDictionary dictionary];
-    d[[NSString stringWithFormat:@"sourceLang_%@", bid]] = lang;
-    [self writeConfig:d];
-    _d = d;
-}
-
-- (NSString *)targetLang {
-    NSString *s = _d[@"targetLang"];
-    return (s && s.length) ? s : @"zh-CN";
 }
 
 - (NSString *)apiBase {
@@ -613,17 +585,8 @@ static NSString *LCJBRootPath(NSString *path) {
     return 0.35;
 }
 
-// v1.0.84：ASR 分片时长（秒）。
-// 依据：设备日志显示 ASR RTT ≈ 音频时长 × 1.1（5.11s→5.6s，7.2s→10s），
-// 分片越长延迟越大。默认 2.5 秒：RTT ≈ 2.8s，比 5 秒分片省约 2.8 秒。
-// 允许范围 1.0~8.0 秒；配 0 或非法值时回退到默认 2.5。
-- (double)asrChunkSeconds {
-    NSNumber *v = _d[@"asrChunkSeconds"];
-    if (!v) return 2.5;
-    double s = [v doubleValue];
-    if (s < 1.0 || s > 8.0) return 2.5;
-    return s;
-}
+// v2.0.0：asrChunkSeconds 硬编码为常量，不再从 plist 读取
+#define LC_ASR_CHUNK_SECONDS 2.5
 
 // v1.0.83：统一的配置写回通道。
 // 背景：面板用 CFPreferences 写、tweak 用文件直写，两套机制竞争同一个
@@ -732,7 +695,8 @@ static NSString *LCJBRootPath(NSString *path) {
     NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if (trimmed.length == 0) return;
 
-    NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [LCConfig shared].targetLang, trimmed];
+    // v2.0.0：目标语言硬编码为中文，cacheKey 不再拼入语言参数
+    NSString *cacheKey = [NSString stringWithFormat:@"|%@", trimmed];
     NSString *cached = nil;
     @synchronized(self) { cached = _cache[cacheKey]; }
     // 注意：必须同时判 length，否则空串（模型对乱码输入常返回空）会被当成有效缓存，
@@ -811,7 +775,7 @@ static NSString *LCJBRootPath(NSString *path) {
         comp = (void (^)(NSString *))rawComp;
     }
 
-    NSString *cacheKey = [NSString stringWithFormat:@"%@|%@", [[LCConfig shared] targetLang], text];
+    NSString *cacheKey = [NSString stringWithFormat:@"|%@", text];
     NSString *cached = nil;
     @synchronized(self) { cached = _cache[cacheKey]; }
     if (cached.length > 0) {
@@ -821,8 +785,8 @@ static NSString *LCJBRootPath(NSString *path) {
     }
 
     _inflight = YES;
-    NSString *target = [[LCConfig shared] targetLang];
 
+    // v2.0.0：目标语言硬编码为中文
     // ===== prompt 精简（v1.0.81）=====
     // 实测（设备 → apihub.agnes-ai.cn 网关）：
     //   agnes-3.0-flash + 1401 字节长 prompt → 29~40s（必然超时）
@@ -830,14 +794,13 @@ static NSString *LCJBRootPath(NSString *path) {
     // 长 prompt 不只是慢，还会显著抬高网关排队时间。
     // 这里保留最关键的三条约束（只输出译文 / 输入可能是脏片段要照翻 / 绝不回显英文），
     // 去掉示例和冗长规则，压到 ~230 字节。
-    NSString *sysPrompt = [NSString stringWithFormat:
-        @"Translate to %@. Output ONLY the translation: no quotes, no explanation. "
+    // v2.0.0：目标语言硬编码为中文，直接写死在 sysPrompt 里
+    NSString *sysPrompt = @"Translate to zh-CN. Output ONLY the translation: no quotes, no explanation. "
         @"The input may be a noisy speech-to-text fragment: infer the meaning and output Chinese. "
-        @"NEVER echo the English input; the output MUST contain Chinese characters.",
-        target];
+        @"NEVER echo the English input; the output MUST contain Chinese characters.";
 
     __weak typeof(self) weakSelf = self;
-    [self raceTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey target:target
+    [self raceTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
              completion:^(NSString *result) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
@@ -849,8 +812,7 @@ static NSString *LCJBRootPath(NSString *path) {
     }];
 }
 
-// 译文有效性校验：模型对识别质量差的输入（乱码/短片段）常原样返回英文 ——
-// 这不算翻译成功。必须与原文比对，且目标语言为中文时结果里必须含中文字符。
+// v2.0.0：目标语言固定为中文，译文校验只需检查是否含中文字符
 - (BOOL)isUsableTranslation:(NSString *)res forText:(NSString *)text {
     if (!res.length) return NO;
     NSString *norm = [res stringByTrimmingCharactersInSet:
@@ -859,15 +821,12 @@ static NSString *LCJBRootPath(NSString *path) {
     NSString *orig = [text stringByTrimmingCharactersInSet:
         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if ([norm isEqualToString:orig]) return NO;
-    NSString *dst = [[LCConfig shared] targetLang];
-    if ([dst hasPrefix:@"zh"]) {
-        BOOL hasCJK = NO;
-        for (NSUInteger i = 0; i < norm.length; i++) {
-            unichar ch = [norm characterAtIndex:i];
-            if (ch >= 0x4E00 && ch <= 0x9FFF) { hasCJK = YES; break; }
-        }
-        if (!hasCJK) return NO;
+    BOOL hasCJK = NO;
+    for (NSUInteger i = 0; i < norm.length; i++) {
+        unichar ch = [norm characterAtIndex:i];
+        if (ch >= 0x4E00 && ch <= 0x9FFF) { hasCJK = YES; break; }
     }
+    if (!hasCJK) return NO;
     return YES;
 }
 
@@ -950,7 +909,7 @@ static NSString *LCJBRootPath(NSString *path) {
                        completion:^(NSString *r) { onResult(p, r); }];
         } else {
             LCLogF(@"translate: race -> mymemory");
-            [self mymemoryTranslate:text targetLang:target cacheKey:cacheKey
+            [self mymemoryTranslate:text
                          completion:^(NSString *r) { onResult(p, r); }];
         }
     }
@@ -987,11 +946,11 @@ static NSString *LCShortLang(NSString *lc) {
     return @"en";
 }
 
-// MyMemory 免费翻译（GET api.mymemory.translated.net，无需密钥）
-- (void)mymemoryTranslate:(NSString *)text targetLang:(NSString *)target
-                 cacheKey:(NSString *)cacheKey completion:(void (^)(NSString *result))completion {
-    NSString *src = LCShortLang([LCConfig shared].sourceLang);
-    NSString *dst = LCShortLang(target);
+// v2.0.0：目标语言固定为中文；MyMemory 免费翻译（GET api.mymemory.translated.net，无需密钥）
+- (void)mymemoryTranslate:(NSString *)text cacheKey:(NSString *)cacheKey completion:(void (^)(NSString *result))completion {
+    // v2.0.0：源语言自动检测，目标语言固定 zh-CN
+    NSString *src = @"auto";
+    NSString *dst = @"zh-CN";
     // 关键：langpair 的分隔符 | 属于 URL 保留字符，必须百分号编码，
     // 否则 NSURL 报 -1002 (unsupported URL)，MyMemory 永远失败
     NSString *langPair = [NSString stringWithFormat:@"%@%%7C%@", src, dst];
@@ -1060,8 +1019,8 @@ static NSString *LCTmtLang(NSString *lcLang) {
                secretId:(NSString *)secretId secretKey:(NSString *)secretKey
              completion:(void (^)(NSString *result))completion {
     if (text.length > 1800) text = [text substringToIndex:1800];  // TextTranslate 单次上限
-    NSString *src = LCTmtLang([LCConfig shared].sourceLang);
-    NSString *dst = LCTmtLang([LCConfig shared].targetLang);
+    NSString *src = LCTmtLang("auto-detected");
+    NSString *dst = LCTmtLang(@"zh-CN");
     NSDictionary *body = @{
         @"SourceText": text,
         @"Source": src,
@@ -1570,7 +1529,7 @@ static BOOL gProcessingFormatValid = NO;
             // 分片减半 → RTT 近似减半 → 字幕延迟从 ~6s 降到 ~3s。
             // 代价：句子被切碎的概率上升。为补偿，保留 overlap 重叠区
             // （下一段开头复用上一段末尾的音频），避免词被切断。
-            double chunkSecs = [[LCConfig shared] asrChunkSeconds];
+            double chunkSecs = LC_ASR_CHUNK_SECONDS;
             double secs = (double)_pcm.length / sizeof(float) / _inRate;
             if (secs >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
                 NSData *chunk = [_pcm copy];
@@ -1695,11 +1654,8 @@ static BOOL gProcessingFormatValid = NO;
                 // 且支持 15 语种自动识别（句子/段落级）。
                 // 我们抓的是视频音轨（背景音乐 + 对白），正属于低质量音频场景，
                 // 用普通引擎 16k_en 会被识别成碎片。
-                NSString *lang = [[LCConfig shared] sourceLang];
-                NSString *eng = @"16k_multi_lang";   // 多语言大模型引擎
-                if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
-                else if ([lang isEqualToString:@"ja-JP"]) eng = @"16k_ja";
-                else if ([lang isEqualToString:@"ko-KR"]) eng = @"16k_ko";
+                // v2.0.0：源语言自动检测，统一用多语言大模型引擎
+                NSString *eng = @"16k_multi_lang";   // 多语言大模型引擎（支持 15 语种自动识别）
 
                 NSDictionary *body = @{
                     @"ProjectId": @0,
@@ -1831,7 +1787,7 @@ static BOOL gProcessingFormatValid = NO;
         // v1.0.84：分片时长与 appendBufferList: 保持一致（可配置，默认 2.5 秒）。
         // 依据（设备日志实证）：ASR RTT ≈ 音频时长 × 1.1，
         // 分片越长延迟越大；5 秒分片 → RTT 5.6s，2.5 秒分片 → RTT 约 2.8s。
-        double chunkSecs = [[LCConfig shared] asrChunkSeconds];
+        double chunkSecs = LC_ASR_CHUNK_SECONDS;
         double secs = (double)_pcm.length / sizeof(float) / _inRate;
         if (secs >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
             NSData *chunk = [_pcm copy];
@@ -1854,7 +1810,7 @@ static BOOL gProcessingFormatValid = NO;
         [_pcm16 appendData:pcm16];
         // v1.0.85：修掉写死的 5 秒分片（v1.0.84 只改了 float 路径，漏了这里）。
         // 统一使用 asrChunkSeconds 配置，默认 2.5 秒。
-        double chunkSecs = [[LCConfig shared] asrChunkSeconds];
+        double chunkSecs = LC_ASR_CHUNK_SECONDS;
         double secs16 = (double)_pcm16.length / 2.0 / 16000.0;
         if (secs16 >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
             NSData *chunk = [_pcm16 copy];
@@ -1942,12 +1898,8 @@ static BOOL gProcessingFormatValid = NO;
                     LC_ASR_DONE();
                     return;
                 }
-                NSString *lang = [[LCConfig shared] sourceLang];
+                // v2.0.0：源语言自动检测，统一用中文引擎（默认已覆盖主要场景）
                 NSString *eng = @"16k_zh";
-                if ([lang isEqualToString:@"en-US"]) eng = @"16k_en";
-                else if ([lang isEqualToString:@"ja-JP"]) eng = @"16k_ja";
-                else if ([lang isEqualToString:@"ko-KR"]) eng = @"16k_ko";
-                else if ([lang isEqualToString:@"zh-CN"]) eng = @"16k_zh";
 
                 NSDictionary *body = @{
                     @"ProjectId": @0,
@@ -2967,7 +2919,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         gProcessingFormat = asbd;
         gProcessingFormatValid = YES;
     }
-    NSLocale *locale = [NSLocale localeWithLocaleIdentifier:[LCConfig shared].sourceLang];
+    NSLocale *locale = [NSLocale localeWithLocaleIdentifier:"auto-detected"];
     SFSpeechRecognizer *rec = [[SFSpeechRecognizer alloc] initWithLocale:locale];
     if (!rec || !rec.isAvailable) {
         // 该 locale 不可用则退回 en-US
@@ -4281,155 +4233,6 @@ static void LCSwizzleAudioProbe(void) {
     }
 }
 
-#pragma mark - 长按图标快捷开关（桌面图标长按菜单）
-
-static void LCAuthSpeech(void);  // 前向声明（定义在文件末尾入口段）
-
-static void LCToggleEnabled(void) {
-    NSString *path = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
-    NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:path];
-    if (!d) d = [NSMutableDictionary dictionary];
-    BOOL now = ![[LCConfig shared] enabled];
-    d[@"enabled"] = @(now);
-    // v1.0.83：走统一写入通道（写完同步 cfprefsd，避免与面板互相覆盖）
-    [[LCConfig shared] writeConfig:d];
-    [[LCConfig shared] reload];
-    LCLogF(@"toggle: now=%d", now);
-    if (now) {
-        [[LCSubtitleOverlay shared] install];
-        [[LCSubtitleOverlay shared] showToast:@"实时字幕翻译：已开启"];
-        LCAuthSpeech();  // 授权检查 + 补启动识别（无授权自动切在线）
-    } else {
-        [[LCSpeech shared] stop];
-        [[LCSubtitleOverlay shared] showToast:@"实时字幕翻译：已关闭"];
-    }
-}
-
-#pragma mark - 桌面图标快捷菜单（长按已注入 App 图标 → 开关实时字幕翻译）
-
-static BOOL LCShortcutInstalled = NO;
-
-static void LCInstallShortcutItem(void) {
-    // 每次调用都重新设置（去掉一次性保护）：目标 App（如 YouTube）自己也会写
-    // shortcutItems，会覆盖我们的菜单。didBecomeActive 时重新装一遍抢回来。
-    @try {
-        UIApplication *app = [UIApplication sharedApplication];
-        // 接管菜单（不保留 App 原有快捷项），并限制总数 ≤4：
-        // iOS 主屏长按菜单最多显示 4 项，5 项会被截断（之前语言项就是这么消失的）。
-        // 4 项 = 开关 + 识别英语/日语/韩语；中文是默认翻译目标不进快捷。
-        NSMutableArray *items = [NSMutableArray array];
-
-        // 总开关项
-        [items addObject:[[UIApplicationShortcutItem alloc]
-            initWithType:@"com.sykes.livecap.toggle"
-            localizedTitle:@"开关实时字幕翻译"
-            localizedSubtitle:nil
-            icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypePlay]
-            userInfo:nil]];
-
-        // 语言快捷切换（每个 App 单独记忆，长按图标即可改，不用进设置）。
-        // 中文是默认翻译目标，不做识别快捷；识别语言 = 英/日/韩（正好 4 项含开关）。
-        NSArray *langs = @[
-            @{@"t": @"com.sykes.livecap.lang.en", @"n": @"识别英语"},
-            @{@"t": @"com.sykes.livecap.lang.ja", @"n": @"识别日语"},
-            @{@"t": @"com.sykes.livecap.lang.ko", @"n": @"识别韩语"},
-        ];
-        for (NSDictionary *ld in langs) {
-            [items addObject:[[UIApplicationShortcutItem alloc]
-                initWithType:ld[@"t"]
-                localizedTitle:ld[@"n"]
-                localizedSubtitle:nil
-                icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypeSearch]
-                userInfo:nil]];
-        }
-
-        app.shortcutItems = items;
-        LCShortcutInstalled = YES;
-        LCLog("shortcut: reinstalled (toggle+en+ja+zh)");
-    } @catch (NSException *e) {
-        LCLogF(@"shortcut: error %@", e);
-    }
-}
-
-// 回到前台后延迟重装快捷菜单（防 App 自己的 shortcutItems 覆盖）
-static void LCScheduleShortcutRefresh(void) {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        @try { LCInstallShortcutItem(); } @catch (NSException *e) {}
-    });
-}
-
-static NSString *LCLangDisplay(NSString *loc) {
-    if ([loc isEqualToString:@"en-US"]) return @"英语";
-    if ([loc isEqualToString:@"ja-JP"]) return @"日语";
-    if ([loc isEqualToString:@"ko-KR"]) return @"韩语";
-    if ([loc isEqualToString:@"zh-CN"]) return @"中文";
-    return loc;
-}
-
-static void (*orig_performAction)(id, SEL, UIApplicationShortcutItem *, id);
-static void LC_performAction(id self, SEL _cmd, UIApplicationShortcutItem *item, id completionHandler) {
-    @try {
-        if (item && [item.type isEqualToString:@"com.sykes.livecap.toggle"]) {
-            LCLog("shortcut: toggle tapped");
-            LCToggleEnabled();
-            if (completionHandler) {
-                void (^handler)(BOOL) = (void (^)(BOOL))completionHandler;
-                handler(YES);
-            }
-            return;
-        }
-        if (item && [item.type hasPrefix:@"com.sykes.livecap.lang."]) {
-            NSString *code = [item.type substringFromIndex:[@"com.sykes.livecap.lang." length]];
-            NSString *loc = nil;
-            if ([code isEqualToString:@"en"]) loc = @"en-US";
-            else if ([code isEqualToString:@"ja"]) loc = @"ja-JP";
-            else if ([code isEqualToString:@"ko"]) loc = @"ko-KR";
-            else if ([code isEqualToString:@"zh"]) loc = @"zh-CN";
-            if (loc) {
-                NSString *bid = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
-                [[LCConfig shared] setSourceLang:loc forBundle:bid];
-                [[LCSpeech shared] stop];
-                if ([[LCConfig shared] enabled]) {
-                    [[LCSpeech shared] startWithFormat:gProcessingFormat];
-                }
-                [[LCSubtitleOverlay shared] showToast:
-                    [NSString stringWithFormat:@"本 App 识别语言：%@", LCLangDisplay(loc)]];
-                LCLogF(@"lang: set %@ for %@", loc, bid);
-            }
-            if (completionHandler) {
-                void (^handler)(BOOL) = (void (^)(BOOL))completionHandler;
-                handler(YES);
-            }
-            return;
-        }
-    } @catch (NSException *e) {}
-    if (orig_performAction) orig_performAction(self, _cmd, item, completionHandler);
-}
-
-static void LCSwizzleShortcut(void) {
-    @try {
-        UIApplication *app = [UIApplication sharedApplication];
-        id delegate = app.delegate;
-        if (!delegate) return;
-        SEL sel = @selector(application:performActionForShortcutItem:completionHandler:);
-        Method m = class_getInstanceMethod([delegate class], sel);
-        if (m) {
-            orig_performAction = (void *)method_getImplementation(m);
-            method_setImplementation(m, (IMP)LC_performAction);
-        } else {
-            BOOL ok = class_addMethod([delegate class], sel, (IMP)LC_performAction, "v@:@?");
-            if (!ok) {
-                m = class_getInstanceMethod([delegate class], sel);
-                if (m) method_setImplementation(m, (IMP)LC_performAction);
-            }
-        }
-        LCLog("hook: shortcut action OK");
-    } @catch (NSException *e) {
-        LCLogF(@"hook: shortcut error %@", e);
-    }
-}
-
 #pragma mark - 入口
 
 static BOOL LCLazyStarted = NO;
@@ -4491,15 +4294,15 @@ static void LCLazyInit(void) {
     LCHookAudioUnitRender();
     LCLog("init: [1b/4] hook AudioUnitSetProperty done");
     LCLog("init: [2/4] swizzle shortcut");
-    LCSwizzleShortcut();
+    // LCSwizzleShortcut(); // v2.0.0: 移除 3D Touch 快捷菜单
     LCLog("init: [3/4] install shortcut item");
-    LCInstallShortcutItem();
+    // LCInstallShortcutItem(); // v2.0.0: 移除 3D Touch 快捷菜单
     LCLog("init: [4/4] speech auth + active observer");
     LCAuthSpeech();
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
                                                       object:nil queue:[NSOperationQueue mainQueue]
                                                   usingBlock:^(NSNotification *n) {
-        LCScheduleShortcutRefresh();  // 抢回被 App 覆盖的快捷菜单
+        // LCScheduleShortcutRefresh(); // v2.0.0: 移除 3D Touch 快捷菜单  // 抢回被 App 覆盖的快捷菜单
         if ([[LCConfig shared] enabled]) {
             [[LCSubtitleOverlay shared] install];
         }
