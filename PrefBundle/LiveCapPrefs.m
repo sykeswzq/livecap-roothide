@@ -1,6 +1,7 @@
 // LiveCapPrefs.m —— v2.0.0 精简版
 // 设置面板主控制器，完全对齐新 UI 结构
 #import <UIKit/UIKit.h>
+#include <math.h>
 #import "LCPrivate.h"
 
 static NSString *LCAppID = @"com.sykes.livecap";
