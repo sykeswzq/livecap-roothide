@@ -54,7 +54,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 #pragma mark - 字体大小控制器
 
-@interface LCFontSizeController : UIViewController <UIColorPickerViewControllerDelegate>
+@interface LCFontSizeController : UIViewController
 @end
 
 @implementation LCFontSizeController {
