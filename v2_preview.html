@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LiveCap v2.0.0 Settings Preview</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f2f2f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 20px; }
+.phone { width: 390px; background: #f2f2f7; border-radius: 40px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; }
+.status-bar { background: #f2f2f7; padding: 12px 24px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 600; color: #000; }
+.nav-bar { background: #f2f2f7; padding: 8px 16px 12px; border-bottom: 0.5px solid rgba(0,0,0,0.1); }
+.nav-title { text-align: center; font-size: 17px; font-weight: 600; color: #000; padding: 4px 60px; }
+.nav-back { position: absolute; left: 16px; top: 8px; color: #007aff; font-size: 17px; cursor: pointer; text-decoration: none; }
+.content { padding: 16px; }
+.section-title { font-size: 13px; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px 16px; }
+.group { background: #fff; border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+.row { display: flex; align-items: center; padding: 12px 16px; border-bottom: 0.5px solid rgba(0,0,0,0.08); cursor: pointer; transition: background 0.1s; }
+.row:last-child { border-bottom: none; }
+.row:active { background: #e5e5ea; }
+.row-icon { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-right: 12px; flex-shrink: 0; }
+.row-label { flex: 1; font-size: 16px; color: #000; }
+.row-value { font-size: 16px; color: #8e8e93; margin-right: 8px; }
+.row-arrow { color: #c7c7cc; font-size: 14px; margin-left: 4px; }
+/* Toggle */
+.toggle { width: 51px; height: 31px; border-radius: 16px; background: #e9e9eb; position: relative; transition: background 0.2s; cursor: pointer; }
+.toggle.on { background: #34c759; }
+.toggle::after { content: ''; position: absolute; width: 27px; height: 27px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.toggle.on::after { transform: translateX(20px); }
+/* Switch row (no arrow) */
+.row-switch { cursor: default; }
+.row-switch .row-arrow { display: none; }
+/* Color swatch */
+.color-swatch { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); display: inline-block; vertical-align: middle; margin-right: 6px; }
+/* Slider hint */
+.slider-hint { font-size: 12px; color: #8e8e93; margin-top: 2px; }
+/* Version badge */
+.version { text-align: center; padding: 20px; color: #8e8e93; font-size: 12px; }
+/* Icon colors */
+.icon-green { background: #d1fae5; }
+.icon-blue { background: #dbeafe; }
+.icon-purple { background: #ede9fe; }
+.icon-orange { background: #ffedd5; }
+.icon-teal { background: #ccfbf1; }
+.icon-red { background: #fee2e2; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="status-bar">
+    <span>9:41</span>
+    <span>📶 🔋</span>
+  </div>
+  <div class="nav-bar">
+    <a class="nav-back" href="#">← 返回</a>
+    <div class="nav-title">实时字幕翻译</div>
+  </div>
+  <div class="content">
+
+    <!-- 基本设置 -->
+    <div class="section-title">基本设置</div>
+    <div class="group">
+      <div class="row row-switch">
+        <div class="row-icon icon-green">▶</div>
+        <div class="row-label">启用字幕翻译</div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="row">
+        <div class="row-icon icon-blue">📱</div>
+        <div class="row-label">选择注入 App</div>
+        <div class="row-value">已注入 0 个</div>
+        <div class="row-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- 接口设置 -->
+    <div class="section-title">接口设置</div>
+    <div class="group">
+      <div class="row">
+        <div class="row-icon icon-blue">🌐</div>
+        <div class="row-label">API 地址</div>
+        <div class="row-value" style="font-size:13px;color:#8e8e93;">apihub.agnes-ai.cn/v1</div>
+        <div class="row-arrow">›</div>
+      </div>
+      <div class="row">
+        <div class="row-icon icon-purple">🔑</div>
+        <div class="row-label">API Key</div>
+        <div class="row-value">••••••••••••</div>
+        <div class="row-arrow">›</div>
+      </div>
+      <div class="row">
+        <div class="row-icon icon-orange">🤖</div>
+        <div class="row-label">模型名称</div>
+        <div class="row-value">agnes-2.5-flash</div>
+        <div class="row-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- 腾讯云服务 -->
+    <div class="section-title">腾讯云服务</div>
+    <div class="group">
+      <div class="row">
+        <div class="row-icon icon-red">☁️</div>
+        <div class="row-label">SecretId</div>
+        <div class="row-value">已设置</div>
+        <div class="row-arrow">›</div>
+      </div>
+      <div class="row">
+        <div class="row-icon icon-red">🔒</div>
+        <div class="row-label">SecretKey</div>
+        <div class="row-value">已设置</div>
+        <div class="row-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- 字幕外观 -->
+    <div class="section-title">字幕外观</div>
+    <div class="group">
+      <div class="row">
+        <div class="row-icon icon-teal">A</div>
+        <div>
+          <div class="row-label">字体大小</div>
+          <div class="slider-hint">当前 16 · 拖动滑块调整</div>
+        </div>
+        <div class="row-arrow">›</div>
+      </div>
+      <div class="row row-switch">
+        <div class="row-icon icon-blue">T</div>
+        <div class="row-label">粗体</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="row">
+        <div class="row-icon icon-purple">◉</div>
+        <div class="row-label">文字颜色</div>
+        <span class="color-swatch" style="background:#fff;border-color:#ccc;"></span>
+        <div class="row-value">白色（默认）</div>
+        <div class="row-arrow">›</div>
+      </div>
+      <div class="row">
+        <div class="row-icon icon-teal">▣</div>
+        <div class="row-label">背景风格</div>
+        <div class="row-value">毛玻璃</div>
+        <div class="row-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- 显示选项 -->
+    <div class="section-title">显示选项</div>
+    <div class="group">
+      <div class="row row-switch">
+        <div class="row-icon icon-green">文</div>
+        <div class="row-label">同时显示原文</div>
+        <div class="toggle"></div>
+      </div>
+    </div>
+
+    <div class="version">LiveCap v2.0.0 · by sykes</div>
+  </div>
+</div>
+</body>
+</html>
