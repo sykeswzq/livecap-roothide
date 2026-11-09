@@ -635,27 +635,27 @@ def check_v84_fixes(src, panel_src=None):
     # 否则注释里的关键词会让检查项形同虚设（双向验证已实测过这个坑）。
     code = _strip_comments_strings(src)
 
-    # ---- 1) 分片时长在 v2.0.0 起硬编码为 LC_ASR_CHUNK_SECONDS，不再从 plist 读取 ----
-    # v2.0.0: #define LC_ASR_CHUNK_SECONDS 2.5 （注意 #define 语法不含 '='）
-    if re.search(r"#define\s+LC_ASR_CHUNK_SECONDS\s+2\.5", code):
-        pass  # OK: v2.0.0 硬编码正确值
-    elif "asrChunkSeconds" in code:
-        errors.append("v1.0.84 回归: asrChunkSeconds 应从代码移出 —— "
-                      "v2.0.0 已改为 LC_ASR_CHUNK_SECONDS=2.5 常量，不应再从 plist 读取")
+    # ---- 1) 分片时长可配置 ----
+    if "asrChunkSeconds" not in code:
+        errors.append("v1.0.84 回归: 缺少 asrChunkSeconds 配置 —— "
+                      "ASR 分片时长必须可配置（设备实测 RTT ≈ 音频时长 × 1.1）")
     else:
-        errors.append("v1.0.84 回归: 缺少 LC_ASR_CHUNK_SECONDS 常量 —— "
-                      "ASR 分片时长必须通过统一常量控制（默认 2.5s）")
-
-    # 两条音频入口路径都必须是 secs >= LC_ASR_CHUNK_SECONDS（不得有写死的阈值）
-    for mm in re.finditer(r"secs\s*>=\s*([0-9]+\.?[0-9]*)", code):
-        errors.append("v1.0.84 回归 行%d: 分片阈值仍写死 %s 秒 —— "
-                      "必须改用 LC_ASR_CHUNK_SECONDS 常量"
-                      % (code[:mm.start()].count("\n") + 1, mm.group(1)))
-    # 确认两处路径都用了常量
-    chunk_ref_count = len(re.findall(r"LC_ASR_CHUNK_SECONDS", code))
-    if chunk_ref_count < 2:
-        errors.append("v1.0.84 回归: LC_ASR_CHUNK_SECONDS 引用只有 %d 处（需 ≥2）—— "
-                      "appendBufferList / processChunk 两条路径都要用到" % chunk_ref_count)
+        m = re.search(r"double\s+chunkSecs\s*=\s*([^;]+);", code)
+        if not m:
+            errors.append("v1.0.84 回归: 未找到 chunkSecs 赋值 —— "
+                          "ASR 分片必须走可配置时长")
+        elif "asrChunkSeconds" not in m.group(1):
+            errors.append("v1.0.84 回归: chunkSecs 被写死为 %s —— "
+                          "必须使用 [[LCConfig shared] asrChunkSeconds]" % m.group(1).strip())
+        # 所有分片阈值判断都必须引用 chunkSecs，不能再写死 5.0 / 10.0
+        for mm in re.finditer(r"secs\s*>=\s*([0-9]+\.?[0-9]*)", code):
+            errors.append("v1.0.84 回归 行%d: 分片阈值仍写死 %s 秒 —— "
+                          "必须改用 chunkSecs（延迟与分片长度成正比）"
+                          % (code[:mm.start()].count("\n") + 1, mm.group(1)))
+        # 两条音频入口路径（appendBufferList / appendMonoFloat）都必须改
+        if len(re.findall(r"secs\s*>=\s*chunkSecs", code)) < 2:
+            errors.append("v1.0.84 回归: 只有部分音频入口改用了 chunkSecs —— "
+                          "appendBufferList: 与 appendMonoFloat: 两条路径都要改")
 
     # ---- 2) 毫秒级 RTT 打点 ----
     # 注意：RTT 打点写在日志格式串里，_strip_comments_strings 会连字符串字面量一起剥掉，
@@ -1094,41 +1094,38 @@ def check_v87_fixes(src, panel_src=None):
             "CI 会报 call to undeclared function 'LCLogF'。"
             "要么把调用挪到定义之后，要么在文件靠前加前向声明。")
 
-    # ---- 8) 面板必须提供真正的字号 UI（v2.0.0：字号页为独立 LCFontSizeController）----
+    # ---- 8) 面板必须提供真正的字号 UI ----
     if panel_src is None:
         warnings.append("v1.0.87: 未读取面板源码，跳过字号 UI 检查")
     else:
-        # v2.0.0: LCFontSizeController 是完整独立的 @interface/@implementation 块
-        # （不再是主面板内联的 @class），必须存在且在使用点之前定义
-        m_if = panel_src.find("@interface LCFontSizeController")
-        m_impl = panel_src.find("@implementation LCFontSizeController")
-        m_use = panel_src.find("[[LCFontSizeController alloc]")
-        has_controller = (m_if >= 0 and m_impl > m_if and m_use >= 0)
-        if not has_controller:
+        if "UISlider" not in panel_src:
             errors.append(
-                "v1.0.87 回归: 缺少 LCFontSizeController（字号选择页）—— "
+                "v1.0.87 回归: 面板没有字号滑块 —— "
+                "用户要求「字体要在 UI 里面可以设置大小」，"
+                "数字键盘输入框不算合格的 UI。")
+        elif not re.search(r"addTarget\s*:\s*self[\s\S]{0,120}?@selector\(lc_sliderChanged:\)",
+                           panel_src):
+            errors.append(
+                "v1.0.87 回归: 字号滑块没有绑定 lc_sliderChanged: 回调 —— "
+                "拖动滑块必须能实时写入 fontSize 配置。")
+        if "LCFontSizeController" not in panel_src:
+            errors.append(
+                "v1.0.87 回归: 面板缺少 LCFontSizeController（字号选择页）—— "
                 "字号必须是一个可视化的调节界面。")
         else:
-            # 类的完整 @interface 必须出现在【使用点之前】
+            # 类的完整 @interface 必须出现在【使用点之前】。
+            # CI 实证（v1.0.87 第二次构建失败）：
+            #   error: receiver 'LCFontSizeController' for class message is a forward declaration
+            # 原因：只有 @class 前向声明时不能发 alloc/init 这类【类消息】。
+            m_if = panel_src.find("@interface LCFontSizeController")
+            m_use = panel_src.find("[[LCFontSizeController alloc]")
             if m_use >= 0 and (m_if < 0 or m_use < m_if):
                 errors.append(
                     "v1.0.87 回归: LCFontSizeController 只有前向声明却被 alloc —— "
                     "CI 会报 'receiver for class message is a forward declaration'。"
                     "必须把完整的 @interface/@implementation 放在使用点之前。")
-            # 控制器内部必须有滑块并绑定回调
-            impl_start = m_impl
-            impl_end = panel_src.find("\n@end\n", impl_start)
-            impl_body = panel_src[impl_start:impl_end] if impl_end > 0 else ""
-            if "UISlider" not in impl_body:
-                errors.append(
-                    "v1.0.87 回归: LCFontSizeController 没有字号滑块 —— "
-                    "用户要求「字体要在 UI 里面可以设置大小」。")
-            elif not re.search(r"addTarget\s*:\s*self[\s\S]{0,120}?@selector\(lc_sliderChanged:\)",
-                               impl_body):
-                errors.append(
-                    "v1.0.87 回归: 字号滑块没有绑定 lc_sliderChanged: 回调 —— "
-                    "拖动滑块必须能实时写入 fontSize 配置。")
         # 旧写法：把可能是 NSString 的值强转成 NSNumber
+        # （必须先剥掉 // 注释，否则注释里举的反例会误判）
         panel_code = re.sub(r"//[^\n]*", "", panel_src)
         if re.search(r"\[\s*\(NSNumber\s*\*\)\s*LCGet\(", panel_code):
             errors.append(
@@ -1140,8 +1137,7 @@ def check_v87_fixes(src, panel_src=None):
             errors.append(
                 "v1.0.87 回归: 面板字号默认值仍是 28 —— "
                 "tweak 侧默认是 16，两边对不上会让用户以为「改了没生效」。")
-        # v2.0.0: fontSize 写入在 LCFontSizeController 内
-        if "LCSet(@(v), @\"fontSize\")" not in panel_src and "LCSet(@((NSInteger)v), @\"fontSize\")" not in panel_src:
+        if 'LCSet(@((NSInteger)v), @"fontSize")' not in panel_src:
             errors.append(
                 "v1.0.87 回归: 面板字号滑块没有写回 fontSize 键 —— "
                 "拖动必须真正写入配置才能生效。")

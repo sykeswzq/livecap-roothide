@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=2.0.0
+VER=1.0.100
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -49,7 +49,7 @@ echo "[2/4] compile preference bundle (arm64 + arm64e)"
 xcrun --sdk iphoneos clang \
   -bundle -fobjc-arc -finput-charset=UTF-8 -fexec-charset=UTF-8 \
   -undefined dynamic_lookup \
-  -framework CoreFoundation -framework Foundation -framework UIKit -framework CoreGraphics \
+  -framework Foundation -framework UIKit -framework CoreGraphics \
   -arch arm64 -arch arm64e \
   -mios-version-min=13.0 \
   -isysroot "$SDK" \

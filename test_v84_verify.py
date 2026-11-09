@@ -56,10 +56,12 @@ def main():
 
         cases = [
             # (名称, 变异函数, 期望被哪个脚本拦住)
-            ("LC_ASR_CHUNK_SECONDS 被移除（延迟回归）",
+            ("ASR 分片时长退回固定 5 秒（延迟回归）",
              lambda s: s.replace(
-                 "#define LC_ASR_CHUNK_SECONDS 2.5",
-                 "// removed"),
+                 "double chunkSecs = [[LCConfig shared] asrChunkSeconds];",
+                 "double chunkSecs = 5.0;")
+              if "double chunkSecs = [[LCConfig shared] asrChunkSeconds];" in s
+              else s,
              "verify_source_safety"),
 
             ("移除 bringSubviewToFront（全屏字幕被盖住回归）",
@@ -111,7 +113,7 @@ def main():
                              "两个脚本都没报错（rc_s=%d rc_r=%d）" % (rc_s, rc_r))
             if detected:
                 # 确认拦截信息里提到了相关关键字（避免误拦到别的问题）
-                kws = ["chunkSecs", "LC_ASR_CHUNK_SECONDS", "bringSubviewToFront",
+                kws = ["chunkSecs", "asrChunkSeconds", "bringSubviewToFront",
                        "ensureInBestWindow", "UIWindowDidBecomeKeyNotification",
                        "钳制", "rtt"]
                 hit = [k for k in kws if k.lower() in combined.lower()]
