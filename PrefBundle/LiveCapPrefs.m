@@ -6,7 +6,7 @@
 static NSString *LCAppID = @"com.sykes.livecap";
 
 static NSString *LCConfigPath(void) {
-    return LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+    return LCJbRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
 }
 
 static id LCGet(NSString *key) {
