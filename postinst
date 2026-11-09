@@ -1,10 +1,11 @@
 #!/bin/sh
-# postinst v2.0.0 —— 预写默认配置 + 修复注入 + 刷新缓存
+# postinst：预写默认配置 + 让设置面板能改写 filter + 刷新注入缓存
 LOG=/var/mobile/Documents/livecap_install.log
 mkdir -p /var/mobile/Documents
 chmod 777 /var/mobile/Documents
 echo "=== postinst $(date) ===" > "$LOG"
 
+# 默认配置（面板与 tweak 共用 /var/mobile/Library/Preferences/com.sykes.livecap.plist）
 CFG=/var/mobile/Library/Preferences/com.sykes.livecap.plist
 if [ ! -f "$CFG" ]; then
   cat > "$CFG" << 'CFGEOF'
@@ -14,10 +15,14 @@ if [ ! -f "$CFG" ]; then
 <dict>
 	<key>enabled</key>
 	<true/>
+	<key>sourceLang</key>
+	<string>en-US</string>
+	<key>targetLang</key>
+	<string>zh-CN</string>
 	<key>apiBase</key>
 	<string>https://apihub.agnes-ai.cn/v1</string>
 	<key>apiKey</key>
-	<string></string>
+	<string>sk-ZunoSlgppZBgp19GwuQe6OiJiO2427oGnP4J60Ny30pS0n19</string>
 	<key>model</key>
 	<string>agnes-2.5-flash</string>
 	<key>fontSize</key>
@@ -30,8 +35,14 @@ if [ ! -f "$CFG" ]; then
 	<string>frost</string>
 	<key>showBilingual</key>
 	<false/>
+	<key>asrChunkSeconds</key>
+	<real>2.5</real>
 	<key>manualPositions</key>
 	<dict/>
+	<key>tencentSecretId</key>
+	<string></string>
+	<key>tencentSecretKey</key>
+	<string></string>
 </dict>
 </plist>
 CFGEOF
@@ -39,17 +50,81 @@ CFGEOF
   echo "config written" >> "$LOG"
 fi
 
+# 腾讯云密钥由用户在设置面板填写（或 ssh 直写 plist），不硬编码进公开仓库
 if [ -f "$CFG" ]; then
   chmod 666 "$CFG"
   echo "config ensured" >> "$LOG"
 fi
 
+# ===== v1.0.81：模型迁移 =====
+# 背景：agnes-3.0-flash 在 apihub 网关实测单次要 29~40s，而设备端请求超时上限
+# 只有 15s → 必然超时 → 字幕永远显示英文。agnes-2.5-flash 实测 0.87~3.4s。
+# 老用户升级时 CFG 已存在（上面的写入被跳过），必须单独做一次迁移。
+if [ -f "$CFG" ]; then
+  if grep -q "agnes-3.0-flash" "$CFG" 2>/dev/null; then
+    sed -i.bak 's|<string>agnes-3.0-flash</string>|<string>agnes-2.5-flash</string>|' "$CFG" 2>/dev/null \
+      || sed -i '' 's|agnes-3.0-flash|agnes-2.5-flash|g' "$CFG" 2>/dev/null
+    rm -f "$CFG.bak"
+    echo "model migrated: agnes-3.0-flash -> agnes-2.5-flash" >> "$LOG"
+  fi
+fi
+
+# ===== v1.0.84：ASR 分片时长默认值 =====
+# 依据：设备日志实测 ASR RTT ≈ 音频时长 × 1.1（5.11s→5.6s，7.2s→10s），
+# 分片越长字幕延迟越大。默认 2.5 秒 → RTT 约 2.8 秒。
+# 只在键不存在时写入（不覆盖用户已改过的值）。
+if [ -f "$CFG" ]; then
+  if ! plutil -convert xml1 "$CFG" 2>>"$LOG"; then
+    echo "WARNING: plutil convert failed, asrChunkSeconds default skipped" >> "$LOG"
+  else
+    if ! grep -q "<key>asrChunkSeconds</key>" "$CFG" 2>/dev/null; then
+      plutil -type real -value 2.5 -key asrChunkSeconds "$CFG" 2>>"$LOG" \
+        && echo "config: asrChunkSeconds default 2.5" >> "$LOG" \
+        || echo "WARNING: write asrChunkSeconds failed" >> "$LOG"
+    fi
+    plutil -convert binary1 "$CFG" 2>>"$LOG"
+  fi
+fi
+
+# ===== v1.0.83：配置键迁移（showEnglish → showBilingual）=====
+# 背景：v1.0.82 用 showEnglish 键控制「是否同时显示英文原文」。
+# 实测该键会被面板/tweak 两套写入机制互相覆盖，出现
+# 「明明写了 false 却变成 true」→ 英文行莫名出现。
+# v1.0.83 语义反转：showBilingual（默认 NO = 只显示中文一行），
+# 老键 showEnglish 一律废弃并删除。
+#
+# 设备上的 plutil 是老版本，实测能力：
+#   -convert xml1 / binary1  ✅
+#   -type bool -value false -key K <file>  ✅（能正确写出 <false/>）
+#   -remove <key> <file>     ❌（把第一个参数当文件路径，直接失败）
+#   -replace                 ❌（把参数当键名，会误写进配置）
+# 因此删除老键用【转 XML → sed 删块 → 转回 binary】的方式。
+if [ -f "$CFG" ]; then
+  if grep -q "showEnglish" "$CFG" 2>/dev/null; then
+    if plutil -convert xml1 "$CFG" 2>>"$LOG"; then
+      # 删除 <key>showEnglish</key> 及其后一行值
+      sed -i.bak '/<key>showEnglish<\/key>/,+1d' "$CFG" 2>>"$LOG"
+      rm -f "$CFG.bak"
+      # 写入新键，默认 NO（只显示中文一行）
+      plutil -type bool -value false -key showBilingual "$CFG" 2>>"$LOG"
+      # 转回二进制（与 cfprefsd 习惯一致）
+      plutil -convert binary1 "$CFG" 2>>"$LOG"
+      echo "config migrated: showEnglish -> showBilingual" >> "$LOG"
+    else
+      echo "WARNING: plutil convert failed, showEnglish key left as-is" >> "$LOG"
+    fi
+  fi
+fi
+
+# 面板写入后 cfprefsd 缓存问题：强制重读，保证面板/tweak 读到的都是最新
 killall -9 cfprefsd 2>/dev/null || true
 
+# ===== roothide 注入修复 =====
 DYLIB_PATH="/var/jb/Library/MobileSubstrate/DynamicLibraries"
 AUTOPATCHES_DIR="/usr/lib/DynamicPatches"
 AUTOPATCHES_FILE="$AUTOPATCHES_DIR/AutoPatches.dylib"
 
+# 1. 修复 dylib 和 plist 权限
 if [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
   chown mobile:staff "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chown dylib OK" >> "$LOG"
   chmod 755 "$DYLIB_PATH/LiveCap.dylib" 2>/dev/null && echo "chmod dylib OK" >> "$LOG"
@@ -64,8 +139,10 @@ else
   echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
 fi
 
+# 2. 创建 roothidepatch 软链接（关键修复）
 ROOTHIDE_PATCH="$DYLIB_PATH/LiveCap.dylib.roothidepatch"
 if [ ! -L "$ROOTHIDE_PATCH" ]; then
+  # 软链接不存在，创建它
   ln -sf "$AUTOPATCHES_FILE" "$ROOTHIDE_PATCH" 2>/dev/null
   if [ -L "$ROOTHIDE_PATCH" ]; then
     chown mobile:staff "$ROOTHIDE_PATCH" 2>/dev/null
@@ -78,12 +155,19 @@ else
   echo "roothidepatch symlink exists" >> "$LOG"
 fi
 
+# 3. 确保 AutoPatches.dylib 存在
 if [ ! -f "$AUTOPATCHES_FILE" ]; then
   echo "WARNING: AutoPatches.dylib not found at $AUTOPATCHES_FILE" >> "$LOG"
+  echo "Please install roothidepatch package first:" >> "$LOG"
+  echo "  dpkg -i /path/to/com.roothidepatch.deb" >> "$LOG"
 else
   echo "AutoPatches.dylib found at $AUTOPATCHES_FILE" >> "$LOG"
 fi
 
+# ===== 代码签名自愈 =====
+# 背景：若打包流程里 ldid 签名后还修改了 Mach-O header（install_name patch），
+# CodeDirectory 哈希会失效，设备端加载报 "code signature invalid (errno=85)"，
+# 表现为 tweak 完全不注入、无任何日志。这里在安装时强制重签一次，确保可加载。
 LDID=""
 for l in /usr/bin/ldid /var/jb/usr/bin/ldid /var/jb/usr/sbin/ldid; do
   [ -x "$l" ] && LDID="$l" && break
@@ -101,11 +185,19 @@ else
   echo "WARNING: ldid not found, cannot re-sign dylib" >> "$LOG"
 fi
 
+# 加入越狱 trustcache（若有 jbctl），确保内核信任该签名
+#
+# v1.0.83 修复：Dopamine 2.x rootless 下，jbctl trustcache add 只接受
+# 【jbroot 真实路径】（/var/containers/Bundle/Application/.jbroot-XXXX/...），
+# 用 /var/jb/... 会报 "ERROR: passed macho path does not exist"。
+# （两者其实是同一 inode，但 jbctl 校验的是路径字面量）
+# 因此这里对候选路径依次尝试，成功即止。
 JBC=""
 for j in /usr/bin/jbctl /basebin/jbctl /var/jb/usr/bin/jbctl; do
   [ -x "$j" ] && JBC="$j" && break
 done
 if [ -n "$JBC" ] && [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
+  # 候选路径：jbroot 真实路径优先，其次 /var/jb 路径
   TC_TARGETS=""
   for jb in /var/containers/Bundle/Application/.jbroot-*; do
     [ -d "$jb" ] && TC_TARGETS="$TC_TARGETS $jb/usr/lib/TweakInject/LiveCap.dylib"
@@ -125,14 +217,25 @@ if [ -n "$JBC" ] && [ -f "$DYLIB_PATH/LiveCap.dylib" ]; then
   [ "$TC_OK" = "0" ] && echo "WARNING: trustcache add failed for all paths" >> "$LOG"
 fi
 
+# 检查权限（诊断用）
 echo "--- file permissions ---" >> "$LOG"
 ls -la "$DYLIB_PATH/" >> "$LOG" 2>&1
 
+# 刷新图标缓存 + 让注入生效（重启 runningboardd 清理残留注入状态）
 for k in /var/jb/usr/bin/killall /usr/bin/killall killall; do
   if [ -x "$k" ]; then "$k" runningboardd >> "$LOG" 2>&1 || true; break; fi
 done
 killall runningboardd 2>/dev/null || true
 
+# ===== v1.0.86：不再杀 mediaserverd =====
+# 背景：mediaserverd 是 iOS 系统媒体服务守护进程，杀它会中断
+# 所有 App 的音频会话（微信语音、通话、音乐都会瞬断）。
+# 且 v1.0.86 起 tweak 不再注入 mediaserverd（见 LiveCap.plist），
+# 没有重启它的必要。
+echo "skip mediaserverd restart (not injected since v1.0.86)" >> "$LOG"
+
+# 等待进程重启
 sleep 2
+
 echo "=== postinst done ===" >> "$LOG"
 exit 0
