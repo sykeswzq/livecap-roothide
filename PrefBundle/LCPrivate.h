@@ -182,31 +182,19 @@ static inline NSSet *LCInstalledAppIDs(void) {
 
 // 真正会被注入 LiveCap 的 bundle 集合
 // 逻辑：以 XL Roohhide 白名单为主（有则用它），否则用 LiveCap Filter/Bundles
+// 真正会被注入 LiveCap 的 bundle 集合
+// 逻辑：LiveCap Filter/Bundles ∩ 已安装 App（独立于 XL，不依赖任何外部文件）
 static inline NSSet *LCReallyInjectedIDs(void) {
     NSMutableSet *out = [NSMutableSet set];
     @try {
-        NSDictionary *xl = LCReadXLRootHideWhitelist();
         NSSet *installed = LCInstalledAppIDs();
-
-        if (xl && xl.count > 0) {
-            // XL 白名单模式：遍历已安装 App，检查是否在白名单里
-            for (id b in installed) {
-                if (![b isKindOfClass:[NSString class]]) continue;
-                NSString *bid = (NSString *)b;
-                if (!bid.length) continue;
-                if ([bid hasSuffix:@".disabled"]) continue;
-                if (LCBidInXLWhitelist(bid)) [out addObject:bid];
-            }
-        } else {
-            // 无 XL 白名单时回退到 LiveCap Filter 模式
-            for (id b in LCReadFilterBundles()) {
-                if (![b isKindOfClass:[NSString class]]) continue;
-                NSString *bid = (NSString *)b;
-                if (!bid.length) continue;
-                if ([bid hasSuffix:@".disabled"]) continue;
-                if (![installed containsObject:bid]) continue;
-                [out addObject:bid];
-            }
+        for (id b in LCReadFilterBundles()) {
+            if (![b isKindOfClass:[NSString class]]) continue;
+            NSString *bid = (NSString *)b;
+            if (!bid.length) continue;
+            if ([bid hasSuffix:@".disabled"]) continue;
+            if (![installed containsObject:bid]) continue;
+            [out addObject:bid];
         }
     } @catch (NSException *e) {}
     return out;

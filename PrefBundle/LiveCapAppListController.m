@@ -233,19 +233,14 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    // XL 白名单模式：注入目标 = XL Roohhide 白名单 ∩ 已安装 App
-    NSSet *xlInjectedIDs = LCReallyInjectedIDs();
-    NSDictionary *xlWhitelist = LCReadXLRootHideWhitelist();
-    NSUInteger realN = [xlInjectedIDs count];
-    NSUInteger xlCount = xlWhitelist ? xlWhitelist.count : 0;
+    // 注入目标 = LiveCap Filter ∩ 已安装 App
+    NSSet *injectedIDs = LCReallyInjectedIDs();
+    NSArray *filter = LCReadFilterBundles();
+    NSUInteger realN = [injectedIDs count];
+    NSUInteger filterN = filter.count;
 
     NSMutableString *s = [NSMutableString stringWithFormat:@"已注入 %lu 个 App", (unsigned long)realN];
-    if (xlWhitelist && xlWhitelist.count > 0) {
-        [s appendFormat:@"（XL Roohhide 白名单 %lu）", (unsigned long)xlCount];
-    } else {
-        NSArray *filter = LCReadFilterBundles();
-        [s appendFormat:@"（LiveCap 勾选 %lu）", (unsigned long)filter.count];
-    }
+    [s appendFormat:@"（LiveCap 勾选 %lu）", (unsigned long)filterN];
     [s appendString:@" · 注销后生效"];
     if (!_filterWriteOK)
         [s appendString:@" · 写入注入配置失败"];
@@ -304,49 +299,18 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     return cell;
 }
 
-// XL 白名单存在时，开关直接读取/写入 XL 白名单文件；
-// 无 XL 白名单时仍回退到 LiveCap Filter 模式。
-static inline void LCWriteToXLWhitelistFile(NSString *bid, BOOL on) {
-    @try {
-        NSArray *paths = @[
-            @"/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
-            @"/var/jb/var/mobile/Library/RootHide/cn.zqbb.inject.plist",
-        ];
-        for (NSString *p in paths) {
-            if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
-            NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:p];
-            if (![dict isKindOfClass:[NSDictionary class]]) continue;
-            NSMutableDictionary *mutable = [dict mutableCopy];
-            NSString *last = [[bid componentsSeparatedByString:@"."] lastObject];
-            mutable[last] = on ? @YES : @NO;
-            NSData *data = [NSPropertyListSerialization dataWithPropertyList:mutable
-                                                                       format:NSPropertyListXMLFormat_v1_0
-                                                                      options:0 error:NULL];
-            if (!data.length) continue;
-            [data writeToFile:p atomically:YES];
-            return;
-        }
-    } @catch (NSException *e) {}
-}
-
 - (void)lc_switchChanged:(UISwitch *)sw {
     @try {
         NSInteger row = sw.tag;
         if (row < 0 || row >= (NSInteger)_shown.count) return;
         NSString *bid = _shown[(NSUInteger)row][@"id"];
         if (!bid) return;
-        NSDictionary *xlWhitelist = LCReadXLRootHideWhitelist();
-        BOOL hasXL = (xlWhitelist != nil && xlWhitelist.count > 0);
-        if (hasXL) {
-            LCWriteToXLWhitelistFile(bid, sw.on);
-        } else {
-            if (sw.on) [[self lc_selected] addObject:bid];
-            else       [[self lc_selected] removeObject:bid];
-            _filterWriteOK = LCWriteFilterBundles(
-                [[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)]);
-            LCSetPref([[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)],
-                      @"injectApps");
-        }
+        if (sw.on) [[self lc_selected] addObject:bid];
+        else       [[self lc_selected] removeObject:bid];
+        _filterWriteOK = LCWriteFilterBundles(
+            [[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)]);
+        LCSetPref([[[self lc_selected] allObjects] sortedArrayUsingSelector:@selector(compare:)],
+                  @"injectApps");
         [_tv reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
     } @catch (NSException *e) {}
 }
