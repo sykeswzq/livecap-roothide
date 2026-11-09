@@ -49,7 +49,7 @@ echo "[2/4] compile preference bundle (arm64 + arm64e)"
 xcrun --sdk iphoneos clang \
   -bundle -fobjc-arc -finput-charset=UTF-8 -fexec-charset=UTF-8 \
   -undefined dynamic_lookup \
-  -framework Foundation -framework UIKit -framework CoreGraphics \
+  -framework CoreFoundation -framework Foundation -framework UIKit -framework CoreGraphics \
   -arch arm64 -arch arm64e \
   -mios-version-min=13.0 \
   -isysroot "$SDK" \
