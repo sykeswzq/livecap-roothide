@@ -18,7 +18,14 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RELEASES = os.path.join(HERE, 'releases')
-TARGET_VER = '2.0.2'
+def _target_ver():
+    """版本号一律从 build.sh 读，避免每次升级都要改这个脚本。"""
+    b = io.open(os.path.join(HERE, 'build.sh'), encoding='utf-8').read()
+    m = re.search(r'^VER=(.+)$', b, re.M)
+    return m.group(1).strip() if m else '2.1.0'
+
+
+TARGET_VER = _target_ver()
 
 
 def creds():
@@ -112,7 +119,10 @@ def verify(deb_path):
     for tag, needle in [('分片配置方法', b'lc_chunkSeconds'),
                         ('短片段跳过日志', b'asr: skip short chunk'),
                         ('agnes 熔断日志', b'agnes rate-limited'),
-                        ('inflight 打点', b'translate: inflight rtt=')]:
+                        ('inflight 打点', b'translate: inflight rtt='),
+                        ('v2.1.0 流式类', b'LCStreamASR'),
+                        ('v2.1.0 握手日志', b'asr: ws handshake ok'),
+                        ('v2.1.0 稳态句日志', b'asr: ws final sentence')]:
         assert needle in dl, '%s 未编进 dylib（%s）' % (tag, needle.decode())
         print('  含新代码: %s OK' % tag)
 

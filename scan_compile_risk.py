@@ -372,6 +372,25 @@ def check_panel_balance(src):
     check_objc_blocks(src, "面板")
 
 
+def check_websocket_api(src, label):
+    """NSURLSessionWebSocketTask 易写错的 selector（Windows 本地无 xcrun，
+    只能靠白名单提前拦，等 CI 3~5 分钟往返才发现太慢）。
+
+    真实踩坑：关闭方法是 cancelWithCloseCode:reason:，
+    但委托回调叫 didCloseWithCode:reason: —— 少一个 Close 就编译失败。
+    """
+    if "LCStreamASR" not in src:
+        return
+    # cancelWithCode: 不是 cancelWithCloseCode: 的子串，可以安全精确匹配
+    if "cancelWithCode:" in src:
+        errors.append("%s: WebSocket 关闭方法名写错 —— 应为 "
+                      "cancelWithCloseCode:reason:（委托回调才叫 didCloseWithCode:）" % label)
+    for need in ("cancelWithCloseCode:", "sendMessage:",
+                 "receiveMessageWithCompletionHandler:"):
+        if need not in src:
+            errors.append("%s: 缺少 WebSocket 必需 selector %s" % (label, need))
+
+
 def main():
     for path, label in ((SRC, "LiveCap.m"), (PANEL, "面板")):
         with io.open(path, "r", encoding="utf-8") as f:
@@ -383,6 +402,7 @@ def main():
             check_ternary_type(src, label)
             check_use_before_decl(src, label)
             check_selectors_exist(src, label)
+            check_websocket_api(src, label)
         else:
             check_panel_balance(src)
             check_ternary_type(src, label)

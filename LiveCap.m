@@ -1585,7 +1585,8 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     if (_task) {
         NSURLSessionWebSocketTask *old = _task;
         _task = nil;                       // 先置空，让旧 task 的关闭回调被忽略
-        [old cancelWithCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
+        // 注意：关闭方法是 cancelWithCloseCode:reason:（委托回调才是 didCloseWithCode:）
+        [old cancelWithCloseCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
     }
     [_session invalidateAndCancel];
     _session = nil;
@@ -1761,7 +1762,8 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     if (_task) {
         NSURLSessionWebSocketTask *old = _task;
         _task = nil;
-        [old cancelWithCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
+        // 注意：关闭方法是 cancelWithCloseCode:reason:（委托回调才是 didCloseWithCode:）
+        [old cancelWithCloseCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
     }
     NSURL *url = [self lc_buildURL];   // 必须换新的 voice_id / timestamp
     if (!url) { [self stop]; return; }
