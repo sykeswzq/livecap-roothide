@@ -1825,6 +1825,12 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     }
     LCLogF(@"asr: ws reconnect #%ld", (long)_retryCount);
     _ready = NO;
+    // 重连必须重置两个看门狗基准：否则 _startedAt 仍是本次会话 start 的时刻，
+    // 握手看门狗会在重连后 200ms 内误判「握手超时」把流式杀掉；
+    // _lastSentenceAt 同理，重连期间不应算作「零产出」。
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    _startedAt = now;
+    _lastSentenceAt = now;
     @synchronized(self) { [_frames removeAllObjects]; }
     if (_task) {
         NSURLSessionWebSocketTask *old = _task;
