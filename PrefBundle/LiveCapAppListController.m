@@ -1,31 +1,116 @@
-// LiveCapAppListController.m —— v2.0.0
+// LiveCapAppListController.m —— v2.2.1
 // 注入目标 App 列表（自动扫描 + 逐个开关）
-// 逻辑：LiveCap Filter/Bundles ∩ 已安装 App，独立于任何外部面板
+//
+// 对齐 XL-Roothide（sykeswzq/XL-Roothide）已验证可用的成熟实现：
+//   ① 勾选状态真相放在【偏好 plist】的 selectedApps（XL 用 apps 键），
+//      不再从 Filter plist 回读。roothide 下 Filter 路径在「设置」进程里
+//      不稳定，回读为空时面板显示全部未勾选，用户勾 1 个就把打包时的
+//      默认 bundle 列表抹成 1 个 —— 正是「选其他 App 无效」的根因。
+//   ② 写偏好 = 直接写 plist 文件 + notify_post（XL 的 XLSetValue 同理）。
+//      LiveCap 的 tweak 是实时读盘（LCConfig freshValueForKey），不走
+//      CFPreferences，故刻意不调 CFPreferencesAppSynchronize：cfprefsd 的
+//      旧快照会反向覆盖刚写好的文件（v2.2.0 踩过这个坑）。
+//   ③ Filter.Bundles 只是「注入声明」，写完必须立刻 killall runningboardd
+//      刷新注入框架缓存（XL 在 XLWriteFilterBundles 里 posix_spawn 做），
+//      否则改了 plist 也要注销才生效。
+//   ④ 所有候选 Filter 路径都同步写，不因某条影子路径写成就提前 return。
+//   ⑤ 老配置没有 selectedApps 时从 Filter 做一次性迁移；回读为空则用
+//      打包默认列表兜底，绝不丢掉原有 App。
 
 #import <UIKit/UIKit.h>
+#import <notify.h>
+#import <spawn.h>
+#import <sys/wait.h>
+#import <unistd.h>
 #import "LCPrivate.h"
 
-// v2.2.0：配置写入统一走「直接写 plist 文件」——tweak 的 freshValueForKey
-// 与 LCInit 自检读的是同一路径。混用 CFPreferencesAppSynchronize 会让
-// cfprefsd 用旧快照把刚写好的新键覆盖掉（面板显示开了、tweak 仍按旧值跑）。
+static NSString *const LCAppListDomain = @"com.sykes.livecap";
+static NSString *const LCAppListKey = @"selectedApps";
+
 static NSString *LCAppListConfigPath(void) {
     return LCJbRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
 }
 
-static void LCAppListSetPref(id value, NSString *key) {
+static id LCAppListValue(NSString *key) {
+    @try {
+        NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:LCAppListConfigPath()];
+        if (d && d[key] != nil) return d[key];
+    } @catch (NSException *e) {}
+    @try {
+        CFTypeRef c = CFPreferencesCopyAppValue((__bridge CFStringRef)key,
+                                                (__bridge CFStringRef)LCAppListDomain);
+        if (c) return CFBridgingRelease(c);
+    } @catch (NSException *e) {}
+    return nil;
+}
+
+// 只写文件 + 发通知；不写 CFPreferences，避免 cfprefsd 旧快照反向覆盖。
+static void LCAppListSetValue(id value, NSString *key) {
     @try {
         NSString *p = LCAppListConfigPath();
-        NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:p];
-        if (!d) d = [NSMutableDictionary dictionary];
+        NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:p]
+                               ?: [NSMutableDictionary dictionary];
         if (value) d[key] = value; else [d removeObjectForKey:key];
         [d writeToFile:p atomically:YES];
     } @catch (NSException *e) {}
+    notify_post("com.sykes.livecap.reload");
 }
 
-// Filter 白名单只能决定「能不能被注入」，且要注销才生效；
-// 这份 enabledBundles 让「取消勾选」在重启该 App 后立即停用，不必注销。
-static void LCSaveEnabledBundles(NSArray *ids) {
-    LCAppListSetPref(ids ?: @[], @"enabledBundles");
+// 打包时 LiveCap.plist 的默认 Bundles。Filter 回读失败时用它兜底，
+// 保证「全新安装 / Filter 路径不可读」时不会把已有 App 全部抹掉。
+static NSArray<NSString *> *LCDefaultBundles(void) {
+    static NSArray *list;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        list = @[
+            @"com.google.ios.youtube",
+            @"com.bilibili.app.blue",
+            @"com.bilibili.app.in",
+            @"com.ss.android.ugc.aweme",
+            @"com.google.android.youtube.kids",
+            @"com.netflix.Netflix",
+            @"com.hulu.plus",
+            @"com.hbo.hbonow",
+            @"com.amazon.avod.thirdpartyclient",
+            @"com.disney.disneyplus",
+            @"com.apple.tv",
+            @"tv.twitch.android.app",
+            @"com.google.android.youtube.music",
+            @"com.baidu.iapp.video",
+            @"com.iqiyi.i18n",
+            @"com.iqiyi.video",
+            @"com.youku.youku",
+            @"com.tencent.qqlive",
+            @"com.sohu.svplayer",
+            @"cn.wanshizheng.pinshipin",
+            @"com.apple.mobilepodcasts",
+            @"com.vimeo.vimeo",
+            @"com.dailymotion.dailymotion-app",
+            @"com.pandora.android",
+            @"com.spotify.client",
+            @"com.soundcloud.android",
+            @"com.tencent.tmgp.sgame",
+            @"com.miHoYo.Yuushen",
+        ];
+    });
+    return list;
+}
+
+// 照 XL-Roothide：改完 Filter 立刻让注入框架重读，否则要手动注销才生效。
+static void LCRefreshInjection(void) {
+    @try {
+        const char *bins[] = {"/usr/bin/killall", "/var/jb/usr/bin/killall",
+                              "/basebin/usr/bin/killall", NULL};
+        for (int i = 0; bins[i]; i++) {
+            if (access(bins[i], X_OK) != 0) continue;
+            pid_t pid = 0;
+            const char *argv[] = {"killall", "runningboardd", NULL};
+            if (posix_spawn(&pid, bins[i], NULL, NULL, (char *const *)argv, NULL) == 0) {
+                waitpid(pid, NULL, 0);
+                return;
+            }
+        }
+    } @catch (NSException *e) {}
 }
 
 static BOOL LCWriteFilterBundles(NSArray *raw) {
@@ -42,9 +127,13 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
         if (bundles.count == 0) bundles = [@[@"com.sykes.livecap.disabled"] mutableCopy];
         NSSet *want = [NSSet setWithArray:bundles];
 
-        // v2.2.0：逐条尝试所有候选路径；只改 Filter.Bundles，保留 plist 其它键
-        // （旧实现 plist[@"Filter"] = @{@"Bundles":...} 会整体覆盖 Filter）。
-        // 回读比对【内容集合】而非数量，杜绝「写到影子目录却判成功」。
+        // v2.2.1：所有候选路径都写，主路径（能读到有效 Filter 的那条）成功才算成功。
+        // v2.2.0 曾「第一条写成就 return」，可能只写进影子目录，真正的 Filter 没改。
+        NSString *primary = LCFilterPlistPath();
+        BOOL primaryOK = NO;
+        NSUInteger okCount = 0;
+        NSString *usedPath = nil;
+
         for (NSString *path in LCFilterPlistCandidates()) {
             NSMutableDictionary *plist = [NSMutableDictionary dictionary];
             NSDictionary *old = [NSDictionary dictionaryWithContentsOfFile:path];
@@ -73,14 +162,19 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
                     setAttributes:@{NSFilePosixPermissions: @(0666)}
                     ofItemAtPath:path error:NULL];
             } @catch (NSException *e) {}
-            LCAppListSetPref(path, @"lastFilterWritePath");
-            LCAppListSetPref(@YES, @"lastFilterWriteOK");
-            return YES;
+
+            okCount++;
+            if (!usedPath) usedPath = path;
+            if ([path isEqualToString:primary]) primaryOK = YES;
         }
-        LCAppListSetPref(@NO, @"lastFilterWriteOK");
-        return NO;
+
+        BOOL ok = (primaryOK || okCount > 0);
+        LCAppListSetValue(usedPath ?: @"", @"lastFilterWritePath");
+        LCAppListSetValue(@(ok), @"lastFilterWriteOK");
+        if (ok) LCRefreshInjection();
+        return ok;
     } @catch (NSException *e) {
-        LCAppListSetPref(@NO, @"lastFilterWriteOK");
+        LCAppListSetValue(@NO, @"lastFilterWriteOK");
         return NO;
     }
 }
@@ -144,11 +238,29 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     [_tv reloadData];
 }
 
+// 勾选状态只认偏好 plist；老配置做一次性迁移，迁移失败用打包默认列表兜底。
 - (NSMutableSet<NSString *> *)lc_selected {
     if (_selected) return _selected;
     _selected = [NSMutableSet set];
-    for (NSString *b in LCReadFilterBundles()) {
-        if ([b isKindOfClass:[NSString class]] && b.length) [_selected addObject:b];
+    NSArray *src = nil;
+    id saved = LCAppListValue(LCAppListKey);
+    if ([saved isKindOfClass:[NSArray class]] && ((NSArray *)saved).count) {
+        src = (NSArray *)saved;
+    } else {
+        NSMutableArray *migrated = [NSMutableArray array];
+        for (id b in LCReadFilterBundles()) {
+            if (![b isKindOfClass:[NSString class]]) continue;
+            NSString *bid = (NSString *)b;
+            if (bid.length == 0 || [bid hasSuffix:@".disabled"]) continue;
+            [migrated addObject:bid];
+        }
+        if (migrated.count == 0) [migrated addObjectsFromArray:LCDefaultBundles()];
+        src = migrated;
+        LCAppListSetValue(src, LCAppListKey);   // 落盘，此后不再依赖 Filter 回读
+    }
+    for (id b in src) {
+        if ([b isKindOfClass:[NSString class]] && ((NSString *)b).length)
+            [_selected addObject:(NSString *)b];
     }
     return _selected;
 }
@@ -238,6 +350,8 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     @try { [_searchBar resignFirstResponder]; } @catch (NSException *e) {}
 }
 
+#pragma mark - 表格
+
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 1; }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -246,33 +360,30 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    // v2.2.0：旧标题写「已注入 N 个」是假象 —— 这里只是 Filter 勾选数，
-    // 真正注入还受 Dopamine Inject Manager 控制。改为如实显示勾选与写入结果。
-    NSArray *filter = LCReadFilterBundles();
+    NSUInteger n = [[self lc_selected] count];
     NSMutableString *s = [NSMutableString stringWithFormat:
-        @"已勾选 %lu 个 App", (unsigned long)filter.count];
-    [s appendString:_filterWriteOK ? @" · 白名单写入成功" : @" · 白名单写入失败"];
-    [s appendFormat:@" · 实际生效 %lu 个", (unsigned long)[LCReallyInjectedIDs() count]];
+        @"已勾选 %lu 个 App（偏好已保存）", (unsigned long)n];
+    [s appendString:_filterWriteOK ? @" · Filter 写入成功" : @" · Filter 写入失败"];
+    [s appendFormat:@" · Filter 声明 %lu 个", (unsigned long)[LCReadFilterBundles() count]];
     return s;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    return 104.0;
+    return 116.0;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-    // 明确告诉用户机制限制，避免「勾了却没反应」时无从排查
-    UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, 104.0)];
-    UILabel *lb = [[UILabel alloc] initWithFrame:CGRectMake(16, 8, tableView.bounds.size.width - 32, 92)];
+    UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, 116.0)];
+    UILabel *lb = [[UILabel alloc] initWithFrame:CGRectMake(16, 8, tableView.bounds.size.width - 32, 104)];
     lb.numberOfLines = 0;
     lb.font = [UIFont systemFontOfSize:12];
     lb.textColor = [UIColor secondaryLabelColor];
-    lb.text = @"新增勾选后要真正生效，需两步：\n"
+    lb.text = @"勾选后会立即刷新注入缓存（killall runningboardd）。\n"
+             @"新增 App 真正生效还需两步：\n"
              @"① Dopamine → Inject Manager 里勾选该 App；\n"
-             @"② 完全杀掉目标 App 再打开（或注销设备）。\n"
-             @"取消勾选：重启该 App 后立即停用，无需注销。\n"
-             @"若一直显示「写入失败」，说明 Filter 路径不可写，"
-             @"可在 Filza 手动改 /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist。";
+             @"② 彻底杀掉目标 App 再打开（或注销设备）。\n"
+             @"取消勾选：重启该 App 后停用。若显示「Filter 写入失败」，"
+             @"说明 Filter 路径不可写，可在 Filza 手动改 LiveCap.plist。";
     [v addSubview:lb];
     return v;
 }
@@ -293,25 +404,26 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     NSDictionary *app = _shown[(NSUInteger)indexPath.row];
     NSString *bid = app[@"id"];
     cell.textLabel.text = app[@"name"] ?: bid;
-    cell.detailTextLabel.text = bid;
+    cell.detailTextLabel.text = bid;   // 保留 Bundle ID，便于真机核对
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
 
-    BOOL picked = [[self lc_selected] containsObject:bid];
-
-    if (picked) {
-        cell.detailTextLabel.text = @"已勾选注入";
-        cell.detailTextLabel.textColor = [UIColor systemGreenColor];
-    } else {
-        cell.detailTextLabel.text = @"未勾选";
-        cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-    }
-
     UISwitch *sw = [[UISwitch alloc] init];
-    sw.on = picked;
+    sw.on = [[self lc_selected] containsObject:bid];
     sw.tag = (NSInteger)indexPath.row;
     [sw addTarget:self action:@selector(lc_switchChanged:) forControlEvents:UIControlEventValueChanged];
     cell.accessoryView = sw;
     return cell;
+}
+
+- (void)lc_save {
+    NSArray *picked = [[[self lc_selected] allObjects]
+                       sortedArrayUsingSelector:@selector(compare:)];
+    // ① 真相写偏好（XL 做法），不再让 UI 状态依赖 Filter 回读
+    LCAppListSetValue(picked, LCAppListKey);
+    // 兼容 v2.2.0 残留键：保留同一份列表，避免回滚旧包时被运行时白名单误杀
+    LCAppListSetValue(picked, @"enabledBundles");
+    // ② 注入声明写 Filter + 刷新注入缓存
+    _filterWriteOK = LCWriteFilterBundles(picked);
 }
 
 - (void)lc_switchChanged:(UISwitch *)sw {
@@ -322,11 +434,7 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
         if (!bid) return;
         if (sw.on) [[self lc_selected] addObject:bid];
         else       [[self lc_selected] removeObject:bid];
-        NSArray *picked = [[[self lc_selected] allObjects]
-                           sortedArrayUsingSelector:@selector(compare:)];
-        _filterWriteOK = LCWriteFilterBundles(picked);
-        // 运行时白名单：取消勾选无需注销即可停用（tweak 启动自检读这个键）
-        LCSaveEnabledBundles(picked);
+        [self lc_save];
         [_tv reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
     } @catch (NSException *e) {}
 }

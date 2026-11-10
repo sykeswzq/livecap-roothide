@@ -129,7 +129,7 @@ def verify(deb_path):
                         ('v2.2.0 整句收句日志', b'asr: ws commit'),
                         ('v2.2.0 严格同步开关键', b'strictSubtitleSync'),
                         ('v2.2.0 滞后译文丢弃', b'overlay: drop lagging pair'),
-                        ('v2.2.0 注入运行时白名单', b'not in enabledBundles')]:
+                        ('v2.2.1 运行时不拦截注入', b'not in enabledBundles (log only')]:
         assert needle in dl, '%s 未编进 dylib（%s）' % (tag, needle.decode())
         print('  含新代码: %s OK' % tag)
 
@@ -142,6 +142,14 @@ def verify(deb_path):
     assert b'asrChunkSeconds' in prefs, '设置面板未编入分片选项'
     assert b'strictSubtitleSync' in prefs, '设置面板未编入严格同步开关'
     assert b'lastFilterWritePath' in prefs, '设置面板未编入 Filter 写入诊断'
+    # v2.2.1 对齐 XL-Roothide 的注入勾选链路，必须真的编进 PrefBundle
+    for tag, needle in (('勾选状态存偏好', b'selectedApps'),
+                        ('写完成刷新注入缓存', b'runningboardd'),
+                        ('Filter 写入诊断键', b'lastFilterWriteOK'),
+                        ('偏好变更通知', b'com.sykes.livecap.reload')):
+        assert needle in prefs, 'v2.2.1 注入修复未编进面板: %s (%s)' % (
+            tag, needle.decode())
+        print('  含注入修复: %s OK' % tag)
     print('  PrefBundle: 含 asrChunkSeconds / strictSubtitleSync / Filter 写入诊断 OK')
     info = dat.extractfile(info_path).read().decode('utf-8', 'replace')
     assert info.count('<string>%s</string>' % TARGET_VER) == 2, 'Info.plist 版本未同步'

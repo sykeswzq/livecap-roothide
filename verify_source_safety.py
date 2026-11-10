@@ -18,6 +18,8 @@ import re
 import sys
 
 SRC = "LiveCap.m"
+APP_LIST = "PrefBundle/LiveCapAppListController.m"
+POSTINST = "postinst"
 
 errors = []
 warnings = []
@@ -1206,7 +1208,7 @@ def check_v220_fixes(src, panel_src):
             ("drop lagging pair", "落后 ≥2 句的译文必须丢弃，避免讲的 A 显示 B"),
             ("_pendingSeq > seq + 1", "时序对账基准必须是最新的 pending seq"),
             ("strictSubtitleSync", "可回退开关，真机可 A/B 对照"),
-            ("not in enabledBundles", "取消勾选的 App 运行时自检停用")):
+            ("not in enabledBundles", "运行时注入诊断日志（v2.2.1 起仅记录不拦截）")):
         if token not in src:
             errors.append("v2.2.0 回归: 缺少 %s —— %s" % (token, why))
     if "kMaxQueue = 3" not in src:
@@ -1215,6 +1217,59 @@ def check_v220_fixes(src, panel_src):
         errors.append("v2.2.0 回归: 回落 ASR 并发不是 1，响应乱序会让字幕顺序颠倒")
     if panel_src and "lc_strictSyncChanged:" not in panel_src:
         errors.append("v2.2.0 回归: 面板缺少严格同步开关")
+
+
+def check_v221_fixes(src, applist_src, postinst_src):
+    """v2.2.1：照 XL-Roothide 成熟实现重做注入勾选链路。
+
+    用户反馈「注入还是有问题，选其他 App 无效」。对照 sykeswzq/XL-Roothide：
+      - XL 把勾选状态存偏好 plist(apps)，LiveCap 却从 Filter plist 回读，
+        roothide 下回读为空 → 勾 1 个就把默认 27 个 bundle 抹成 1 个；
+      - XL 写完 Filter 立刻 killall runningboardd，LiveCap 没有 → 不刷新缓存；
+      - XL dylib 运行时不做白名单判定，LiveCap v2.2.0 加了 enabledBundles
+        硬卡「不在列表就 return」→ 列表写坏时连 YouTube 一起挡掉。
+    这里锚定修复关键串，并显式禁止硬卡回归。
+    """
+    # ① dylib 绝不能再拦 hook
+    if "if (!LCBundleAllowedByPrefs()) return;" in src:
+        errors.append("v2.2.1 回归: 运行时白名单仍在拦 hook —— 列表写坏会挡掉所有 App")
+    if "LCLogBundleSelection();" not in src:
+        errors.append("v2.2.1 回归: 缺少注入诊断日志调用")
+    if "not in enabledBundles (log only" not in src:
+        errors.append("v2.2.1 回归: 注入诊断日志未标明「仅记录不拦截」")
+
+    # ② 面板：状态真相在偏好 + 刷新注入缓存 + 全候选同步写 + 默认值兜底
+    if applist_src is None:
+        errors.append("v2.2.1 回归: 读不到 App 列表控制器源码")
+    else:
+        # 扫代码前必须剥离注释行：注释里的示例/说明会造成误报或假通过
+        code = re.sub(r"//[^\n]*", "", applist_src)
+        for token, why in (
+                ("selectedApps", "勾选状态必须存偏好，不能从 Filter 回读"),
+                ("LCAppListSetValue", "偏好写入 + notify_post（XL 的 XLSetValue）"),
+                ("notify_post", "配置变更通知"),
+                ("LCReadFilterBundles", "老配置一次性迁移入口"),
+                ("LCDefaultBundles", "Filter 回读为空时用打包默认列表兜底"),
+                ("LCRefreshInjection", "写完 Filter 必须刷新注入缓存"),
+                ("runningboardd", "XL 同款 killall runningboardd"),
+                ("primaryOK", "所有候选路径同步写，不能第一条成功就 return"),
+                ("lastFilterWritePath", "Filter 写入诊断")):
+            if token not in code:
+                errors.append("v2.2.1 回归: 面板缺少 %s —— %s" % (token, why))
+        # 只留函数定义、删掉调用点也不行：Filter 改了但注入框架不重读
+        if "LCRefreshInjection();" not in code:
+            errors.append("v2.2.1 回归: 写完 Filter 没有调用刷新注入缓存，改了 plist 也不生效")
+        if "CFPreferencesAppSynchronize" in code:
+            errors.append("v2.2.1 回归: 面板又用 CFPreferences 同步，cfprefsd 旧快照会覆盖文件")
+
+    # ③ postinst：按 deb 解包相对路径修 Filter 权限（XL 做法）
+    if postinst_src is None:
+        errors.append("v2.2.1 回归: 读不到 postinst")
+    else:
+        if "FILTER_CWD" not in postinst_src:
+            errors.append("v2.2.1 回归: postinst 缺少相对安装路径的 Filter 权限修复")
+        if "chmod 666" not in postinst_src:
+            errors.append("v2.2.1 回归: Filter 未开放 666，面板无法改写 Bundles")
 
 
 def main():
@@ -1228,6 +1283,20 @@ def main():
     try:
         with io.open(PANEL, "r", encoding="utf-8") as pf:
             panel_src = pf.read()
+    except Exception:
+        pass
+
+    applist_src = None
+    try:
+        with io.open(APP_LIST, "r", encoding="utf-8") as af:
+            applist_src = af.read()
+    except Exception:
+        pass
+
+    postinst_src = None
+    try:
+        with io.open(POSTINST, "r", encoding="utf-8") as sf:
+            postinst_src = sf.read()
     except Exception:
         pass
 
@@ -1246,6 +1315,7 @@ def main():
     check_v87_fixes(src, panel_src)
     check_v211_fixes(src, panel_src)
     check_v220_fixes(src, panel_src)
+    check_v221_fixes(src, applist_src, postinst_src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -1268,7 +1338,8 @@ def main():
     print("  OK: v1.0.84 修复在位（分片时长可配置/毫秒RTT打点/提到最上层/跟随新window/位置钳制）")
     print("  OK: v1.0.87 修复在位（ADTS 封装/失败可恢复/分片不丢音/字号滑块+实时生效）")
     print("  OK: v2.1.1 修复在位（RFC3986编码/中间结果兜底翻译/握手与零产出看门狗/流式开关）")
-    print("  OK: v2.2.0 修复在位（整句断句/忠实直译/时序对账/队列与回落排序/注入白名单）")
+    print("  OK: v2.2.0 修复在位（整句断句/忠实直译/时序对账/队列与回落排序）")
+    print("  OK: v2.2.1 注入修复在位（偏好存勾选/写后刷新缓存/不拦hook/Filter 666）")
     return 0
 
 

@@ -5008,19 +5008,22 @@ static void LCLazyInit(void) {
     LCLog("init: done");
 }
 
-// v2.2.0：面板「选择注入 App」的运行时白名单。
-// Filter 决定能不能被注入（且要注销才生效），这里让【取消勾选】重启 App 即停用。
-// 键不存在或为空（老配置 / 全新安装）一律放行，避免升级后字幕整片消失。
-static BOOL LCBundleAllowedByPrefs(void) {
+// v2.2.1：对齐 XL-Roothide —— 运行时【不】做 App 白名单拦截。
+// v2.2.0 的 enabledBundles 判定「不在列表就 return」有致命副作用：
+// 面板一旦把列表写坏（roothide 下 Filter 回读为空 → 勾 1 个 App 就把原有
+// 27 个默认 bundle 抹成 1 个），连原本能用的 YouTube 也会被 constructor
+// 直接挡掉，表现就是「注入没效果 / 选了别的 App 还是不出字幕」。
+// 注入范围只由 Filter.Bundles 精确匹配 + Dopamine Inject Manager 决定（XL 同款做法）。
+// 这里只留诊断日志，真机可确认当前 App 与勾选列表的关系，绝不拦截 hook。
+static void LCLogBundleSelection(void) {
     NSString *p = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
     NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:p];
-    NSArray *list = d[@"enabledBundles"];
-    if (![list isKindOfClass:[NSArray class]] || list.count == 0) return YES;
+    NSArray *list = d[@"selectedApps"] ?: d[@"enabledBundles"];
     NSString *bid = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
-    if (bid.length == 0) return YES;
-    if ([list containsObject:bid]) return YES;
-    LCLog("init: bundle not in enabledBundles -> skip hooks");
-    return NO;
+    if ([list isKindOfClass:[NSArray class]] && list.count && bid.length &&
+        ![list containsObject:bid]) {
+        LCLog("init: not in enabledBundles (log only, injection not blocked)");
+    }
 }
 
 __attribute__((constructor))
@@ -5082,7 +5085,8 @@ static void LCInit(void) {
     if (strncmp(exe, "/System", 7) == 0) return;
     if (strncmp(exe, "/usr", 4) == 0) return;
     if (strncmp(exe, "/bin", 4) == 0) return;
-    if (!LCBundleAllowedByPrefs()) return;
+    // v2.2.1：不再用偏好白名单拦 hook（详见 LCLogBundleSelection 注释）
+    LCLogBundleSelection();
 
     // 注入后先等 App 完全启动（3s），再在下一轮主线程空闲时做 hook，
     // 最大程度避免干扰 App 自身初始化。

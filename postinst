@@ -1,5 +1,5 @@
 #!/bin/sh
-# postinst v2.2.0 —— 预写默认配置 + 修复注入 + 刷新缓存
+# postinst v2.2.1 —— 预写默认配置 + 修复注入 + 刷新缓存
 LOG=/var/mobile/Documents/livecap_install.log
 mkdir -p /var/mobile/Documents
 chmod 777 /var/mobile/Documents
@@ -73,6 +73,22 @@ if [ -f "$DYLIB_PATH/LiveCap.plist" ]; then
 else
   echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
 fi
+
+# v2.2.1 对齐 XL-Roothide：再按 deb 解包目录的相对路径修一次 Filter 权限。
+# roothide 下 /var/jb 在不同进程里可能指向影子目录，硬编码那条可能落空；
+# 相对 CWD（dpkg 执行 maintainer script 时的安装根）才是真正解包的位置。
+# Filter 必须是 666，「设置」面板（mobile 用户）才能改写 Bundles，
+# 否则勾选会静默失败 —— XL 的 build.sh/postinst 都是这个做法。
+FILTER_CWD="Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
+FILTER_REL="$(dirname "$0")/../../Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
+for fp in "$FILTER_CWD" "$FILTER_REL"; do
+  if [ -f "$fp" ]; then
+    chown mobile:staff "$fp" 2>/dev/null || true
+    chmod 666 "$fp" 2>/dev/null && echo "chmod filter OK (relative): $fp" >> "$LOG"
+  else
+    echo "WARN: filter not found (relative): $fp" >> "$LOG"
+  fi
+done
 
 ROOTHIDE_PATCH="$DYLIB_PATH/LiveCap.dylib.roothidepatch"
 if [ ! -L "$ROOTHIDE_PATCH" ]; then

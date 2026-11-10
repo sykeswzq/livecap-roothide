@@ -269,8 +269,11 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else if (indexPath.row == 1) {
             cell.textLabel.text = @"选择注入 App";
-            // v2.2.0：这里只是 Filter 勾选数，不是「真的已注入」，别再误导用户
-            NSUInteger n = [LCReadFilterBundles() count];
+            // v2.2.1：与 App 列表页一致，勾选数取自偏好 selectedApps；
+            // 老配置尚未迁移时退回 Filter 声明数，不要显示 0 误导用户。
+            id saved = LCGet(@"selectedApps");
+            NSUInteger n = [saved isKindOfClass:[NSArray class]]
+                ? [(NSArray *)saved count] : [LCReadFilterBundles() count];
             cell.detailTextLabel.text = [NSString stringWithFormat:@"已勾选 %lu 个", (unsigned long)n];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 2) {

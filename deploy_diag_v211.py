@@ -1,13 +1,13 @@
-"""v2.2.0 一键部署 + 真机诊断（设备上线后执行）。
+"""v2.2.1 一键部署 + 真机诊断（设备上线后执行）。
 
 用法：
   py -3.11 deploy_diag_v211.py deploy [IP]     # 等连、部署 deb、复核 plist
   py -3.11 deploy_diag_v211.py diag   [IP]     # 用户重开 App 后抓日志定位真因
 
-背景：用户反馈 v2.1.0「右上有点、没翻译框」。右上点 = overlay 的 26x26
-拖动圆点；没有 showPending 时 hasContent=NO，字幕框不出现。
-本地实测已证伪「持续推流无稳态句」和「URL 编码导致 4002」，
-真因最可能在连接层，必须靠设备日志里的 asr: ws / code= / showPending 定案。
+背景：v2.2.1 照 XL-Roothide 重做注入勾选链路 —— 勾选状态改存偏好
+selectedApps（不再从 Filter 回读）、写完 Filter 立刻 killall runningboardd、
+dylib 运行时不再用 enabledBundles 白名单拦 hook。diag 会顺带打印
+Filter 权限 / 内容 / selectedApps，便于确认注入是否真的写进去了。
 """
 import base64
 import os
@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 KEY = 'E:/SynologyDrive/单位/F/wangziqing/00000/ucs_ssh_key'
 HOST_DEFAULT = '10.10.201.107'
 DEB = os.path.join(HERE, 'releases',
-                   'com.sykes.livecap_2.2.0_iphoneos-arm64e.deb')
+                   'com.sykes.livecap_2.2.1_iphoneos-arm64e.deb')
 PLIST = '/var/mobile/Library/Preferences/com.sykes.livecap.plist'
 
 
@@ -67,13 +67,17 @@ def do_deploy(host):
         return r
     out, _ = ssh(host, 'dpkg -l com.sykes.livecap | tail -1')
     print('设备版本行:', out.decode('utf-8', 'replace').strip())
-    # 复核配置：v2.2.0 新增 strictSubtitleSync（代码默认 YES，老 plist 无该键也生效）
+    # 复核配置：v2.2.1 新增 selectedApps（勾选状态真相）
     d = read_plist(host)
     print('plist 键数:', len(d))
     for k in ('enabled', 'showBilingual', 'model', 'streamASR',
-              'strictSubtitleSync', 'enabledBundles', 'lastFilterWriteOK',
+              'strictSubtitleSync', 'selectedApps', 'enabledBundles',
+              'lastFilterWriteOK', 'lastFilterWritePath',
               'asrEngine', 'asrAppId', 'asrChunkSeconds'):
-        print('  %-22s = %r' % (k, d.get(k, '<未设置→走代码默认>')))
+        v = d.get(k, '<未设置→走代码默认>')
+        if isinstance(v, list) and len(v) > 6:
+            v = '%d 个: %s ...' % (len(v), ', '.join(map(str, v[:4])))
+        print('  %-22s = %r' % (k, v))
     print('  apiKey 存在:', bool(d.get('apiKey')),
           ' 腾讯云密钥存在:', bool(d.get('tencentSecretId')),
           ' 注入 App 数:', len(d.get('manualPositions', {})))
@@ -101,6 +105,19 @@ def do_diag(host):
                   '"asr: sending" "showFailed"; do '
                   'printf "%-34s %s\\n" "$k" "$(grep -a -c "$k" "$f")"; done')
     print(out2.decode('utf-8', 'replace'))
+    print('\n=== 注入状态（v2.2.1）===')
+    inj_cmd = (
+        'echo "--- Filter 文件（权限必须是 -rw-rw-rw-）---"; '
+        'for p in /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist '
+        '/var/containers/Bundle/Application/.jbroot-*/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist; do '
+        '[ -f "$p" ] || continue; ls -la "$p"; plutil -p "$p" 2>/dev/null | head -40; done; '
+        'echo "--- 偏好 selectedApps / Filter 写入诊断 ---"; '
+        'plutil -p /var/mobile/Library/Preferences/com.sykes.livecap.plist 2>/dev/null | '
+        'grep -i -A3 -e selectedApps -e lastFilterWrite | head -40; '
+        'echo "--- 版本 ---"; dpkg -l com.sykes.livecap | tail -1'
+    )
+    inj, _ = ssh(host, inj_cmd)
+    print(inj.decode('utf-8', 'replace')[:5000])
     print('=== 判读 ===')
     print('  ws code= 非 0        -> 签名/计费/服务问题，看 message 原文')
     print('  handshake timeout 6s -> WebSocket 连接层不通，已按设计回落 HTTP')
@@ -112,6 +129,12 @@ def do_diag(host):
     print('  partial fallback=0   -> 严格同步已开（若非 0 说明开关被关掉了）')
     print('  queue overflow 多    -> 翻译仍跟不上，看 inflight rtt 是否 >3s')
     print('  drop lagging pair 多 -> 译文滞后严重，字幕会主动丢弃旧句')
+    print('=== v2.2.1 注入判读 ===')
+    print('  Filter 权限非 666    -> 面板写不进 Bundles，勾选会静默失败')
+    print('  Filter 里没目标 App  -> 勾选没写进去，看 lastFilterWritePath/OK')
+    print('  selectedApps 缺失    -> 面板还没打开过，首次打开会做一次性迁移')
+    print('  selectedApps 只有 1 个 -> 迁移兜底没生效，原有 App 被抹掉了')
+    print('  仍不生效             -> 还要 Dopamine → Inject Manager 勾选 + 彻底重开 App')
     return 0
 
 
