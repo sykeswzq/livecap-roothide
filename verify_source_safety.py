@@ -730,8 +730,12 @@ def check_v85_fixes(src, panel_src=None):
         if not m:
             errors.append("v1.0.85 回归: LC_ASR_MAX_CONCURRENCY 未赋常量值")
         elif int(m.group(1)) < 2:
-            errors.append("v1.0.85 回归: 并发上限为 %s —— 必须 ≥2，"
-                          "否则串行排队问题依旧" % m.group(1))
+            # v2.2.0 起允许【刻意】串行：回落 HTTP 链路 2 路并发会让两个 POST
+            # 的响应乱序，showPending 直接上屏导致字幕顺序颠倒（用户反馈
+            # 「字幕和语音对不上」）。必须带明确说明，防止无意改回串行又踩吞吐坑。
+            if "回落链路改回串行" not in src:
+                errors.append("v1.0.85/v2.2.0 回归: 并发上限为 %s 却没有顺序修复说明 —— "
+                              "要么误改回串行，要么缺少按序输出保障" % m.group(1))
     # 并发判定必须真的用上计数
     conc = len(re.findall(r"_inFlightCount\s*<\s*LC_ASR_MAX_CONCURRENCY", code))
     if conc < 2:
@@ -1186,6 +1190,33 @@ def check_v211_fixes(src, panel_src):
                       "真机异常时用户必须能一键回退 HTTP 分片链路")
 
 
+def check_v220_fixes(src, panel_src):
+    """v2.2.0：整句断句 + 忠实直译 + 时序对账 + 注入白名单修复。
+
+    用户反馈「字幕和语音/原版字幕对不上」：v2.1.1 把 slice_type=1 中间结果
+    每 3 秒当整句送译、prompt 让模型脑补补全、队列只留 1 条持续丢句、
+    showPair 只用 _transSeq 对账挡不住滞后译文。这里锚定新逻辑关键串防回归。
+    """
+    for token, why in (
+            ("lc_mergePartial:", "partial 前缀归一化（累积式/分片式都要能合并）"),
+            ("lc_commitSentence:", "整句收句后统一送译，一句只翻一次"),
+            ("lc_flushIfSettled", "静音时由定时器收句，否则服务端不推 partial 会零字幕"),
+            ("asr: ws commit", "收句可观测日志，真机可定位"),
+            ("do NOT add, infer, complete", "prompt 必须忠实直译，禁止脑补补全"),
+            ("drop lagging pair", "落后 ≥2 句的译文必须丢弃，避免讲的 A 显示 B"),
+            ("_pendingSeq > seq + 1", "时序对账基准必须是最新的 pending seq"),
+            ("strictSubtitleSync", "可回退开关，真机可 A/B 对照"),
+            ("not in enabledBundles", "取消勾选的 App 运行时自检停用")):
+        if token not in src:
+            errors.append("v2.2.0 回归: 缺少 %s —— %s" % (token, why))
+    if "kMaxQueue = 3" not in src:
+        errors.append("v2.2.0 回归: 翻译队列仍只留 1 条，会持续丢句")
+    if "LC_ASR_MAX_CONCURRENCY = 1" not in src:
+        errors.append("v2.2.0 回归: 回落 ASR 并发不是 1，响应乱序会让字幕顺序颠倒")
+    if panel_src and "lc_strictSyncChanged:" not in panel_src:
+        errors.append("v2.2.0 回归: 面板缺少严格同步开关")
+
+
 def main():
     try:
         src = read_src()
@@ -1214,6 +1245,7 @@ def main():
     check_v86_fixes(src, panel_src)
     check_v87_fixes(src, panel_src)
     check_v211_fixes(src, panel_src)
+    check_v220_fixes(src, panel_src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -1236,6 +1268,7 @@ def main():
     print("  OK: v1.0.84 修复在位（分片时长可配置/毫秒RTT打点/提到最上层/跟随新window/位置钳制）")
     print("  OK: v1.0.87 修复在位（ADTS 封装/失败可恢复/分片不丢音/字号滑块+实时生效）")
     print("  OK: v2.1.1 修复在位（RFC3986编码/中间结果兜底翻译/握手与零产出看门狗/流式开关）")
+    print("  OK: v2.2.0 修复在位（整句断句/忠实直译/时序对账/队列与回落排序/注入白名单）")
     return 0
 
 

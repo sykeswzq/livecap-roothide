@@ -233,7 +233,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0)
-        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。流式识别边说边推、不攒音频；关闭后回到旧的分片识别。分片时长只在关闭流式时生效。";
+        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。流式识别边说边推、不攒音频；关闭后回到旧的分片识别。分片时长只在关闭流式时生效。严格同步：凑成整句才翻译，字幕与原版字幕对齐；关闭则回到旧的定时兜底（可作对照）。";
     if (section == 1)
         return @"使用 OpenAI 兼容的翻译 API，默认使用 agnes-3.0-flash。";
     if (section == 2)
@@ -244,7 +244,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) return 4;
+    if (section == 0) return 5;
     if (section == 1) return 3;
     if (section == 2) return 4;
     if (section == 3) return 1;
@@ -269,8 +269,9 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else if (indexPath.row == 1) {
             cell.textLabel.text = @"选择注入 App";
-            NSUInteger n = [LCReallyInjectedIDs() count];
-            cell.detailTextLabel.text = [NSString stringWithFormat:@"已注入 %lu 个", (unsigned long)n];
+            // v2.2.0：这里只是 Filter 勾选数，不是「真的已注入」，别再误导用户
+            NSUInteger n = [LCReadFilterBundles() count];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"已勾选 %lu 个", (unsigned long)n];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 2) {
             cell.textLabel.text = @"识别分片时长";
@@ -278,7 +279,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             if (secs < 1.0 || secs > 3.0) secs = 1.5;
             cell.detailTextLabel.text = [NSString stringWithFormat:@"%.1f 秒", secs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        } else {
+        } else if (indexPath.row == 3) {
             // v2.1.1：流式识别一键回退开关。真机若出现「只有圆点、没有字幕框」，
             // 关掉这里即可立刻回到已验证可用的 HTTP 分片链路，无需重新编译或改 plist。
             cell.textLabel.text = @"流式识别（不攒音频）";
@@ -286,6 +287,15 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             UISwitch *sw = [[UISwitch alloc] init];
             sw.on = LCGetBool(@"streamASR", YES);
             [sw addTarget:self action:@selector(lc_streamChanged:) forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = sw;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        } else {
+            // v2.2.0：整句才送译。关掉回到 v2.1.1 的定时兜底，便于真机对照。
+            cell.textLabel.text = @"严格同步（整句才翻译）";
+            cell.detailTextLabel.text = LCGetBool(@"strictSubtitleSync", YES) ? @"开" : @"关";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = LCGetBool(@"strictSubtitleSync", YES);
+            [sw addTarget:self action:@selector(lc_strictSyncChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         }
@@ -485,6 +495,12 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (void)lc_streamChanged:(UISwitch *)sw {
     LCSet(@(sw.on), @"streamASR");
+    [self.lc_tv reloadData];
+}
+- (void)lc_strictSyncChanged:(UISwitch *)sw {
+    // tweak 的 freshValueForKey 是直接读同一个 plist 文件（不走 CFPreferences 缓存），
+    // 所以这里与面板其它设置一样用 LCSet 写文件即可，立即生效。
+    LCSet(@(sw.on), @"strictSubtitleSync");
     [self.lc_tv reloadData];
 }
 - (void)lc_enabledChanged:(UISwitch *)sw { LCSet(@(sw.on), @"enabled"); }

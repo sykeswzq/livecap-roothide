@@ -1,4 +1,4 @@
-"""v2.1.1 一键部署 + 真机诊断（设备上线后执行）。
+"""v2.2.0 一键部署 + 真机诊断（设备上线后执行）。
 
 用法：
   py -3.11 deploy_diag_v211.py deploy [IP]     # 等连、部署 deb、复核 plist
@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 KEY = 'E:/SynologyDrive/单位/F/wangziqing/00000/ucs_ssh_key'
 HOST_DEFAULT = '10.10.201.107'
 DEB = os.path.join(HERE, 'releases',
-                   'com.sykes.livecap_2.1.1_iphoneos-arm64e.deb')
+                   'com.sykes.livecap_2.2.0_iphoneos-arm64e.deb')
 PLIST = '/var/mobile/Library/Preferences/com.sykes.livecap.plist'
 
 
@@ -67,12 +67,13 @@ def do_deploy(host):
         return r
     out, _ = ssh(host, 'dpkg -l com.sykes.livecap | tail -1')
     print('设备版本行:', out.decode('utf-8', 'replace').strip())
-    # 复核配置：v2.1.1 不新增必填键，升级包也不覆盖已有 plist
+    # 复核配置：v2.2.0 新增 strictSubtitleSync（代码默认 YES，老 plist 无该键也生效）
     d = read_plist(host)
     print('plist 键数:', len(d))
     for k in ('enabled', 'showBilingual', 'model', 'streamASR',
+              'strictSubtitleSync', 'enabledBundles', 'lastFilterWriteOK',
               'asrEngine', 'asrAppId', 'asrChunkSeconds'):
-        print('  %-18s = %r' % (k, d.get(k, '<未设置→走代码默认>')))
+        print('  %-22s = %r' % (k, d.get(k, '<未设置→走代码默认>')))
     print('  apiKey 存在:', bool(d.get('apiKey')),
           ' 腾讯云密钥存在:', bool(d.get('tencentSecretId')),
           ' 注入 App 数:', len(d.get('manualPositions', {})))
@@ -95,6 +96,7 @@ def do_diag(host):
                   '2>/dev/null | head -1); '
                   'for k in "asr: ws" "handshake ok" "ws code=" "handshake timeout" '
                   '"no sentence in 10s" "partial fallback translate" "final sentence" '
+                  '"asr: ws commit" "queue overflow" "drop lagging pair" "inflight rtt" '
                   '"showPending" "overlay: pending" "overlay: showPair" '
                   '"asr: sending" "showFailed"; do '
                   'printf "%-34s %s\\n" "$k" "$(grep -a -c "$k" "$f")"; done')
@@ -105,6 +107,11 @@ def do_diag(host):
     print('  有 partial 无 final  -> 断句异常，兜底翻译应已上屏')
     print('  有 showPending       -> 字幕框应出现；若仍无框查 overlay/window 层')
     print('  asr: sending 有值    -> 已回落 HTTP 分片链路，字幕正常')
+    print('=== v2.2.0 判读 ===')
+    print('  asr: ws commit 有值  -> 整句断句生效；commit 数应 ≈ 送译句数')
+    print('  partial fallback=0   -> 严格同步已开（若非 0 说明开关被关掉了）')
+    print('  queue overflow 多    -> 翻译仍跟不上，看 inflight rtt 是否 >3s')
+    print('  drop lagging pair 多 -> 译文滞后严重，字幕会主动丢弃旧句')
     return 0
 
 

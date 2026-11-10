@@ -125,7 +125,11 @@ def verify(deb_path):
                         ('v2.1.0 稳态句日志', b'asr: ws final sentence'),
                         ('v2.1.1 中间结果兜底', b'asr: ws partial fallback translate'),
                         ('v2.1.1 握手看门狗', b'asr: ws handshake timeout 6s'),
-                        ('v2.1.1 零产出看门狗', b'asr: ws no sentence in 10s')]:
+                        ('v2.1.1 零产出看门狗', b'asr: ws no sentence in 10s'),
+                        ('v2.2.0 整句收句日志', b'asr: ws commit'),
+                        ('v2.2.0 严格同步开关键', b'strictSubtitleSync'),
+                        ('v2.2.0 滞后译文丢弃', b'overlay: drop lagging pair'),
+                        ('v2.2.0 注入运行时白名单', b'not in enabledBundles')]:
         assert needle in dl, '%s 未编进 dylib（%s）' % (tag, needle.decode())
         print('  含新代码: %s OK' % tag)
 
@@ -136,7 +140,9 @@ def verify(deb_path):
 
     prefs = dat.extractfile(prefs_path).read()
     assert b'asrChunkSeconds' in prefs, '设置面板未编入分片选项'
-    print('  PrefBundle: 含 asrChunkSeconds 设置项 OK')
+    assert b'strictSubtitleSync' in prefs, '设置面板未编入严格同步开关'
+    assert b'lastFilterWritePath' in prefs, '设置面板未编入 Filter 写入诊断'
+    print('  PrefBundle: 含 asrChunkSeconds / strictSubtitleSync / Filter 写入诊断 OK')
     info = dat.extractfile(info_path).read().decode('utf-8', 'replace')
     assert info.count('<string>%s</string>' % TARGET_VER) == 2, 'Info.plist 版本未同步'
     print('  Info.plist: 两处版本均为 %s OK' % TARGET_VER)

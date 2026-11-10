@@ -37,7 +37,10 @@ static NSString *LCTencentAuthHeader(NSString *secretId, NSString *secretKey,
 // 串行时吞吐 = 音频时长 / RTT ≈ 1/1.1 = 0.91 实时率 →
 // 字幕永远追不上语音，表现为「越播越滞后」。
 // 改成 2 路并发后吞吐翻倍，可以跟上实时。
-static const NSInteger LC_ASR_MAX_CONCURRENCY = 2;
+// v2.2.0：回落链路改回串行。2 路并发时两个 POST 的 RTT 不同，
+// 后发的分片可能先返回，showPending 直接上屏会让字幕【顺序颠倒】
+// （用户反馈「字幕和语音对不上」的来源之一）。回落只是兜底，稳定优先。
+static const NSInteger LC_ASR_MAX_CONCURRENCY = 1;
 
 // 请求结束时释放一个并发槽位（防止计数变负）
 #define LC_ASR_DONE() do { \
@@ -412,6 +415,7 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) UIColor *textColor;
 @property (readonly) NSString *backgroundStyle;
 @property (readonly) BOOL showEnglish;   // 是否同时显示英文原文（默认 NO：只显示中文一行）
+@property (readonly) BOOL strictSubtitleSync;  // v2.2.0：整句才送译（默认 YES，可回退）
 @property (readonly) CGFloat manualX;
 @property (readonly) CGFloat manualY;
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y;
@@ -517,6 +521,15 @@ static NSString *LCJBRootPath(NSString *path) {
     if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v boolValue];
     if ([v isKindOfClass:[NSString class]]) return [(NSString *)v boolValue];
     return YES;   // 默认开：流式是 v2.1.0 的主路径，关掉则回到旧 HTTP 分片
+}
+
+// v2.2.0：严格同步（整句才送译）。关掉则回到 v2.1.1 的「中间结果定时兜底」，
+// 便于真机对照，确认断句重构是否有效。
+- (BOOL)strictSubtitleSync {
+    id v = [self freshValueForKey:@"strictSubtitleSync"];
+    if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v boolValue];
+    if ([v isKindOfClass:[NSString class]]) return [(NSString *)v boolValue];
+    return YES;
 }
 
 // ===== v1.0.87：字号实时读盘，改完立即生效 =====
@@ -783,10 +796,10 @@ static NSString *LCJBRootPath(NSString *path) {
         // 这里统一用 id 承载，取出时再显式 cast 回 block。
         id compBox = completion ? (id)completion : (id)[NSNull null];
         [self->_pendingItems addObject:@{@"text": trimmed, @"comp": compBox}];
-        // v2.0.0 修复：ASR 每 2.5s 入队一句，而串行单槽翻译吞吐常低于此，
-        // 队列 3 会让译文越积越旧（设备日志实测滞后 5~8s）。只保留最新一句，
-        // 旧句回调 nil（showFailed 保留上一句中文，不会显示错句）。
-        const NSUInteger kMaxQueue = 1;
+        // v2.2.0：kMaxQueue=1 时每来一句就丢掉排队中的上一句，配合 3~5s 的
+        // 翻译 RTT 会让大量句子【整句不显示】，表现为字幕跳句、和语音对不上。
+        // 放宽到 3；真正过时的译文由 showPair 按最新句 seq 丢弃，不会错配上屏。
+        const NSUInteger kMaxQueue = 3;
         while (self->_pendingItems.count > kMaxQueue) {
             NSDictionary *dropped = self->_pendingItems.firstObject;
             [self->_pendingItems removeObjectAtIndex:0];
@@ -836,14 +849,16 @@ static NSString *LCJBRootPath(NSString *path) {
     // 这里保留最关键的三条约束（只输出译文 / 输入可能是脏片段要照翻 / 绝不回显英文），
     // 去掉示例和冗长规则，压到 ~230 字节。
     // v2.0.0：目标语言硬编码为中文，直接写死在 sysPrompt 里
-    // v2.1.0：合成一条「识别碎片纠错 + 中译」prompt。
-    // 流式 ASR 用通用引擎时输出可能有错词/半截词，让免费 LLM 在翻译的同时
-    // 顺手补全与纠偏（实测能把 "Back to the channel, hello, hello we"
-    // 修成通顺中文），比单纯直译碎片质量高得多。
-    NSString *sysPrompt = @"You are a subtitle post-editor. The input is a noisy speech-to-text fragment "
-        @"from a video. Silently fix obvious recognition errors and complete truncated words, then "
-        @"translate the corrected meaning into natural Simplified Chinese. Output ONLY the Chinese "
-        @"translation: no quotes, no explanation, no English. NEVER echo the input.";
+    // v2.2.0：改回「忠实直译」。
+    // v2.1.0 让模型顺手纠错、补全截断词，实测会把碎片脑补成另一句完整话，
+    // 译文和 YouTube 原版字幕对不上（用户反馈）。字幕翻译必须逐字忠实，
+    // 宁可译出半句，也不要替观众猜内容。
+    NSString *sysPrompt = @"You are a subtitle translator. Translate the given speech-to-text "
+        @"fragment faithfully into natural Simplified Chinese. Keep the original meaning and word "
+        @"order; do NOT add, infer, complete, summarize or correct anything absent from the input. "
+        @"If the input is an incomplete fragment, translate only that fragment and leave it "
+        @"incomplete. Output ONLY the Chinese translation: no quotes, no explanation, no English. "
+        @"NEVER echo the input.";
 
     __weak typeof(self) weakSelf = self;
     NSDate *t0 = [NSDate date];
@@ -952,10 +967,11 @@ static NSString *LCJBRootPath(NSString *path) {
         }
     };
 
-    // v2.1.0：agnes 参赛时享有 2.5 秒优先窗口。
-    // 纯竞速下 MyMemory 0.6~1.1s 恒快于 agnes 1.4s → 等于系统性选到质量差的
-    // 兜底译文（还会回显上一句）。延迟发 MyMemory 让 agnes 先跑，
-    // 只有 agnes 长尾 / 失败时才由兜底顶上；agnes 被熔断时不延迟，保持原速。
+    // v2.1.0 给 agnes 2.5 秒优先窗口，v2.2.0 压到 1.0 秒。
+    // 纯竞速下 MyMemory 0.6~1.1s 恒快于 agnes 1.4s → 会系统性选到质量差的
+    // 兜底译文（还会回显上一句）。但 2.5s 窗口 + agnes 3.5s 超时会让失败路径
+    // 拖到 3.7~4.9s，比 ASR 产句还慢，队列必然积压 → 字幕越播越滞后。
+    // 1.0s 既让 agnes 先跑，又保证兜底能在 2.5s 内上屏。
     BOOL preferAgnes = [providers containsObject:@"agnes"];
 
     // 并行发出全部请求
@@ -972,7 +988,7 @@ static NSString *LCJBRootPath(NSString *path) {
                           apiKey:apiKey apiBase:apiBase model:model maxAttempts:1
                        completion:^(NSString *r) { onResult(p, r); }];
         } else {
-            LCLogF(@"translate: race -> mymemory%@", preferAgnes ? @" (delayed 2.5s)" : @"");
+            LCLogF(@"translate: race -> mymemory%@", preferAgnes ? @" (delayed 1.0s)" : @"");
             void (^fireMyMemory)(void) = ^{
                 BOOL alreadyWon = NO;
                 @synchronized (state) { alreadyWon = [state[@"won"] boolValue]; }
@@ -981,7 +997,7 @@ static NSString *LCJBRootPath(NSString *path) {
                              completion:^(NSString *r) { onResult(p, r); }];
             };
             if (preferAgnes) {
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)),
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                     dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), fireMyMemory);
             } else {
                 fireMyMemory();
@@ -1509,6 +1525,11 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     NSString *_lastPartialText;         // 最近一次中间结果
     NSTimeInterval _lastPartialAt;      // 中间结果文本发生变化的时刻
     NSString *_lastTranslatedText;      // 最近一次送翻译的文本（去重用）
+    // v2.2.0：客户端语义断句（partial 只累积，成句才送译）
+    NSMutableString *_sentence;         // 当前累积句
+    NSString *_lastRawPartial;          // 上一次原始 partial（前缀归一化用）
+    NSTimeInterval _lastChangeAt;       // 累积文本最后变化时刻
+    NSTimeInterval _sentenceStartAt;    // 本句起始时刻（0 = 尚未开始）
 }
 
 + (instancetype)shared {
@@ -1585,6 +1606,11 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     _lastPartialAt = now;
     _lastPartialText = nil;
     _lastTranslatedText = nil;
+    if (!_sentence) _sentence = [NSMutableString string];
+    [_sentence setString:@""];
+    _lastRawPartial = nil;
+    _lastChangeAt = now;
+    _sentenceStartAt = 0;
     NSURLSessionConfiguration *c = [NSURLSessionConfiguration defaultSessionConfiguration];
     c.connectionProxyDictionary = @{};   // 禁系统代理，直连（同 LCSessionDirect）
     _session = [NSURLSession sessionWithConfiguration:c delegate:self delegateQueue:nil];
@@ -1663,23 +1689,108 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     NSInteger st = [r[@"slice_type"] integerValue];
     NSString *txt = r[@"voice_text_str"];
     if (txt.length == 0) return;
+    if (![[LCConfig shared] strictSubtitleSync]) {
+        // 可回退路径：完全沿用 v2.1.1 的「中间结果定时兜底」，便于真机 A/B 对照
+        if (st == 1) {
+            [[LCSubtitleOverlay shared] showPartial:txt];
+            [self lc_maybeTranslatePartial:txt];
+        } else if (st == 2) {
+            [self lc_translateFinal:txt];
+        }
+        return;
+    }
+
+    if (st == 2) {
+        // 服务端明确判句末：合并累积文本后收句，一句只翻一次
+        NSString *merged = [self lc_mergePartial:txt];
+        LCLogF(@"asr: ws final sentence [%@]", merged);
+        [self lc_commitSentence:merged reason:@"slice2"];
+        return;
+    }
     if (st == 1) {
-        // 中间结果会变化，只登记不刷屏（showBilingual=NO 时也不该闪英文）
+        // v2.2.0：中间结果【只登记、只累积，绝不单独送翻译】。
+        // v2.1.1 每 3 秒把半句当整句送译，是本轮「字幕对不上」的首因。
         [[LCSubtitleOverlay shared] showPartial:txt];
-        LCLogF(@"asr: ws partial [%@]", txt);
-        // v2.1.1：真机是无限持续推流 + 背景音乐，服务端 VAD 常常判不出 800ms 静音，
-        // 会长期只给 slice_type=1 而不给 2。只等稳态句会导致字幕框一次都不出现
-        // （showPending 从未被调用）。这里按「文本稳定」节流送翻译兜底。
-        [self lc_maybeTranslatePartial:txt];
-    } else if (st == 2) {
-        LCLogF(@"asr: ws final sentence [%@]", txt);
-        [self lc_translateFinal:txt];
+        NSString *merged = [self lc_mergePartial:txt];
+        [self lc_updateSentence:merged];
+        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+        if ([self lc_shouldCommit:merged now:now]) {
+            [self lc_commitSentence:merged reason:@"auto"];
+        }
     }
 }
 
-// 中间结果兜底：文本稳定 1.0s 或距上次送译 ≥3.0s 且文本变化后，把当前中间结果
-// 当作一句送翻译。这样即使服务端不判句，中文也会持续上屏（约 2~3s 延迟），
-// 且不会因为每 200ms 一个 partial 而刷爆翻译队列。
+// ===== v2.2.0 客户端语义断句 =====
+// 腾讯云 slice_type=1 的 voice_text_str 有两种形态：
+//   (a) 同一句的累积前缀："hello" → "hello world" → "hello world today"
+//   (b) 每片独立文本：    "hello" → "world" → "today"
+// 统一归一化成一条累积句，避免把半句当整句反复送翻、也避免重复拼接。
+- (NSString *)lc_mergePartial:(NSString *)raw {
+    NSString *cur = _sentence ?: @"";
+    NSString *last = _lastRawPartial ?: @"";
+    _lastRawPartial = [raw copy];
+    if (cur.length && [raw hasPrefix:cur]) return raw;                    // (a) 累积
+    if (raw.length && cur.length && [cur hasPrefix:raw]) return cur;       // 服务端回退
+    if ([raw isEqualToString:last]) return cur;                            // 重复推送
+    if (raw.length && cur.length && [cur rangeOfString:raw].location != NSNotFound) return cur;
+    return cur.length ? [NSString stringWithFormat:@"%@ %@", cur, raw] : raw;   // (b) 追加
+}
+
+- (void)lc_updateSentence:(NSString *)merged {
+    if (!_sentence) _sentence = [NSMutableString string];
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    if (![merged isEqualToString:_sentence]) {
+        [_sentence setString:merged];
+        _lastChangeAt = now;
+        if (_sentenceStartAt <= 0) _sentenceStartAt = now;
+    }
+    if (LCLogThrottled(@"ws-partial", 1.0)) LCLogF(@"asr: ws partial [%@]", merged);
+}
+
+- (BOOL)lc_shouldCommit:(NSString *)s now:(NSTimeInterval)now {
+    if (s.length < 2) return NO;
+    unichar last = [s characterAtIndex:s.length - 1];
+    if (last == '.' || last == '?' || last == '!' ||
+        last == 0x3002 || last == 0xFF1F || last == 0xFF01) return YES;   // 句末标点
+    if (now - _lastChangeAt >= 1.0 && s.length >= 8) return YES;          // 静音断句
+    if (s.length >= 100) return YES;                                       // 长度上限
+    if (_sentenceStartAt > 0 && now - _sentenceStartAt >= 8.0) return YES; // 硬上限
+    return NO;
+}
+
+// 静音时服务端不再推 partial，靠 keepalive 定时器收句
+- (void)lc_flushIfSettled {
+    if (![[LCConfig shared] strictSubtitleSync]) return;
+    NSString *s = [_sentence copy];
+    if (s.length < 2) return;
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    if (now - _lastChangeAt >= 1.0 && s.length >= 8)
+        [self lc_commitSentence:s reason:@"silence"];
+    else if (_sentenceStartAt > 0 && now - _sentenceStartAt >= 8.0)
+        [self lc_commitSentence:s reason:@"timeout"];
+}
+
+- (void)lc_commitSentence:(NSString *)text reason:(NSString *)why {
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    NSString *s = [text stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    // 无论是否送译都先清空累积状态，避免下一句粘上上一句
+    if (!_sentence) _sentence = [NSMutableString string];
+    [_sentence setString:@""];
+    _lastRawPartial = nil;
+    _lastChangeAt = now;
+    _sentenceStartAt = 0;
+    if (s.length < 2) return;
+    if ([s isEqualToString:_lastTranslatedText]) {
+        LCLog("asr: ws skip duplicate sentence");
+        return;
+    }
+    LCLogF(@"asr: ws commit (%@) [%@]", why, s);
+    [self lc_translateFinal:s];
+}
+
+// 旧兜底（strictSubtitleSync=NO 时使用）：保留 v2.1.1 行为供真机对照。
+// 文本稳定 1.0s 或距上次送译 ≥3.0s 且文本变化后，把当前中间结果当一句送翻译。
 - (void)lc_maybeTranslatePartial:(NSString *)text {
     if (!_active || text.length < 4) return;
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
@@ -1799,6 +1910,8 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
             return;
         }
         if (!self->_ready) return;
+        // v2.2.0：静音时服务端不再推 partial，由定时器按「文本稳定」收句
+        [self lc_flushIfSettled];
         if (now - self->_lastAudioAt < 1.0) return;           // 有真实音频时不插静音
         if (now - self->_lastAudioAt > 30.0) {                // 长时间无音频，主动断开省计费
             LCLog("asr: ws idle 30s -> disconnect");
@@ -1831,6 +1944,12 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
     _startedAt = now;
     _lastSentenceAt = now;
+    // 重连是全新的 voice_id / 音频流，旧半句不能带过去
+    if (!_sentence) _sentence = [NSMutableString string];
+    [_sentence setString:@""];
+    _lastRawPartial = nil;
+    _lastChangeAt = now;
+    _sentenceStartAt = 0;
     @synchronized(self) { [_frames removeAllObjects]; }
     if (_task) {
         NSURLSessionWebSocketTask *old = _task;
@@ -3081,6 +3200,15 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             if (seq != 0 && seq < _transSeq) {
                 LCLogF(@"overlay: drop stale pair seq=%lu (transSeq=%lu) origin=[%@]",
                        (unsigned long)seq, (unsigned long)_transSeq, origin);
+                return;
+            }
+            // v2.2.0：_transSeq 只能挡「比当前画面更旧」的译文。
+            // 语音已走到第 N 句、第 N-3 句的译文才回来时 seq >= _transSeq 仍会被
+            // 接受 → 讲的 A 却显示 B。以最新登记句 _pendingSeq 为基准，
+            // 落后 ≥2 句直接丢弃（允许落后 1 句，避免翻译稍慢就完全没字幕）。
+            if (seq != 0 && _pendingSeq > seq + 1) {
+                LCLogF(@"overlay: drop lagging pair seq=%lu (latest=%lu) origin=[%@]",
+                       (unsigned long)seq, (unsigned long)_pendingSeq, origin);
                 return;
             }
             _displayedTranslation = translation;
@@ -4880,6 +5008,21 @@ static void LCLazyInit(void) {
     LCLog("init: done");
 }
 
+// v2.2.0：面板「选择注入 App」的运行时白名单。
+// Filter 决定能不能被注入（且要注销才生效），这里让【取消勾选】重启 App 即停用。
+// 键不存在或为空（老配置 / 全新安装）一律放行，避免升级后字幕整片消失。
+static BOOL LCBundleAllowedByPrefs(void) {
+    NSString *p = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:p];
+    NSArray *list = d[@"enabledBundles"];
+    if (![list isKindOfClass:[NSArray class]] || list.count == 0) return YES;
+    NSString *bid = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
+    if (bid.length == 0) return YES;
+    if ([list containsObject:bid]) return YES;
+    LCLog("init: bundle not in enabledBundles -> skip hooks");
+    return NO;
+}
+
 __attribute__((constructor))
 static void LCInit(void) {
     // 纯 C 诊断：构造函数第一行就写文件，不依赖 ObjC
@@ -4939,6 +5082,7 @@ static void LCInit(void) {
     if (strncmp(exe, "/System", 7) == 0) return;
     if (strncmp(exe, "/usr", 4) == 0) return;
     if (strncmp(exe, "/bin", 4) == 0) return;
+    if (!LCBundleAllowedByPrefs()) return;
 
     // 注入后先等 App 完全启动（3s），再在下一轮主线程空闲时做 hook，
     // 最大程度避免干扰 App 自身初始化。
