@@ -95,3 +95,18 @@
   `16k_multi_lang` 即可（代码已支持，无需重新编译）。
 - 新增通用经验：`NSURLSessionWebSocketTask` 用 `cancelWithCloseCode:reason:`；
   Windows 下脚本改源码必须防 LF→CRLF；新增等效代码要同步收紧防回归断言。
+
+## 当前状态（v2.1.1 待部署）
+- 用户反馈 v2.1.0「右上有点、没翻译框」。设备 `10.10.201.107` 当时**离线**
+  （ping/SSH 全不通），真因未定案；本地实测已证伪「VAD 不断句」与
+  「URL 编码导致 4002」两个假设，最可疑是连接层，需设备日志。
+- **v2.1.1 已构建并校核完成**（CI #42799707291 全绿，deb 113232 bytes），
+  但**尚未部署到设备**。包含：中间结果节流兜底翻译、握手 6s / 零产出 10s
+  看门狗自动回落 HTTP、重连重置看门狗基准、RFC3986 编码统一、
+  面板「流式识别」一键回退开关。
+- 设备上线后：跑 `deploy_v87.py releases/com.sykes.livecap_2.1.1_...deb`，
+  再抓 `asr: ws` / `code=` / `showPending` 日志定案。若仍异常，
+  在设置里关「流式识别」即可立即恢复 HTTP 字幕。
+- **两条铁律**：① 双向验证前必须先 commit（脚本会 checkout 冲掉未提交改动）；
+  ② `[skip ci]` 的 head commit 会跳过构建，空提交又被 `paths-ignore` 跳过，
+  触发 CI 要用带文件改动的提交或 `workflow_dispatch`。
