@@ -81,3 +81,17 @@
   但必须保留 ~3s 超时熔断 + 429 退避 + 兜底（3.0 有 17s 级长尾）。
   `agnes-2.5-flash` 是推理模型，256 token 常被思维链吃光导致空译文，应弃用为主力。
 - **注意**：一旦切换流式架构，v2.0.2 分片复测即失去意义，不必再等用户重开 App。
+
+## 当前状态（2026-11-10 16:30 更新）
+- 用户已选「零成本组合」并已实施交付：设备 `10.10.201.107` 装 **v2.1.0**
+  （CI Run #42782771675 全绿，HEAD `ac78d98`）。
+- v2.1.0 = 流式 ASR WebSocket（`16k_en` + needvad 语义断句，不攒音频）
+  + `agnes-3.0-flash` 主力翻译（2.5s 优先窗口 / 3.5s 超时 / 碎片纠错 prompt）
+  + 旧 HTTP 分片链路完整保留作兜底（`streamASR=false` 可一键回退）。
+- 配置文件已迁移到 19 键；备份 `releases/device_cfg_before_v210.plist`。
+- **唯一待办**：用户完全退出 YouTube 重开后跑 `verify_v210_latency.py`，
+  确认 agnes 胜出率 >80% 与端到端延迟。若嫌识别不准，
+  去腾讯云控制台开通「实时 ASR 大模型版」后付费，把 `asrEngine` 改成
+  `16k_multi_lang` 即可（代码已支持，无需重新编译）。
+- 新增通用经验：`NSURLSessionWebSocketTask` 用 `cancelWithCloseCode:reason:`；
+  Windows 下脚本改源码必须防 LF→CRLF；新增等效代码要同步收紧防回归断言。
