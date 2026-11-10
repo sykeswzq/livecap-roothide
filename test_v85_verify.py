@@ -159,9 +159,12 @@ def main():
         "markDirectFailure"))
 
     # B10: 去掉 connectionProxyDictionary
+    # v2.1.0：新增的 LCStreamASR 也有 `c.connectionProxyDictionary = @{};`，
+    # 只删 LCSessionDirect 那一处的话新配置会掩盖移除效果 → 必须两处都删。
     mutants.append((
         "B10 去掉代理禁用",
-        base.replace("cfg.connectionProxyDictionary = proxy;", ""),
+        base.replace("cfg.connectionProxyDictionary = proxy;", "")
+            .replace("c.connectionProxyDictionary = @{};", ""),
         "代理"))
 
     # B11: 去掉 HTTPS 代理禁用

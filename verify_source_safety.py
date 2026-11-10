@@ -781,8 +781,12 @@ def check_v85_fixes(src, panel_src=None):
             errors.append("v1.0.87 回归: 缺少 %s —— %s" % (token, why))
 
     # ---- 4) 直连 session ----
-    if "connectionProxyDictionary" not in code:
-        errors.append("v1.0.85 回归: 缺少 connectionProxyDictionary —— "
+    # v2.1.0：源码里现在有两处代理禁用（LCSessionDirect 的 cfg=proxy 与
+    # LCStreamASR 的 c=@{}）。防回归必须锚定【原始 HTTP 直连 session】那一条，
+    # 只查 "connectionProxyDictionary" 会被流式 session 的新配置掩盖（假通过）。
+    if not re.search(r"cfg\.connectionProxyDictionary\s*=\s*proxy", code):
+        errors.append("v1.0.85 回归: 缺少 LCSessionDirect 的 "
+                      "connectionProxyDictionary = proxy —— "
                       "ASR 请求仍会走系统代理，多出 2 个跨洋 RTT（约 1.5s 固定开销）")
     # v1.0.86 修正：kCFNetworkProxiesHTTPSEnable / kCFNetworkProxiesSOCKSEnable
     # 在 iOS SDK 里标记为 "unavailable: not available on iOS"，用了会编译失败。
