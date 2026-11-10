@@ -2,16 +2,27 @@
 
 ## 关键构建教训
 
-### CoreFoundation framework 必须显式链接
-- **踩坑记录**: v2.0.0 使用 CFPreferences API（SetAppValue/AppSynchronize/__bridge CFStringRef）但 build.sh 未加 `-framework CoreFoundation`
-- **症状**: CI Build 步骤在 ~6 秒内快速失败（链接器错误）
-- **修复**: 第 52 行追加 `-framework CoreFoundation`
-- **规则**: 只要代码中出现 `CF*`、`__bridge`、`NSTimer` 等 API，必须在 clang 命令中链接对应 framework
+### ⚠️ 更正（2026-11-10）：v2.0.0 CI 连续失败的真实根因
+- 早先记的「缺 CoreFoundation framework」「LCJBRootPath 拼写」「CRLF」「M_PI_2」**均为误判**。
+- 真实原因全是 v2.0.0 重构遗留的**编译错误**（详见 `2026-11-10.md`）：
+  1. 调用点删了 `target:`/`cacheKey:` 参数，但 `raceTranslate:`/`mymemoryTranslate:` 实现签名漏改
+  2. 两处 `@"auto-detected"` 误写成裸 C 字符串
+  3. 新增字号页 `[_valueLabel centerXAnchor constraint...]` 缺点语法 + 数组类型声明错误
+  4. `test_v83_verify.py` 用例3 依赖旧缩进导致假失败
+- 修复提交 `7c11084` + `08c9b2d` → Run #42741950126 全绿，已出 v2.0.0 deb 并部署。
+
+### 拿真实 CI 日志（最重要）
+- git remote URL 里内嵌有效 PAT；用 `GET /repos/{o}/{r}/actions/runs/{id}/logs` + `-L`
+  下载完整日志 ZIP，直接看 `build/6_Build.txt` 的 `error:` 行。
+- 旧 PAT 失效时 403/401；`/actions/runs/{id}/jobs` 可能返回陈旧缓存数据，别信。
+- **CI 失败第一步就拉日志**，别用源码隔离测试反推（这次为此白跑十余轮）。
+- Windows Python 读不到 Git Bash 的 `/tmp`，ZIP 要落到仓库相对路径。
 
 ### 验证脚本局限
-- `verify_source_safety.py`, `scan_compile_risk.py`, `test_v*.py` 仅检查源码语法/逻辑
-- **无法检测**框架链接缺失、符号未定义等链接期错误
-- 必须依赖 CI 环境真实编译才能发现此类问题
+- `verify_source_safety.py` / `scan_compile_risk.py` / `test_v*.py` 只查已知历史 bug 模式，
+  **挡不住 selector 签名不一致、裸 C 字符串、点语法笔误**这类编译期错误
+- 本地无 xcrun → 这类错误仍需 CI 真实编译兜底，但必须配合日志 ZIP 快速定位
+- 改调用点参数时，必须同步核对方法实现签名与 `@interface` 声明
 
 ### iOS Tweak 开发通用要点
 1. Windows 本地无法编译 iOS dylib（无 xcrun），CI 往返 3~5 分钟 → 编译期错误靠静态检查提前拦
@@ -30,6 +41,10 @@
   - 新增 UI：LCFontSizeController 独立字号调节页（UISlider + 实时预览）
   - 精简：UI 改为 4 组面板（基本/接口/外观/显示选项）
   - 修复：CRLF 转换、LCJBRootPath 拼写错误、CoreFoundation framework 链接
+  - **✅ 2026-11-10 修完编译错误后构建成功（Run #42741950126）并部署到设备 v2.0.0**
+    - 产物 `releases/com.sykes.livecap_2.0.0_iphoneos-arm64e.deb`（103096 bytes）
+    - SSH key：`E:/SynologyDrive/单位/F/wangziqing/00000/ucs_ssh_key`
+    - 部署脚本：`python3 deploy_v87.py <deb路径>`（分块上传 + dpkg -i + 校验）
 
 ## 部署目标
 - 设备 IP: `10.10.201.107`
@@ -37,6 +52,7 @@
 - 架构: iphoneos-arm64e
 
 ## 待办事项
-- [ ] GitHub Actions CI 构建成功后下载 `.deb` 并部署到设备
-- [ ] 重启 SpringBoard 测试字幕翻译功能
-- [ ] 验证字号调节 UI 是否正常工作
+- [x] ~~GitHub Actions CI 构建成功后下载 `.deb` 并部署到设备~~（2026-11-10 已完成，v2.0.0）
+- [ ] 完全退出 YouTube 后重开，实测中文字幕叠加与翻译延迟
+- [ ] 验证 v2.0.0 新增的字号调节页（UISlider 10–40 + 实时预览）
+- [ ] 可选：清理设备旧配置 plist 里 v1 遗留键（v2.0.0 不读取，无害）
