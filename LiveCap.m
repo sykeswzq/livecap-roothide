@@ -746,7 +746,10 @@ static NSString *LCJBRootPath(NSString *path) {
         // 这里统一用 id 承载，取出时再显式 cast 回 block。
         id compBox = completion ? (id)completion : (id)[NSNull null];
         [self->_pendingItems addObject:@{@"text": trimmed, @"comp": compBox}];
-        const NSUInteger kMaxQueue = 3;
+        // v2.0.0 修复：ASR 每 2.5s 入队一句，而串行单槽翻译吞吐常低于此，
+        // 队列 3 会让译文越积越旧（设备日志实测滞后 5~8s）。只保留最新一句，
+        // 旧句回调 nil（showFailed 保留上一句中文，不会显示错句）。
+        const NSUInteger kMaxQueue = 1;
         while (self->_pendingItems.count > kMaxQueue) {
             NSDictionary *dropped = self->_pendingItems.firstObject;
             [self->_pendingItems removeObjectAtIndex:0];
@@ -801,8 +804,12 @@ static NSString *LCJBRootPath(NSString *path) {
         @"NEVER echo the English input; the output MUST contain Chinese characters.";
 
     __weak typeof(self) weakSelf = self;
+    NSDate *t0 = [NSDate date];
     [self raceTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
              completion:^(NSString *result) {
+        LCLogF(@"translate: inflight rtt=%lldms len=%lu",
+               (long long)([[NSDate date] timeIntervalSinceDate:t0] * 1000),
+               (unsigned long)result.length);
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
         dispatch_async(strongSelf->_queue, ^{
@@ -949,8 +956,10 @@ static NSString *LCShortLang(NSString *lc) {
 
 // v2.0.0：目标语言固定为中文；MyMemory 免费翻译（GET api.mymemory.translated.net，无需密钥）
 - (void)mymemoryTranslate:(NSString *)text completion:(void (^)(NSString *result))completion {
-    // v2.0.0：源语言自动检测，目标语言固定 zh-CN
-    NSString *src = @"auto";
+    // v2.0.0 修复：MyMemory 不接受 langpair 里的 "auto"（设备实测 403
+    // "'AUTO' IS AN INVALID SOURCE LANGUAGE"），此前免费兜底 100% 失败。
+    // 目标语言固定 zh-CN；源语言按英文处理（非英文源由 agnes 竞速兜住）。
+    NSString *src = @"en";
     NSString *dst = @"zh-CN";
     // 关键：langpair 的分隔符 | 属于 URL 保留字符，必须百分号编码，
     // 否则 NSURL 报 -1002 (unsupported URL)，MyMemory 永远失败
@@ -962,7 +971,7 @@ static NSString *LCShortLang(NSString *lc) {
         langPair];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
     [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
-    req.timeoutInterval = 12.0;
+    req.timeoutInterval = 6.0;
     LCLogF(@"translate: mymemory request url=%@", urlStr);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
@@ -1054,7 +1063,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
     [req setValue:@"ap-guangzhou" forHTTPHeaderField:@"X-TC-Region"];
     [req setValue:auth forHTTPHeaderField:@"Authorization"];
     req.HTTPBody = payload;
-    req.timeoutInterval = 12.0;
+    req.timeoutInterval = 6.0;
 
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
@@ -1162,10 +1171,10 @@ static NSString *LCTmtLang(NSString *lcLang) {
     // 换成普通客户端标识后翻译恢复正常。
     [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
     req.HTTPBody = payload;
-    // 超时放宽到 30s：实测网关慢模型单次要 29~40s，15s 必然 -1001 超时。
-    // 但因为 v1.0.81 改成了并行竞速（MyMemory 同时在跑），慢的这一路超时
-    // 也不会拖累整句 —— 快的那个早已返回。
-    req.timeoutInterval = 30.0;
+    // v2.0.0 修复：竞速【全部失败】时 _inflight 要等最慢的一路超时才释放，
+    // 30s 会把串行翻译队列堵死（设备日志实测中文滞后 5~8s、大量 showFailed）。
+    // agnes-2.5-flash 正常 0.87~3.4s；压到 6s 后最坏 6s 释放队列。
+    req.timeoutInterval = 6.0;
 
     LCLogF(@"translate: openai request url=%@ model=%@ attempt=%ld", chatUrl, trimmedModel, (long)attempt);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
