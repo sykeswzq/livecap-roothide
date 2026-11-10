@@ -122,7 +122,10 @@ def verify(deb_path):
                         ('inflight 打点', b'translate: inflight rtt='),
                         ('v2.1.0 流式类', b'LCStreamASR'),
                         ('v2.1.0 握手日志', b'asr: ws handshake ok'),
-                        ('v2.1.0 稳态句日志', b'asr: ws final sentence')]:
+                        ('v2.1.0 稳态句日志', b'asr: ws final sentence'),
+                        ('v2.1.1 中间结果兜底', b'asr: ws partial fallback translate'),
+                        ('v2.1.1 握手看门狗', b'asr: ws handshake timeout 6s'),
+                        ('v2.1.1 零产出看门狗', b'asr: ws no sentence in 10s')]:
         assert needle in dl, '%s 未编进 dylib（%s）' % (tag, needle.decode())
         print('  含新代码: %s OK' % tag)
 
