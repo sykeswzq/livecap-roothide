@@ -16,3 +16,6 @@ __pycache__/
 *.pyc
 livecap_v87.log
 device_*.log
+
+# 设备配置备份含真实 API Key / 密钥，禁止入库
+device_cfg_*.plist
