@@ -19,3 +19,6 @@ device_*.log
 
 # 设备配置备份含真实 API Key / 密钥，禁止入库
 device_cfg_*.plist
+
+# 本地生成的合成测试音频（可由 verify_ws_asr.py 自动重建）
+test_ws_asr.wav
