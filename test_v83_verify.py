@@ -119,8 +119,10 @@ def main():
         with io.open(PANEL, "r", encoding="utf-8") as f:
             p = f.read()
         # v1.0.87：面板改用类型安全的 LCGetBool 读配置（兼容 NSNumber/NSString）
-        bug3_old = """            sw.on = LCGetBool(@"showBilingual", NO);"""
-        bug3_new = """            sw.on = LCGetBool(@"showEnglish", YES);"""
+        # v2.0.0：面板重构后该行缩进由 12 空格变为 8 空格。
+        #         只匹配语句本体，不依赖缩进，避免用例因排版变化假失败。
+        bug3_old = """sw.on = LCGetBool(@"showBilingual", NO);"""
+        bug3_new = """sw.on = LCGetBool(@"showEnglish", YES);"""
         if bug3_old in p:
             with io.open(PANEL, "w", encoding="utf-8") as f:
                 f.write(p.replace(bug3_old, bug3_new, 1))

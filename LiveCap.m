@@ -653,6 +653,7 @@ static NSString *LCJBRootPath(NSString *path) {
                cacheKey:(NSString *)cacheKey
                apiKey:(NSString *)apiKey apiBase:(NSString *)apiBase
                   model:(NSString *)model attempt:(NSInteger)attempt
+          maxAttempts:(NSInteger)maxAttempts
              completion:(void (^)(NSString *result))completion;
 @end
 
@@ -839,7 +840,7 @@ static NSString *LCJBRootPath(NSString *path) {
 //   竞速后整体延迟 = min(两者) ≈ 1s。
 // 竞速天然提供了冗余：一家失败另一家顶上，不再需要靠重试放大延迟。
 - (void)raceTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
-               cacheKey:(NSString *)cacheKey target:(NSString *)target
+               cacheKey:(NSString *)cacheKey
              completion:(void (^)(NSString *result))completion {
     NSString *apiKey = [[LCConfig shared] apiKey];
     NSString *apiBase = [[LCConfig shared] apiBase];
@@ -947,7 +948,7 @@ static NSString *LCShortLang(NSString *lc) {
 }
 
 // v2.0.0：目标语言固定为中文；MyMemory 免费翻译（GET api.mymemory.translated.net，无需密钥）
-- (void)mymemoryTranslate:(NSString *)text cacheKey:(NSString *)cacheKey completion:(void (^)(NSString *result))completion {
+- (void)mymemoryTranslate:(NSString *)text completion:(void (^)(NSString *result))completion {
     // v2.0.0：源语言自动检测，目标语言固定 zh-CN
     NSString *src = @"auto";
     NSString *dst = @"zh-CN";
@@ -1019,7 +1020,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
                secretId:(NSString *)secretId secretKey:(NSString *)secretKey
              completion:(void (^)(NSString *result))completion {
     if (text.length > 1800) text = [text substringToIndex:1800];  // TextTranslate 单次上限
-    NSString *src = LCTmtLang("auto-detected");
+    NSString *src = LCTmtLang(@"auto-detected");
     NSString *dst = LCTmtLang(@"zh-CN");
     NSDictionary *body = @{
         @"SourceText": text,
@@ -2919,7 +2920,7 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         gProcessingFormat = asbd;
         gProcessingFormatValid = YES;
     }
-    NSLocale *locale = [NSLocale localeWithLocaleIdentifier:"auto-detected"];
+    NSLocale *locale = [NSLocale localeWithLocaleIdentifier:@"auto-detected"];
     SFSpeechRecognizer *rec = [[SFSpeechRecognizer alloc] initWithLocale:locale];
     if (!rec || !rec.isAvailable) {
         // 该 locale 不可用则退回 en-US
