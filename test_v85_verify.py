@@ -94,13 +94,15 @@ def main():
                "ivar"),
         "并发"))
 
-    # B2: 并发上限改成 1
+    # B2: v2.2.0 起回落 HTTP 链路允许【刻意】串行（2 路并发的 POST 响应乱序
+    #     会让字幕顺序颠倒），但必须带顺序修复说明。删掉说明 = 误改回串行，
+    #     check_v85_fixes 仍要能拦下（否则防回归形同虚设）。
     mutants.append((
-        "B2 并发上限=1",
+        "B2 串行缺少顺序修复说明",
         mutate(base,
-               "static const NSInteger LC_ASR_MAX_CONCURRENCY = 2;",
-               "static const NSInteger LC_ASR_MAX_CONCURRENCY = 1;",
-               "const"),
+               "回落链路改回串行",
+               "",
+               "order-note"),
         "并发上限"))
 
     # B3: 释放槽位不防负数
