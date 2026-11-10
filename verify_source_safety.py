@@ -1155,6 +1155,37 @@ def check_v87_fixes(src, panel_src=None):
                 "拖动必须真正写入配置才能生效。")
 
 
+def check_v211_fixes(src, panel_src):
+    """v2.1.1：流式层不能「只等 slice_type=2」。
+
+    真机是无限持续推流 + 背景音乐，服务端 VAD 常判不出静音，会长期只给
+    slice_type=1。若只等稳态句，showPending 一次都不触发，只中文模式下
+    字幕框完全不出现（用户看到的现象：右上只有一个拖动圆点、没有框）。
+    同时流式层 _active=YES 会吞掉三条音频入口，旧的 HTTP 链路永远没机会跑。
+    """
+    if "LCStreamASR" not in src:
+        return
+    for token, why in (
+            # 锚定「调用点」而非方法名：只查方法名时，把 slice_type=1 分支里的
+            # 调用删掉、留着方法定义也能骗过检查（实测踩过）。
+            ("lc_maybeTranslatePartial:txt]", "slice_type=1 分支必须真的调用中间结果兜底翻译"),
+            ("- (void)lc_maybeTranslatePartial:", "中间结果节流兜底方法定义"),
+            ("partial fallback translate", "兜底路径缺少可观测日志，真机无法定位"),
+            ("handshake timeout 6s", "握手失败看门狗，必须能停流式回落 HTTP"),
+            ("no sentence in 10s", "零产出看门狗，必须能停流式回落 HTTP"),
+            ("skip duplicate sentence", "稳态句与兜底句去重，避免同一句翻两次")):
+        if token not in src:
+            errors.append("v2.1.1 回归: 缺少 %s —— %s" % (token, why))
+    # 编码规则必须与 verify_ws_asr.py 的 urllib.parse.quote(v, safe='') 一致，
+    # 否则 16k_en / UUID 里的 _ 和 - 会被多编码，设备端验签结果可能与本地实测不同。
+    if 'addCharactersInString:@"-_.~"' not in src:
+        errors.append("v2.1.1 回归: WebSocket 参数编码未保留 RFC3986 unreserved "
+                      "(-_.~) —— 需与本地实测脚本一致")
+    if "lc_streamChanged:" not in panel_src:
+        errors.append("v2.1.1 回归: 面板缺少流式识别开关 —— "
+                      "真机异常时用户必须能一键回退 HTTP 分片链路")
+
+
 def main():
     try:
         src = read_src()
@@ -1182,6 +1213,7 @@ def main():
     check_v85_fixes(src, panel_src)
     check_v86_fixes(src, panel_src)
     check_v87_fixes(src, panel_src)
+    check_v211_fixes(src, panel_src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -1203,6 +1235,7 @@ def main():
     print("  OK: v1.0.83 修复在位（showBilingual 语义/统一配置通道/容器尺寸不再冻结/测量扣内边距）")
     print("  OK: v1.0.84 修复在位（分片时长可配置/毫秒RTT打点/提到最上层/跟随新window/位置钳制）")
     print("  OK: v1.0.87 修复在位（ADTS 封装/失败可恢复/分片不丢音/字号滑块+实时生效）")
+    print("  OK: v2.1.1 修复在位（RFC3986编码/中间结果兜底翻译/握手与零产出看门狗/流式开关）")
     return 0
 
 

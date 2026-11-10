@@ -233,9 +233,9 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0)
-        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。分片越短字幕越快，但长句可能被切断；改动最多 2 秒后生效。";
+        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。流式识别边说边推、不攒音频；关闭后回到旧的分片识别。分片时长只在关闭流式时生效。";
     if (section == 1)
-        return @"使用 OpenAI 兼容的翻译 API，默认使用 agnes-2.5-flash。";
+        return @"使用 OpenAI 兼容的翻译 API，默认使用 agnes-3.0-flash。";
     if (section == 2)
         return @"字幕可长按拖动，位置按 App 记忆。字号拖完立即生效无需重启。";
     if (section == 3)
@@ -244,7 +244,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) return 3;
+    if (section == 0) return 4;
     if (section == 1) return 3;
     if (section == 2) return 4;
     if (section == 3) return 1;
@@ -272,12 +272,22 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             NSUInteger n = [LCReallyInjectedIDs() count];
             cell.detailTextLabel.text = [NSString stringWithFormat:@"已注入 %lu 个", (unsigned long)n];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        } else {
+        } else if (indexPath.row == 2) {
             cell.textLabel.text = @"识别分片时长";
             double secs = LCGetNum(@"asrChunkSeconds", 1.5);
             if (secs < 1.0 || secs > 3.0) secs = 1.5;
             cell.detailTextLabel.text = [NSString stringWithFormat:@"%.1f 秒", secs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        } else {
+            // v2.1.1：流式识别一键回退开关。真机若出现「只有圆点、没有字幕框」，
+            // 关掉这里即可立刻回到已验证可用的 HTTP 分片链路，无需重新编译或改 plist。
+            cell.textLabel.text = @"流式识别（不攒音频）";
+            cell.detailTextLabel.text = LCGetBool(@"streamASR", YES) ? @"开" : @"关";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = LCGetBool(@"streamASR", YES);
+            [sw addTarget:self action:@selector(lc_streamChanged:) forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = sw;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
         }
     }
     else if (indexPath.section == 1) {
@@ -291,7 +301,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else {
             cell.textLabel.text = @"模型名称";
-            cell.detailTextLabel.text = LCStr(@"model", @"agnes-2.5-flash");
+            cell.detailTextLabel.text = LCStr(@"model", @"agnes-3.0-flash");
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         }
     }
@@ -406,13 +416,13 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 1 && indexPath.row == 2) {
-        NSString *current = LCStr(@"model", @"agnes-2.5-flash");
+        NSString *current = LCStr(@"model", @"agnes-3.0-flash");
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"模型名称"
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleAlert];
         [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
             tf.text = current;
-            tf.placeholder = @"agnes-2.5-flash";
+            tf.placeholder = @"agnes-3.0-flash";
             tf.clearButtonMode = UITextFieldViewModeWhileEditing;
             tf.autocorrectionType = UITextAutocorrectionTypeNo;
         }];
@@ -473,6 +483,10 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 #pragma mark - 开关回调
 
+- (void)lc_streamChanged:(UISwitch *)sw {
+    LCSet(@(sw.on), @"streamASR");
+    [self.lc_tv reloadData];
+}
 - (void)lc_enabledChanged:(UISwitch *)sw { LCSet(@(sw.on), @"enabled"); }
 - (void)lc_boldChanged:(UISwitch *)sw { LCSet(@(sw.on), @"boldText"); }
 - (void)lc_showEnglishChanged:(UISwitch *)sw { LCSet(@(sw.on), @"showBilingual"); }

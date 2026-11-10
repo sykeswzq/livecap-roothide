@@ -1463,8 +1463,13 @@ static BOOL gProcessingFormatValid = NO;
 //     把 asrEngine 改成 16k_multi_lang 即可，无需重新编译。
 
 static NSString *LCPercentEncodeAll(NSString *s) {
-    // 只保留字母数字，+/=/-/_ 全部编码（官方文档要求 += 等必须编码）
-    NSCharacterSet *allow = [NSCharacterSet alphanumericCharacterSet];
+    // RFC 3986 unreserved = A-Z a-z 0-9 - _ . ~
+    // v2.1.0 只用 alphanumericCharacterSet，会把 engine_model_type=16k_en 的 '_'、
+    // voice_id(UUID) 的 '-' 也编码成 %5F / %2D；本地 verify_ws_asr.py 用
+    // urllib.parse.quote(v, safe='') 是保留这两个字符的。为消除设备端与本地实测
+    // 验签结果不一致的隐患，这里统一为同一套规则。+、/、= 仍会被编码。
+    NSMutableCharacterSet *allow = [NSMutableCharacterSet alphanumericCharacterSet];
+    [allow addCharactersInString:@"-_.~"];
     return [s stringByAddingPercentEncodingWithAllowedCharacters:allow] ?: s;
 }
 
@@ -1498,6 +1503,12 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     NSTimeInterval _lastFrameAt;
     dispatch_source_t _keepalive;
     NSInteger _retryCount;
+    // v2.1.1：流式断句兜底与看门狗
+    NSTimeInterval _startedAt;          // start 时刻
+    NSTimeInterval _lastSentenceAt;     // 最近一次真正送翻译的时刻
+    NSString *_lastPartialText;         // 最近一次中间结果
+    NSTimeInterval _lastPartialAt;      // 中间结果文本发生变化的时刻
+    NSString *_lastTranslatedText;      // 最近一次送翻译的文本（去重用）
 }
 
 + (instancetype)shared {
@@ -1567,7 +1578,13 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     _active = YES;
     _ready = NO;
     _retryCount = 0;
-    _lastAudioAt = [[NSDate date] timeIntervalSince1970];
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    _lastAudioAt = now;
+    _startedAt = now;
+    _lastSentenceAt = now;          // 看门狗从 start 起算，避免刚连上就误判
+    _lastPartialAt = now;
+    _lastPartialText = nil;
+    _lastTranslatedText = nil;
     NSURLSessionConfiguration *c = [NSURLSessionConfiguration defaultSessionConfiguration];
     c.connectionProxyDictionary = @{};   // 禁系统代理，直连（同 LCSessionDirect）
     _session = [NSURLSession sessionWithConfiguration:c delegate:self delegateQueue:nil];
@@ -1650,13 +1667,47 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
         // 中间结果会变化，只登记不刷屏（showBilingual=NO 时也不该闪英文）
         [[LCSubtitleOverlay shared] showPartial:txt];
         LCLogF(@"asr: ws partial [%@]", txt);
+        // v2.1.1：真机是无限持续推流 + 背景音乐，服务端 VAD 常常判不出 800ms 静音，
+        // 会长期只给 slice_type=1 而不给 2。只等稳态句会导致字幕框一次都不出现
+        // （showPending 从未被调用）。这里按「文本稳定」节流送翻译兜底。
+        [self lc_maybeTranslatePartial:txt];
     } else if (st == 2) {
         LCLogF(@"asr: ws final sentence [%@]", txt);
         [self lc_translateFinal:txt];
     }
 }
 
+// 中间结果兜底：文本稳定 1.0s 或距上次送译 ≥3.0s 且文本变化后，把当前中间结果
+// 当作一句送翻译。这样即使服务端不判句，中文也会持续上屏（约 2~3s 延迟），
+// 且不会因为每 200ms 一个 partial 而刷爆翻译队列。
+- (void)lc_maybeTranslatePartial:(NSString *)text {
+    if (!_active || text.length < 4) return;
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    BOOL changed = ![text isEqualToString:_lastPartialText];
+    if (changed) {
+        _lastPartialText = [text copy];
+        _lastPartialAt = now;
+    }
+    BOOL settled = !changed && (now - _lastPartialAt >= 1.0);
+    // 不依赖「文本是否变长」：服务端给的 voice_text_str 可能是每片独立文本而非累积，
+    // 那种情况下长度比较永远不成立，会重新变回零字幕。
+    BOOL periodic = (now - _lastSentenceAt >= 3.0) &&
+                    ![text isEqualToString:_lastTranslatedText];
+    if (!settled && !periodic) return;
+    if ([text isEqualToString:_lastTranslatedText]) return;   // 同一句不重复翻
+    LCLogF(@"asr: ws partial fallback translate [%@]", text);
+    [self lc_translateFinal:text];
+}
+
 - (void)lc_translateFinal:(NSString *)text {
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    // 稳态句与 partial 兜底可能间隔很近且文本相同，跳过重复翻译避免字幕抖两下
+    if ([text isEqualToString:_lastTranslatedText] && (now - _lastSentenceAt < 1.5)) {
+        LCLog("asr: ws skip duplicate sentence");
+        return;
+    }
+    _lastTranslatedText = [text copy];
+    _lastSentenceAt = now;
     NSUInteger seq = [[LCSubtitleOverlay shared] showPending:text];
     [[LCTranslator shared] translate:text completion:^(NSString *tr) {
         if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr seq:seq];
@@ -1730,8 +1781,24 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     __weak typeof(self) weakSelf = self;
     dispatch_source_set_event_handler(_keepalive, ^{
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || !self->_active || !self->_ready) return;
+        if (!self || !self->_active) return;
         NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+        // v2.1.1 看门狗：流式层一旦 _active=YES 就会吞掉三条音频入口，
+        // 如果它半死不活（握手不上 / 识别全空），旧的 HTTP 分片链路永远没机会跑，
+        // 表现为「右上只有一个拖动圆点、字幕框完全不出现」。
+        // 这里在两种异常下主动 stop，让音频入口自动回落 HTTP，保证字幕一定出来。
+        if (!self->_ready && (now - self->_startedAt > 6.0)) {
+            LCLog("asr: ws handshake timeout 6s -> HTTP fallback");
+            [self stop];
+            return;
+        }
+        if (self->_ready && (now - self->_lastAudioAt < 2.0) &&
+            (now - self->_lastSentenceAt > 10.0)) {
+            LCLog("asr: ws no sentence in 10s -> HTTP fallback");
+            [self stop];
+            return;
+        }
+        if (!self->_ready) return;
         if (now - self->_lastAudioAt < 1.0) return;           // 有真实音频时不插静音
         if (now - self->_lastAudioAt > 30.0) {                // 长时间无音频，主动断开省计费
             LCLog("asr: ws idle 30s -> disconnect");

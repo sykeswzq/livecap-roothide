@@ -1,5 +1,5 @@
 #!/bin/sh
-# postinst v2.1.0 —— 预写默认配置 + 修复注入 + 刷新缓存
+# postinst v2.1.1 —— 预写默认配置 + 修复注入 + 刷新缓存
 LOG=/var/mobile/Documents/livecap_install.log
 mkdir -p /var/mobile/Documents
 chmod 777 /var/mobile/Documents
