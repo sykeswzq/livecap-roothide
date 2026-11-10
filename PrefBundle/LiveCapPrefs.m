@@ -106,7 +106,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         initWithTitle:@"完成" style:UIBarButtonItemStyleDone target:self action:@selector(lc_done)];
     self.navigationItem.rightBarButtonItem = doneBtn;
 
-    NSLayoutConstraint *constraints = @[
+    NSArray<NSLayoutConstraint *> *constraints = @[
         [tip.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16],
         [tip.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],
         [tip.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16],
@@ -115,7 +115,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         [_slider.centerYAnchor constraintEqualToAnchor:tip.bottomAnchor constant:24],
         [_slider.widthAnchor constraintEqualToConstant:180],
 
-        [_valueLabel centerXAnchor constraintEqualToAnchor:_slider.centerXAnchor],
+        [_valueLabel.centerXAnchor constraintEqualToAnchor:_slider.centerXAnchor],
         [_valueLabel.topAnchor constraintEqualToAnchor:_slider.bottomAnchor constant:12],
 
         [_preview.topAnchor constraintEqualToAnchor:_valueLabel.bottomAnchor constant:24],
