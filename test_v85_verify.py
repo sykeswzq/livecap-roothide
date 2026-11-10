@@ -38,12 +38,16 @@ def run_check(src_text, tag):
             io.open(os.path.join(tmp, "PrefBundle", "LiveCapPrefs.m"),
                     "w", encoding="utf-8").write(
                         io.open(real_panel, encoding="utf-8").read())
-        # v1.0.86 新增的检查项要读 LiveCap.plist 和 postinst，
+        # v1.0.86 新增的检查项要读 LiveCap.plist 和 postinst；
+        # v2.2.1 新增的检查项还要读 PrefBundle/LiveCapAppListController.m。
         # 缺了会产生「读不到文件」这种与本用例无关的误报。
-        for extra in ("LiveCap.plist", "postinst"):
+        for extra in ("LiveCap.plist", "postinst",
+                      os.path.join("PrefBundle", "LiveCapAppListController.m")):
             src_extra = os.path.join(HERE, extra)
+            dst_extra = os.path.join(tmp, extra)
             if os.path.exists(src_extra):
-                io.open(os.path.join(tmp, extra), "w", encoding="utf-8").write(
+                os.makedirs(os.path.dirname(dst_extra), exist_ok=True)
+                io.open(dst_extra, "w", encoding="utf-8").write(
                     io.open(src_extra, encoding="utf-8").read())
         p = subprocess.run([sys.executable, chk_p], cwd=tmp,
                            capture_output=True, text=True, encoding="utf-8",
