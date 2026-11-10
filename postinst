@@ -1,5 +1,5 @@
 #!/bin/sh
-# postinst v2.0.2 —— 预写默认配置 + 修复注入 + 刷新缓存
+# postinst v2.1.0 —— 预写默认配置 + 修复注入 + 刷新缓存
 LOG=/var/mobile/Documents/livecap_install.log
 mkdir -p /var/mobile/Documents
 chmod 777 /var/mobile/Documents
@@ -19,7 +19,13 @@ if [ ! -f "$CFG" ]; then
 	<key>apiKey</key>
 	<string></string>
 	<key>model</key>
-	<string>agnes-2.5-flash</string>
+	<string>agnes-3.0-flash</string>
+	<key>streamASR</key>
+	<true/>
+	<key>asrEngine</key>
+	<string>16k_en</string>
+	<key>asrAppId</key>
+	<string>1312073434</string>
 	<key>fontSize</key>
 	<string>16</string>
 	<key>asrChunkSeconds</key>

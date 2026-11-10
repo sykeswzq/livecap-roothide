@@ -473,10 +473,14 @@ static NSString *LCJBRootPath(NSString *path) {
 
 - (NSString *)model {
     NSString *s = _d[@"model"];
-    // 默认用 agnes-2.5-flash：实测 agnes-3.0-flash 无论 prompt 长短都要 29~40s，
-    // 远超字幕场景可接受延迟（设备网络超时上限只有 15s → 必然全失败）。
-    // agnes-2.5-flash 实测 0.87~3.4s。
-    return (s && s.length) ? s : @"agnes-2.5-flash";
+    // v2.1.0 默认 agnes-3.0-flash（免费、非推理模型）。
+    // 实测（2026-11-10，设备同款 payload 各 5 次）：
+    //   2.5-flash：p50 1.09s / max 7.8s，带 reasoning_content，
+    //     思维链吃光 256 token 时 content 返回空 → showFailed（日志里 15 次），
+    //     碎片句还会回显英文。
+    //   3.0-flash：p50 1.38s / max 17.4s，reasoning=0、不回显英文、译文更自然。
+    // 3.0 有极端长尾，靠 3.5s 超时 + MyMemory 延迟兜底窗口兜住。
+    return (s && s.length) ? s : @"agnes-3.0-flash";
 }
 
 - (NSString *)tencentSecretId {
@@ -487,6 +491,32 @@ static NSString *LCJBRootPath(NSString *path) {
 - (NSString *)tencentSecretKey {
     NSString *s = _d[@"tencentSecretKey"];
     return (s && s.length) ? s : @"";
+}
+
+// ===== v2.1.0：流式 ASR 配置 =====
+// 注意「升级不覆盖已有 plist」这个坑：设备 plist 里可能没有这些新键，
+// 所以每个都必须有代码默认值，不能只靠 postinst 预写。
+- (NSString *)asrAppId {
+    NSString *s = _d[@"asrAppId"];
+    if (s.length) return s;
+    // 账号 APPID（非密钥）。可用 cam:GetUserAppId 查；也可用 plist 覆盖。
+    return @"1312073434";
+}
+
+- (NSString *)asrEngine {
+    NSString *s = _d[@"asrEngine"];
+    if (s.length) return s;
+    // 16k_en 是账号已开通的通用引擎（实测 code=0）。
+    // 大模型引擎 16k_multi_lang / 16k_zh_en / Hy-ASR-3.0-preview 属独立计费项，
+    // 未开通后付费时会返回 4004；开通后把 asrEngine 改成对应值即可，无需重新编译。
+    return @"16k_en";
+}
+
+- (BOOL)streamASREnabled {
+    id v = _d[@"streamASR"];
+    if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v boolValue];
+    if ([v isKindOfClass:[NSString class]]) return [(NSString *)v boolValue];
+    return YES;   // 默认开：流式是 v2.1.0 的主路径，关掉则回到旧 HTTP 分片
 }
 
 // ===== v1.0.87：字号实时读盘，改完立即生效 =====
@@ -806,9 +836,14 @@ static NSString *LCJBRootPath(NSString *path) {
     // 这里保留最关键的三条约束（只输出译文 / 输入可能是脏片段要照翻 / 绝不回显英文），
     // 去掉示例和冗长规则，压到 ~230 字节。
     // v2.0.0：目标语言硬编码为中文，直接写死在 sysPrompt 里
-    NSString *sysPrompt = @"Translate to zh-CN. Output ONLY the translation: no quotes, no explanation. "
-        @"The input may be a noisy speech-to-text fragment: infer the meaning and output Chinese. "
-        @"NEVER echo the English input; the output MUST contain Chinese characters.";
+    // v2.1.0：合成一条「识别碎片纠错 + 中译」prompt。
+    // 流式 ASR 用通用引擎时输出可能有错词/半截词，让免费 LLM 在翻译的同时
+    // 顺手补全与纠偏（实测能把 "Back to the channel, hello, hello we"
+    // 修成通顺中文），比单纯直译碎片质量高得多。
+    NSString *sysPrompt = @"You are a subtitle post-editor. The input is a noisy speech-to-text fragment "
+        @"from a video. Silently fix obvious recognition errors and complete truncated words, then "
+        @"translate the corrected meaning into natural Simplified Chinese. Output ONLY the Chinese "
+        @"translation: no quotes, no explanation, no English. NEVER echo the input.";
 
     __weak typeof(self) weakSelf = self;
     NSDate *t0 = [NSDate date];
@@ -917,6 +952,12 @@ static NSString *LCJBRootPath(NSString *path) {
         }
     };
 
+    // v2.1.0：agnes 参赛时享有 2.5 秒优先窗口。
+    // 纯竞速下 MyMemory 0.6~1.1s 恒快于 agnes 1.4s → 等于系统性选到质量差的
+    // 兜底译文（还会回显上一句）。延迟发 MyMemory 让 agnes 先跑，
+    // 只有 agnes 长尾 / 失败时才由兜底顶上；agnes 被熔断时不延迟，保持原速。
+    BOOL preferAgnes = [providers containsObject:@"agnes"];
+
     // 并行发出全部请求
     for (NSString *provider in providers) {
         NSString *p = [provider copy];
@@ -931,9 +972,20 @@ static NSString *LCJBRootPath(NSString *path) {
                           apiKey:apiKey apiBase:apiBase model:model maxAttempts:1
                        completion:^(NSString *r) { onResult(p, r); }];
         } else {
-            LCLogF(@"translate: race -> mymemory");
-            [self mymemoryTranslate:text
-                         completion:^(NSString *r) { onResult(p, r); }];
+            LCLogF(@"translate: race -> mymemory%@", preferAgnes ? @" (delayed 2.5s)" : @"");
+            void (^fireMyMemory)(void) = ^{
+                BOOL alreadyWon = NO;
+                @synchronized (state) { alreadyWon = [state[@"won"] boolValue]; }
+                if (alreadyWon) return;   // agnes 已赢，别再发无效请求抢上行带宽
+                [self mymemoryTranslate:text
+                             completion:^(NSString *r) { onResult(p, r); }];
+            };
+            if (preferAgnes) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)),
+                    dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), fireMyMemory);
+            } else {
+                fireMyMemory();
+            }
         }
     }
 }
@@ -1142,7 +1194,7 @@ static NSString *LCTmtLang(NSString *lcLang) {
                   model:(NSString *)model attempt:(NSInteger)attempt maxAttempts:(NSInteger)maxAttempts
              completion:(void (^)(NSString *result))completion {
     if (text.length > 1800) text = [text substringToIndex:1800];
-    NSString *trimmedModel = model.length ? model : @"agnes-2.5-flash";
+    NSString *trimmedModel = model.length ? model : @"agnes-3.0-flash";
     // 动态 max_tokens：每行最多 96 token，最少 256，最多 2048
     NSUInteger lineCount = [text componentsSeparatedByString:@"\n"].count;
     NSInteger maxTokens = (NSInteger)(lineCount * 96);
@@ -1188,8 +1240,10 @@ static NSString *LCTmtLang(NSString *lcLang) {
     req.HTTPBody = payload;
     // v2.0.0 修复：竞速【全部失败】时 _inflight 要等最慢的一路超时才释放，
     // 30s 会把串行翻译队列堵死（设备日志实测中文滞后 5~8s、大量 showFailed）。
-    // agnes-2.5-flash 正常 0.87~3.4s；压到 6s 后最坏 6s 释放队列。
-    req.timeoutInterval = 6.0;
+    // v2.1.0：agnes-3.0-flash p50 1.38s，但实测有 17.4s 级长尾（历史注释
+    // 里甚至出现过 29~40s）。压到 3.5s：正常请求都能回，长尾直接放弃，
+    // 交给延迟窗口里发出的 MyMemory 兜底，不让串行翻译队列被卡住。
+    req.timeoutInterval = 3.5;
 
     LCLogF(@"translate: openai request url=%@ model=%@ attempt=%ld", chatUrl, trimmedModel, (long)attempt);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
@@ -1396,6 +1450,341 @@ static BOOL gProcessingFormatValid = NO;
 - (void)checkConfigChange;
 @end
 
+#pragma mark - 腾讯云实时语音识别 WebSocket（v2.1.0：不攒音频，边说边推）
+
+// 实测依据（2026-11-10，见 verify_ws_asr.py / probe_ws_engines.py）：
+//   · 签名 Base64(HMAC-SHA1("asr.cloud.tencent.com/asr/v2/<appid>?<字典序query>", SecretKey))
+//     —— 与 TC3 完全不同的算法，但复用同一对 CAM 密钥。
+//   · voice_format=1（16k/16bit/mono PCM），每 200ms 发 6400 字节，严格 1:1 实时率。
+//   · needvad=1 让服务端按语义断句，slice_type=2 才是稳态句末，只有它送翻译。
+//   · 音频回调本身是实时的，「缓冲满 6400 字节就切一帧」天然满足 1:1，不需要攒分片。
+//   · 发送必须串行（上一帧 completion 后再发下一帧），否则会被服务端判 4000。
+//   · 引擎默认 16k_en（通用引擎，账号已开通）；开通大模型 ASR 后付费后
+//     把 asrEngine 改成 16k_multi_lang 即可，无需重新编译。
+
+static NSString *LCPercentEncodeAll(NSString *s) {
+    // 只保留字母数字，+/=/-/_ 全部编码（官方文档要求 += 等必须编码）
+    NSCharacterSet *allow = [NSCharacterSet alphanumericCharacterSet];
+    return [s stringByAddingPercentEncodingWithAllowedCharacters:allow] ?: s;
+}
+
+static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
+    const char *k = [key UTF8String];
+    const char *d = [src UTF8String];
+    if (!k || !d) return nil;
+    unsigned char mac[CC_SHA1_DIGEST_LENGTH];
+    CCHmac(kCCHmacAlgSHA1, k, strlen(k), d, strlen(d), mac);
+    return [[NSData dataWithBytes:mac length:sizeof(mac)] base64EncodedStringWithOptions:0];
+}
+
+@interface LCStreamASR : NSObject <NSURLSessionWebSocketDelegate>
++ (instancetype)shared;
+- (BOOL)isActive;
+- (void)start;
+- (void)appendPCM16:(NSData *)pcm16;
+- (void)appendMonoFloat:(const float *)mono frames:(UInt32)frames rate:(double)rate;
+- (void)stop;
+@end
+
+@implementation LCStreamASR {
+    NSURLSession *_session;
+    NSURLSessionWebSocketTask *_task;
+    NSMutableData *_buf;                  // 不足一帧的残余 PCM
+    NSMutableArray<NSData *> *_frames;    // 待发送帧（串行）
+    BOOL _sending;
+    BOOL _ready;                          // 收到 code=0 握手确认
+    BOOL _active;
+    NSTimeInterval _lastAudioAt;
+    NSTimeInterval _lastFrameAt;
+    dispatch_source_t _keepalive;
+    NSInteger _retryCount;
+}
+
++ (instancetype)shared {
+    static LCStreamASR *s;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        s = [[LCStreamASR alloc] init];
+        s->_buf = [NSMutableData data];
+        s->_frames = [NSMutableArray array];
+    });
+    return s;
+}
+
+- (BOOL)isActive { return _active; }
+
+- (NSURL *)lc_buildURL {
+    LCConfig *cfg = [LCConfig shared];
+    NSString *appid = [cfg asrAppId];
+    NSString *sid = [cfg tencentSecretId];
+    NSString *skey = [cfg tencentSecretKey];
+    if (appid.length == 0 || sid.length == 0 || skey.length == 0) {
+        LCLog("asr: ws missing appid/keys -> keep HTTP fallback");
+        return nil;
+    }
+    long long ts = (long long)[[NSDate date] timeIntervalSince1970];
+    NSString *engine = [cfg asrEngine];
+    NSDictionary *p = @{
+        @"secretid": sid,
+        @"timestamp": [NSString stringWithFormat:@"%lld", ts],
+        @"expired": [NSString stringWithFormat:@"%lld", ts + 3600],
+        @"nonce": [NSString stringWithFormat:@"%lld", ts % 10000000000LL],
+        @"engine_model_type": engine,
+        @"voice_format": @"1",
+        @"needvad": @"1",
+        @"vad_silence_time": @"800",
+        @"max_speak_time": @"15000",
+        @"filter_empty_result": @"1",
+        @"voice_id": [[NSUUID UUID] UUIDString],
+    };
+    NSArray *keys = [[p allKeys] sortedArrayUsingSelector:@selector(compare:)];
+    NSMutableString *plain = [NSMutableString stringWithFormat:@"asr.cloud.tencent.com/asr/v2/%@?", appid];
+    NSMutableString *query = [NSMutableString string];
+    for (NSUInteger i = 0; i < keys.count; i++) {
+        NSString *k = keys[i];
+        NSString *v = p[k];
+        if (i) { [plain appendString:@"&"]; [query appendString:@"&"]; }
+        [plain appendFormat:@"%@=%@", k, v];          // 签名原文用未编码值
+        [query appendFormat:@"%@=%@", k, LCPercentEncodeAll(v)];
+    }
+    NSString *sig = LCWsHmacSha1B64(plain, skey);
+    if (!sig) return nil;
+    NSString *url = [NSString stringWithFormat:
+        @"wss://asr.cloud.tencent.com/asr/v2/%@?%@&signature=%@",
+        appid, query, LCPercentEncodeAll(sig)];
+    LCLogF(@"asr: ws connecting engine=%@ appid=%@", engine, appid);
+    return [NSURL URLWithString:url];
+}
+
+- (void)start {
+    if (_active) return;
+    if (![[LCConfig shared] streamASREnabled]) {
+        LCLog("asr: ws disabled by config -> HTTP fallback");
+        return;
+    }
+    NSURL *url = [self lc_buildURL];
+    if (!url) return;
+    _active = YES;
+    _ready = NO;
+    _retryCount = 0;
+    _lastAudioAt = [[NSDate date] timeIntervalSince1970];
+    NSURLSessionConfiguration *c = [NSURLSessionConfiguration defaultSessionConfiguration];
+    c.connectionProxyDictionary = @{};   // 禁系统代理，直连（同 LCSessionDirect）
+    _session = [NSURLSession sessionWithConfiguration:c delegate:self delegateQueue:nil];
+    _task = [_session webSocketTaskWithURL:url];
+    [_task resume];
+    [self lc_pumpReceive];
+    [self lc_startKeepalive];
+}
+
+- (void)stop {
+    _active = NO;
+    _ready = NO;
+    if (_keepalive) { dispatch_source_cancel(_keepalive); _keepalive = nil; }
+    @synchronized(self) { [_frames removeAllObjects]; }
+    if (_task) {
+        NSURLSessionWebSocketTask *old = _task;
+        _task = nil;                       // 先置空，让旧 task 的关闭回调被忽略
+        [old cancelWithCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
+    }
+    [_session invalidateAndCancel];
+    _session = nil;
+}
+
+- (void)lc_pumpReceive {
+    NSURLSessionWebSocketTask *task = _task;
+    if (!task || !_active) return;
+    __weak typeof(self) weakSelf = self;
+    [task receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage *msg, NSError *err) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || !self->_active) return;
+        if (task != self->_task) return;   // 已被重连替换的旧 task，回调直接丢弃
+        if (err) {
+            LCLogF(@"asr: ws recv err %@", err);
+            [self lc_reconnect];
+            return;
+        }
+        if (msg.type == NSURLSessionWebSocketMessageTypeString && msg.string.length) {
+            [self lc_onText:msg.string];
+        }
+        [self lc_pumpReceive];
+    }];
+}
+
+- (void)lc_onText:(NSString *)s {
+    NSData *d = [s dataUsingEncoding:NSUTF8StringEncoding];
+    if (!d) return;
+    NSDictionary *j = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+    if (![j isKindOfClass:[NSDictionary class]]) return;
+    id codeObj = j[@"code"];
+    if (codeObj) {
+        NSInteger code = [codeObj integerValue];
+        if (code != 0) {
+            LCLogF(@"asr: ws code=%ld msg=%@", (long)code, j[@"message"]);
+            // 4002 签名/密钥、4003 服务未开通、4004 大模型计费未开：不要无限重连
+            if (code == 4002 || code == 4003 || code == 4004) {
+                LCLog("asr: ws fatal -> stop, HTTP fallback takes over");
+                [self stop];
+                return;
+            }
+            [self lc_reconnect];
+            return;
+        }
+        if (!_ready) {
+            _ready = YES;
+            _retryCount = 0;
+            LCLogF(@"asr: ws handshake ok voice_id=%@", j[@"voice_id"]);
+            [self lc_drain];
+        }
+    }
+    if ([j[@"final"] integerValue] == 1) {
+        LCLog("asr: ws final=1");
+    }
+    NSDictionary *r = j[@"result"];
+    if (![r isKindOfClass:[NSDictionary class]]) return;
+    NSInteger st = [r[@"slice_type"] integerValue];
+    NSString *txt = r[@"voice_text_str"];
+    if (txt.length == 0) return;
+    if (st == 1) {
+        // 中间结果会变化，只登记不刷屏（showBilingual=NO 时也不该闪英文）
+        [[LCSubtitleOverlay shared] showPartial:txt];
+        LCLogF(@"asr: ws partial [%@]", txt);
+    } else if (st == 2) {
+        LCLogF(@"asr: ws final sentence [%@]", txt);
+        [self lc_translateFinal:txt];
+    }
+}
+
+- (void)lc_translateFinal:(NSString *)text {
+    NSUInteger seq = [[LCSubtitleOverlay shared] showPending:text];
+    [[LCTranslator shared] translate:text completion:^(NSString *tr) {
+        if (tr.length) [[LCSubtitleOverlay shared] showPair:text translation:tr seq:seq];
+        else [[LCSubtitleOverlay shared] showFailed:text seq:seq];
+    }];
+}
+
+- (void)appendPCM16:(NSData *)pcm16 {
+    if (!_active || !pcm16.length) return;
+    _lastAudioAt = [[NSDate date] timeIntervalSince1970];
+    @synchronized(self) {
+        [_buf appendData:pcm16];
+        while (_buf.length >= 6400) {
+            NSData *frame = [_buf subdataWithRange:NSMakeRange(0, 6400)];
+            [_buf replaceBytesInRange:NSMakeRange(0, 6400) withBytes:NULL length:0];
+            if (_frames.count > 12) [_frames removeObjectAtIndex:0];  // 网络慢时丢最旧
+            [_frames addObject:frame];
+        }
+    }
+    [self lc_drain];
+}
+
+- (void)appendMonoFloat:(const float *)mono frames:(UInt32)frames rate:(double)rate {
+    // float 管线（非 YouTube 主路径）：增量最近邻重采样到 16k + 量化 SInt16，
+    // 再走同一条 PCM16 流式通道，保证不会同时跑 HTTP 产生双份字幕。
+    if (!_active || !mono || frames == 0) return;
+    double ratio = (rate > 0) ? rate / 16000.0 : 1.0;
+    if (ratio <= 0) ratio = 1.0;
+    UInt32 outN = (UInt32)(frames / ratio);
+    if (outN == 0) return;
+    NSMutableData *out = [NSMutableData dataWithLength:(NSUInteger)outN * sizeof(SInt16)];
+    SInt16 *dst = (SInt16 *)[out mutableBytes];
+    for (UInt32 i = 0; i < outN; i++) {
+        UInt32 src = (UInt32)(i * ratio);
+        if (src >= frames) src = frames - 1;
+        float v = mono[src];
+        if (v > 1.0f) v = 1.0f;
+        else if (v < -1.0f) v = -1.0f;
+        dst[i] = (SInt16)(v * 32767.0f);
+    }
+    [self appendPCM16:out];
+}
+
+- (void)lc_drain {
+    NSData *frame = nil;
+    @synchronized(self) {
+        if (_sending || !_ready || !_active || _frames.count == 0) return;
+        _sending = YES;
+        frame = _frames[0];
+        [_frames removeObjectAtIndex:0];
+    }
+    NSURLSessionWebSocketTask *task = _task;
+    if (!task) { @synchronized(self) { _sending = NO; } return; }
+    __weak typeof(self) weakSelf = self;
+    NSURLSessionWebSocketMessage *msg = [[NSURLSessionWebSocketMessage alloc] initWithData:frame];
+    [task sendMessage:msg completionHandler:^(NSError *err) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        @synchronized(self) { self->_sending = NO; }
+        if (err) { LCLogF(@"asr: ws send err %@", err); [self lc_reconnect]; return; }
+        self->_lastFrameAt = [[NSDate date] timeIntervalSince1970];
+        [self lc_drain];
+    }];
+}
+
+- (void)lc_startKeepalive {
+    if (_keepalive) dispatch_source_cancel(_keepalive);
+    dispatch_queue_t q = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    _keepalive = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, q);
+    dispatch_source_set_timer(_keepalive, dispatch_walltime(NULL, 0), 200 * NSEC_PER_MSEC, 50 * NSEC_PER_MSEC);
+    __weak typeof(self) weakSelf = self;
+    dispatch_source_set_event_handler(_keepalive, ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || !self->_active || !self->_ready) return;
+        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+        if (now - self->_lastAudioAt < 1.0) return;           // 有真实音频时不插静音
+        if (now - self->_lastAudioAt > 30.0) {                // 长时间无音频，主动断开省计费
+            LCLog("asr: ws idle 30s -> disconnect");
+            [self stop];
+            return;
+        }
+        NSMutableData *silence = [NSMutableData dataWithLength:6400];  // 全 0 静音帧
+        @synchronized(self) {
+            if (self->_frames.count > 12) [self->_frames removeObjectAtIndex:0];
+            [self->_frames addObject:silence];
+        }
+        [self lc_drain];
+    });
+    dispatch_resume(_keepalive);
+}
+
+- (void)lc_reconnect {
+    if (!_active) return;
+    _retryCount++;
+    if (_retryCount > 5) {
+        LCLog("asr: ws retry exhausted -> stop, HTTP fallback takes over");
+        [self stop];
+        return;
+    }
+    LCLogF(@"asr: ws reconnect #%ld", (long)_retryCount);
+    _ready = NO;
+    @synchronized(self) { [_frames removeAllObjects]; }
+    if (_task) {
+        NSURLSessionWebSocketTask *old = _task;
+        _task = nil;
+        [old cancelWithCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
+    }
+    NSURL *url = [self lc_buildURL];   // 必须换新的 voice_id / timestamp
+    if (!url) { [self stop]; return; }
+    _task = [_session webSocketTaskWithURL:url];
+    [_task resume];
+    [self lc_pumpReceive];
+}
+
+- (void)URLSession:(NSURLSession *)session webSocketTask:(NSURLSessionWebSocketTask *)task
+    didOpenWithProtocol:(NSString *)protocol {
+    LCLogF(@"asr: ws opened protocol=%@", protocol ?: @"(none)");
+}
+
+- (void)URLSession:(NSURLSession *)session webSocketTask:(NSURLSessionWebSocketTask *)task
+    didCloseWithCode:(NSURLSessionWebSocketCloseCode)code reason:(NSData *)reason {
+    LCLogF(@"asr: ws closed code=%ld", (long)code);
+    // 只处理当前 task：重连时 cancel 掉的旧 task 也会触发本回调，
+    // 不忽略会形成「cancel → didClose → reconnect → cancel」死循环。
+    if (_active && task == _task) [self lc_reconnect];
+}
+
+@end
+
 #pragma mark - LCHttpASR
 
 @interface LCHttpASR : NSObject
@@ -1482,6 +1871,9 @@ static BOOL gProcessingFormatValid = NO;
     _running = YES;
     LCLogF(@"asr: tencent online ASR started (sr=%g ch=%u)", _inRate,
            (unsigned)asbd.mChannelsPerFrame);
+    // v2.1.0：启动流式 WebSocket。失败时 LCStreamASR 会自行 stop，
+    // 三条音频入口检测到 !isActive 会自动回落旧的 HTTP 分片链路。
+    [[LCStreamASR shared] start];
 }
 
 #pragma mark - v1.0.87：失败恢复策略（AAC / 直连 / 分片）
@@ -1592,6 +1984,13 @@ static BOOL gProcessingFormatValid = NO;
                     if (n) acc /= n;
                 }
                 tmp[i] = acc;
+            }
+            // v2.1.0：流式模式下直接推 WebSocket，不再攒分片，也不发 HTTP，
+            // 避免两条链路同时识别造成双份字幕。
+            if ([[LCStreamASR shared] isActive]) {
+                [[LCStreamASR shared] appendMonoFloat:tmp frames:frames rate:_inRate];
+                free(tmp);
+                return;
             }
             [_pcm appendBytes:tmp length:frames * sizeof(float)];
             free(tmp);
@@ -1848,6 +2247,7 @@ static BOOL gProcessingFormatValid = NO;
     LC_ASR_DONE();
     [_pcm setLength:0];
     [_pcm16 setLength:0];
+    [[LCStreamASR shared] stop];
 }
 
 // ===== AVSampleBuffer 管线（YouTube 自研播放器）输入 =====
@@ -1857,6 +2257,10 @@ static BOOL gProcessingFormatValid = NO;
     if (!_running) return;
     if (![[LCConfig shared] enabled]) return;
     if (!mono || frames == 0) return;
+    if ([[LCStreamASR shared] isActive]) {
+        [[LCStreamASR shared] appendMonoFloat:mono frames:frames rate:_inRate];
+        return;
+    }
     @autoreleasepool {
         [_pcm appendBytes:mono length:frames * sizeof(float)];
         // v1.0.84：分片时长与 appendBufferList: 保持一致（可配置，默认 1.5 秒（v2.0.2，设置面板可调））。
@@ -1881,6 +2285,12 @@ static BOOL gProcessingFormatValid = NO;
     if (!_running) return;
     if (![[LCConfig shared] enabled]) return;
     if (!pcm16 || pcm16.length == 0) return;
+    // v2.1.0 主路径：YouTube 自研播放器给的已经是 16k/16bit/mono PCM，
+    // 直接切成 200ms 帧推流，零重采样、零编码、零 Base64。
+    if ([[LCStreamASR shared] isActive]) {
+        [[LCStreamASR shared] appendPCM16:pcm16];
+        return;
+    }
     @autoreleasepool {
         [_pcm16 appendData:pcm16];
         // v1.0.85：修掉写死的 5 秒分片（v1.0.84 只改了 float 路径，漏了这里）。
