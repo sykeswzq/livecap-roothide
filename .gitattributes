@@ -2,3 +2,10 @@
 *.sh eol=lf
 postinst eol=lf
 postrm eol=lf
+
+# Windows 上用 Python 临时改写源码做「双向验证」后，默认文本写回会把
+# 整份文件变成 CRLF，造成 git diff 全文件重写、并可能让 macOS CI 出问题。
+*.m eol=lf
+*.h eol=lf
+*.py eol=lf
+*.plist eol=lf
