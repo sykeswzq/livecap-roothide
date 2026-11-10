@@ -585,8 +585,13 @@ static NSString *LCJBRootPath(NSString *path) {
     return 0.35;
 }
 
-// v2.0.0：asrChunkSeconds 硬编码为常量，不再从 plist 读取
-#define LC_ASR_CHUNK_SECONDS 2.5
+// v2.0.2：分片时长可在设置面板调节（键 asrChunkSeconds），默认 1.5 秒。
+// 依据（2026-11-10 设备实测，v2.0.1，29 句样本）：
+//   端到端 4.4s = 攒音 1.3s + 腾讯云 ASR 2.0s(p90 4.8s) + 翻译 1.2s。
+//   v2.0.1 已修好串行队列，翻译不再是瓶颈；缩短分片可同时减少
+//   「攒音等待」和「ASR 按音频时长计费的处理耗时」，是双重收益。
+// 真实取值由 LCHttpASR 的 -lc_chunkSeconds 提供（带 2 秒缓存，避免音频回调高频读盘）。
+#define LC_ASR_CHUNK_DEFAULT 1.5
 
 // v1.0.83：统一的配置写回通道。
 // 背景：面板用 CFPreferences 写、tweak 用文件直写，两套机制竞争同一个
@@ -674,6 +679,8 @@ static NSString *LCJBRootPath(NSString *path) {
     NSMutableArray *_pendingItems;   // 每项 = @{@"text": NSString, @"comp": block}
     BOOL _inflight;
     BOOL _tencentDisabled;   // 腾讯云机器翻译服务未开通时，本次会话内跳过
+    // v2.0.2：agnes 免费额度限流后的暂停截止时间戳（0 = 正常参赛）
+    NSTimeInterval _agnesPausedUntil;
 }
 
 + (instancetype)shared {
@@ -854,11 +861,19 @@ static NSString *LCJBRootPath(NSString *path) {
     NSString *model = [[LCConfig shared] model];
 
     // 参赛厂商
+    // v2.0.2：agnes 免费额度报「速率限制」后暂停 90 秒，不再发无效请求。
+    // 设备实测 22 次 provider 失败几乎全是这个错误：白跑一个 HTTPS 请求，
+    // 还会和 ASR 抢上行带宽（ASR p90 高达 4.8s）。MyMemory 始终是兜底。
     NSMutableArray *providers = [NSMutableArray array];
-    if (apiKey.length && apiBase.length) [providers addObject:@"agnes"];
-    [providers addObject:@"mymemory"];               // 永远保留的免费兜底
     BOOL tencentDisabled = NO;
-    @synchronized(self) { tencentDisabled = _tencentDisabled; }
+    BOOL agnesPaused = NO;
+    @synchronized(self) {
+        tencentDisabled = _tencentDisabled;
+        agnesPaused = (_agnesPausedUntil > 0 &&
+                       [NSDate timeIntervalSinceReferenceDate] < _agnesPausedUntil);
+    }
+    if (apiKey.length && apiBase.length && !agnesPaused) [providers addObject:@"agnes"];
+    [providers addObject:@"mymemory"];               // 永远保留的免费兜底
     NSString *secretId = [[LCConfig shared] tencentSecretId];
     NSString *secretKey = [[LCConfig shared] tencentSecretKey];
     if (!tencentDisabled && secretId.length && secretKey.length) [providers addObject:@"tencent"];
@@ -1179,6 +1194,19 @@ static NSString *LCTmtLang(NSString *lcLang) {
     LCLogF(@"translate: openai request url=%@ model=%@ attempt=%ld", chatUrl, trimmedModel, (long)attempt);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
+        // v2.0.2：网关限流识别。agnes 免费额度限流返回的是 HTTP 200 +
+        // {"error":{"message":"...速率限制..."}}，不是 429，所以状态码和响应体都要判。
+        // 命中后暂停 90 秒参赛，到期自动恢复；只针对 agnes 域名，不误伤自建 API。
+        BOOL isAgnes = ([apiBase rangeOfString:@"agnes"
+                                      options:NSCaseInsensitiveSearch].location != NSNotFound);
+        NSInteger status = [resp isKindOfClass:[NSHTTPURLResponse class]]
+            ? [(NSHTTPURLResponse *)resp statusCode] : 0;
+        if (isAgnes && (status == 429 || status == 403)) {
+            @synchronized(self) {
+                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 90.0;
+            }
+            LCLogF(@"translate: agnes http %ld -> pause 90s", (long)status);
+        }
         if (taskErr) {
             LCLogF(@"translate: openai req err %@ url=%@ attempt=%ld", taskErr, chatUrl, (long)attempt);
             // 网络类错误（超时/连接中断）→ 退避后重试同一 provider
@@ -1231,6 +1259,18 @@ static NSString *LCTmtLang(NSString *lcLang) {
                     LCLogF(@"translate: content len=%lu bytes=[%.*s]", (unsigned long)c.length, (int)MIN(100, c.length), [c UTF8String]);
                 }
             }
+        }
+        // v2.0.2：HTTP 200 但响应体是 {"error":{...}} 的限流场景
+        NSDictionary *gwErr = [json isKindOfClass:[NSDictionary class]] ? json[@"error"] : nil;
+        NSString *gwMsg = [gwErr isKindOfClass:[NSDictionary class]] ? gwErr[@"message"] : nil;
+        if (isAgnes && [gwMsg isKindOfClass:[NSString class]] &&
+            ([gwMsg rangeOfString:@"速率限制"].location != NSNotFound ||
+             [gwMsg rangeOfString:@"Token Plan"].location != NSNotFound ||
+             [gwMsg rangeOfString:@"rate" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+            @synchronized(self) {
+                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 90.0;
+            }
+            LCLogF(@"translate: agnes rate-limited -> pause 90s");
         }
         NSArray *choices = json[@"choices"];
         if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {
@@ -1388,6 +1428,29 @@ static BOOL gProcessingFormatValid = NO;
     NSTimeInterval _directRetryAfter;   // 直连冷却截止时间戳（0 = 可直连）
     NSInteger _aacFailCount;            // AAC 连续失败次数
     NSTimeInterval _aacRetryAfter;      // AAC 冷却截止时间戳（0 = 可用 AAC）
+    // v2.0.2：分片时长可在面板实时修改，这里缓存 2 秒，避免每次音频回调读盘
+    double _chunkSecs;
+    NSTimeInterval _chunkCheckAt;
+}
+
+// v2.0.2：读取 asrChunkSeconds，钳制到 [1.0, 3.0]，默认 1.5 秒。
+// 面板用 LCSet 写盘 + CFPreferencesAppSynchronize，这里直接读文件，
+// 两边不打架；读不到文件（沙盒/roothide 路径异常）时用默认值兜底。
+- (double)lc_chunkSeconds {
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    @synchronized(self) {
+        if (_chunkSecs > 0 && (now - _chunkCheckAt) < 2.0) return _chunkSecs;
+        _chunkCheckAt = now;
+        double v = LC_ASR_CHUNK_DEFAULT;
+        NSString *p = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+        NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:p];
+        id raw = d[@"asrChunkSeconds"];
+        if ([raw isKindOfClass:[NSNumber class]]) v = [(NSNumber *)raw doubleValue];
+        else if ([raw isKindOfClass:[NSString class]]) v = [(NSString *)raw doubleValue];
+        if (v < 1.0 || v > 3.0) v = LC_ASR_CHUNK_DEFAULT;
+        _chunkSecs = v;
+        return v;
+    }
 }
 
 + (instancetype)shared {
@@ -1533,13 +1596,13 @@ static BOOL gProcessingFormatValid = NO;
             [_pcm appendBytes:tmp length:frames * sizeof(float)];
             free(tmp);
 
-            // v1.0.84：分片时长从固定 5 秒改为可配置，默认 2.5 秒。
+            // v1.0.84：分片时长从固定 5 秒改为可配置，默认 1.5 秒（v2.0.2，设置面板可调）。
             // 依据（设备日志实证）：ASR RTT ≈ 音频时长 × 1.1
             //   5.11s 音频 → RTT 5.6s；7.20s 音频 → RTT 10s
             // 分片减半 → RTT 近似减半 → 字幕延迟从 ~6s 降到 ~3s。
             // 代价：句子被切碎的概率上升。为补偿，保留 overlap 重叠区
             // （下一段开头复用上一段末尾的音频），避免词被切断。
-            double chunkSecs = LC_ASR_CHUNK_SECONDS;
+            double chunkSecs = [self lc_chunkSeconds];
             double secs = (double)_pcm.length / sizeof(float) / _inRate;
             if (secs >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
                 NSData *chunk = [_pcm copy];
@@ -1558,7 +1621,9 @@ static BOOL gProcessingFormatValid = NO;
 }
 
 - (void)processChunk:(NSData *)floatMono {
-    if (!floatMono || floatMono.length < sizeof(float) * 1600) return;  // <0.1s 丢弃
+    // v2.0.2：分片缩到 1.5s 后，并发槽满 trim 出的残片可能很短，
+    // 送上去只会得到半截词（设备日志已出现 "your per" 这种），直接丢弃。
+    if (!floatMono || floatMono.length < sizeof(float) * 8000) return;  // <0.5s @16k 丢弃
     _inFlightCount++;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @autoreleasepool {
@@ -1794,10 +1859,10 @@ static BOOL gProcessingFormatValid = NO;
     if (!mono || frames == 0) return;
     @autoreleasepool {
         [_pcm appendBytes:mono length:frames * sizeof(float)];
-        // v1.0.84：分片时长与 appendBufferList: 保持一致（可配置，默认 2.5 秒）。
+        // v1.0.84：分片时长与 appendBufferList: 保持一致（可配置，默认 1.5 秒（v2.0.2，设置面板可调））。
         // 依据（设备日志实证）：ASR RTT ≈ 音频时长 × 1.1，
         // 分片越长延迟越大；5 秒分片 → RTT 5.6s，2.5 秒分片 → RTT 约 2.8s。
-        double chunkSecs = LC_ASR_CHUNK_SECONDS;
+        double chunkSecs = [self lc_chunkSeconds];
         double secs = (double)_pcm.length / sizeof(float) / _inRate;
         if (secs >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
             NSData *chunk = [_pcm copy];
@@ -1819,8 +1884,8 @@ static BOOL gProcessingFormatValid = NO;
     @autoreleasepool {
         [_pcm16 appendData:pcm16];
         // v1.0.85：修掉写死的 5 秒分片（v1.0.84 只改了 float 路径，漏了这里）。
-        // 统一使用 asrChunkSeconds 配置，默认 2.5 秒。
-        double chunkSecs = LC_ASR_CHUNK_SECONDS;
+        // 统一使用 asrChunkSeconds 配置，默认 1.5 秒（v2.0.2，设置面板可调）。
+        double chunkSecs = [self lc_chunkSeconds];
         double secs16 = (double)_pcm16.length / 2.0 / 16000.0;
         if (secs16 >= chunkSecs && (_inFlightCount < LC_ASR_MAX_CONCURRENCY)) {
             NSData *chunk = [_pcm16 copy];
@@ -1835,7 +1900,12 @@ static BOOL gProcessingFormatValid = NO;
 }
 
 - (void)processChunk16:(NSData *)pcm16 {
-    if (!pcm16 || pcm16.length < 1600) return;
+    // v2.0.2：16k/16bit/mono = 32000 B/s，正常 1.5s 分片 = 48000 B。
+    // 不足 0.7s（22400 B）的残片识别出来多半是半截词，丢弃不发 ASR。
+    if (!pcm16 || pcm16.length < 22400) {
+        LCLogF(@"asr: skip short chunk len=%lu", (unsigned long)pcm16.length);
+        return;
+    }
     _inFlightCount++;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @autoreleasepool {

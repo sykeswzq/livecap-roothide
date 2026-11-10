@@ -635,27 +635,31 @@ def check_v84_fixes(src, panel_src=None):
     # 否则注释里的关键词会让检查项形同虚设（双向验证已实测过这个坑）。
     code = _strip_comments_strings(src)
 
-    # ---- 1) 分片时长在 v2.0.0 起硬编码为 LC_ASR_CHUNK_SECONDS，不再从 plist 读取 ----
-    # v2.0.0: #define LC_ASR_CHUNK_SECONDS 2.5 （注意 #define 语法不含 '='）
-    if re.search(r"#define\s+LC_ASR_CHUNK_SECONDS\s+2\.5", code):
-        pass  # OK: v2.0.0 硬编码正确值
-    elif "asrChunkSeconds" in code:
-        errors.append("v1.0.84 回归: asrChunkSeconds 应从代码移出 —— "
-                      "v2.0.0 已改为 LC_ASR_CHUNK_SECONDS=2.5 常量，不应再从 plist 读取")
-    else:
-        errors.append("v1.0.84 回归: 缺少 LC_ASR_CHUNK_SECONDS 常量 —— "
-                      "ASR 分片时长必须通过统一常量控制（默认 2.5s）")
+    # ---- 1) v2.0.2 起：分片时长统一由 -lc_chunkSeconds 提供 ----
+    # 默认 1.5 秒（2026-11-10 设备实测：2.5 秒分片端到端 4.4s），
+    # 设置面板可改 plist 的 asrChunkSeconds；三条音频入口必须都走同一个取值。
+    # 防回归意图与 v1.0.84 一致：不许退回固定 5 秒长分片（RTT 随音频时长线性变慢），
+    # 也不许把阈值写死散落在各路径。
+    m_default = re.search(r"#define\s+LC_ASR_CHUNK_DEFAULT\s+([0-9]+\.?[0-9]*)", code)
+    if not m_default:
+        errors.append("v2.0.2 回归: 缺少 LC_ASR_CHUNK_DEFAULT —— "
+                      "分片默认值必须由统一常量给出（lc_chunkSeconds 依赖它）")
+    elif not (1.0 <= float(m_default.group(1)) <= 2.0):
+        errors.append("v2.0.2 回归: LC_ASR_CHUNK_DEFAULT=%s 秒超出 [1.0,2.0] —— "
+                      "长分片会让 ASR RTT 线性变慢（lc_chunkSeconds）" % m_default.group(1))
+    if not re.search(r"-\s*\(double\)\s*lc_chunkSeconds", code):
+        errors.append("v2.0.2 回归: 缺少 -lc_chunkSeconds 统一取值方法 —— "
+                      "分片时长不得散落在各音频入口")
 
-    # 两条音频入口路径都必须是 secs >= LC_ASR_CHUNK_SECONDS（不得有写死的阈值）
+    # 两条音频入口路径不得写死 secs >= 数字
     for mm in re.finditer(r"secs\s*>=\s*([0-9]+\.?[0-9]*)", code):
         errors.append("v1.0.84 回归 行%d: 分片阈值仍写死 %s 秒 —— "
-                      "必须改用 LC_ASR_CHUNK_SECONDS 常量"
+                      "必须改用 lc_chunkSeconds 统一取值"
                       % (code[:mm.start()].count("\n") + 1, mm.group(1)))
-    # 确认两处路径都用了常量
-    chunk_ref_count = len(re.findall(r"LC_ASR_CHUNK_SECONDS", code))
+    chunk_ref_count = len(re.findall(r"\[self\s+lc_chunkSeconds\]", code))
     if chunk_ref_count < 2:
-        errors.append("v1.0.84 回归: LC_ASR_CHUNK_SECONDS 引用只有 %d 处（需 ≥2）—— "
-                      "appendBufferList / processChunk 两条路径都要用到" % chunk_ref_count)
+        errors.append("v1.0.84 回归: lc_chunkSeconds 引用只有 %d 处（需 ≥2）—— "
+                      "appendBufferList / appendMonoFloat / appendPCM16 都要用到" % chunk_ref_count)
 
     # ---- 2) 毫秒级 RTT 打点 ----
     # 注意：RTT 打点写在日志格式串里，_strip_comments_strings 会连字符串字面量一起剥掉，

@@ -4,7 +4,7 @@
 
 变更说明：
   v2.0.0 把字号调节从主面板内联 UISlider 改成了独立的 LCFontSizeController 页，
-  asrChunkSeconds 也从 plist 读取改成了代码常量 LC_ASR_CHUNK_SECONDS = 2.5。
+  v2.0.2 起分片时长改为 -lc_chunkSeconds 统一取值（LC_ASR_CHUNK_DEFAULT=1.5，面板可调）。
   本脚本只跑 B 组回归拦截 + C 组反向断言，不跑 A 组（verify_source_safety.py 单独覆盖）。
 """
 import io

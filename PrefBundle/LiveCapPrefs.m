@@ -233,7 +233,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0)
-        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。";
+        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。分片越短字幕越快，但长句可能被切断；改动最多 2 秒后生效。";
     if (section == 1)
         return @"使用 OpenAI 兼容的翻译 API，默认使用 agnes-2.5-flash。";
     if (section == 2)
@@ -244,7 +244,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) return 2;
+    if (section == 0) return 3;
     if (section == 1) return 3;
     if (section == 2) return 4;
     if (section == 3) return 1;
@@ -267,10 +267,16 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             [sw addTarget:self action:@selector(lc_enabledChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        } else {
+        } else if (indexPath.row == 1) {
             cell.textLabel.text = @"选择注入 App";
             NSUInteger n = [LCReallyInjectedIDs() count];
             cell.detailTextLabel.text = [NSString stringWithFormat:@"已注入 %lu 个", (unsigned long)n];
+            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        } else {
+            cell.textLabel.text = @"识别分片时长";
+            double secs = LCGetNum(@"asrChunkSeconds", 1.5);
+            if (secs < 1.0 || secs > 3.0) secs = 1.5;
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"%.1f 秒", secs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         }
     }
@@ -338,6 +344,23 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
                 [self presentViewController:nav animated:YES completion:nil];
             }
         } @catch (NSException *e) {}
+    }
+    else if (indexPath.section == 0 && indexPath.row == 2) {
+        UIAlertController *alert = [UIAlertController
+            alertControllerWithTitle:@"识别分片时长"
+                           message:@"越短越跟嘴、延迟越低；越长句子越完整。改动最多 2 秒后生效。"
+                    preferredStyle:UIAlertControllerStyleActionSheet];
+        NSArray *vals = @[@1.0, @1.2, @1.5, @2.0, @2.5];
+        for (NSNumber *n in vals) {
+            NSString *title = [NSString stringWithFormat:@"%.1f 秒%@", [n doubleValue],
+                               ([n doubleValue] == 1.5) ? @"（推荐）" : @""];
+            [alert addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                LCSet(n, @"asrChunkSeconds");
+                [self.lc_tv reloadData];
+            }]];
+        }
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 1 && indexPath.row == 0) {
         NSString *current = LCStr(@"apiBase", @"https://apihub.agnes-ai.cn/v1");
