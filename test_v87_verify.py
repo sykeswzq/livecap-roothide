@@ -1,26 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""v1.0.87 双向验证。
+"""v2.0.0 双向验证（对应 v1.0.87 检查项）。
 
-用户反馈：「好像还是有延迟，然后字体要在UI里面可以设置大小」
-
-必须满足：
-  A. 修复版（当前源码）全部检查项通过
-  B. 注入每个历史 bug 后，必须被【准确】拦在对应检查项上
-  C. 合法写法不得误报
-
-B 组是重点 —— v1.0.86 的 mediaserverd 事故说明：
-「检查脚本看起来在跑」不等于「真能拦住」，
-必须有「把 bug 放回去，看它是否被抓到」的闭环。
-本轮同样适用：v1.0.87 修了「一次失败即永久禁用」这个老设计，
-如果反向断言写得不准，改回去就没人拦得住。
+变更说明：
+  v2.0.0 把字号调节从主面板内联 UISlider 改成了独立的 LCFontSizeController 页，
+  asrChunkSeconds 也从 plist 读取改成了代码常量 LC_ASR_CHUNK_SECONDS = 2.5。
+  本脚本只跑 B 组回归拦截 + C 组反向断言，不跑 A 组（verify_source_safety.py 单独覆盖）。
 """
 import io
 import os
 import re
-import shutil
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -70,7 +60,6 @@ print("B. 回归：注入历史 bug 必须被准确拦截")
 print("=" * 70)
 
 # ---- B1: 裸 AAC 编码器复活（v1.0.85 的原始 bug）----
-# 腾讯云拒收无 ADTS 头的 AAC → 压缩完全失效 → 退回 82KB WAV → 延迟反弹
 bad = mutate(
     BASE_SRC,
     "static NSData *LCAACEncodeADTSFramed(NSData *pcm16) {",
@@ -195,21 +184,23 @@ print("  [B8] 字号变了但不重绘 -> %s"
 if not hit:
     sys.exit(1)
 
-# ---- B9: 面板退回数字键盘（没有滑块）----
+# ---- B9: LCFontSizeController 缺少 UISlider ----
+# v2.0.0：滑块在独立的 LCFontSizeController 里，不在主面板
 bad_panel = BASE_PANEL.replace("UISlider", "ZzSlider")
 assert bad_panel != BASE_PANEL
 errs = run_check(BASE_SRC, bad_panel)
 hit = [e for e in errs if "滑块" in e]
-print("  [B9] 面板没有字号滑块 -> %s"
+print("  [B9] LCFontSizeController 没有字号滑块 -> %s"
       % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
 if not hit:
     sys.exit(1)
 
 # ---- B9b: 滑块存在但不绑定回调（拖了没反应）----
+# 变异 LCFontSizeController 内部的 addTarget 回调
 bad_panel = mutate(
     BASE_PANEL,
-    "                action:@selector(lc_sliderChanged:)",
-    "                action:@selector(lc_nothingHappened:)",
+    "    [_slider addTarget:self action:@selector(lc_sliderChanged:) forControlEvents:UIControlEventValueChanged];",
+    "    [_slider addTarget:self action:@selector(lc_nothingHappened:) forControlEvents:UIControlEventValueChanged];",
     "B9b-panel")
 errs = run_check(BASE_SRC, bad_panel)
 hit = [e for e in errs if "lc_sliderChanged" in e]
@@ -218,28 +209,29 @@ print("  [B9b] 滑块没绑回调 -> %s"
 if not hit:
     sys.exit(1)
 
-# ---- B10: 面板退回 [(NSNumber *)LCGet(...)] 强转 ----
-bad_panel = mutate(
-    BASE_PANEL,
-    '            CGFloat fs = LCGetNum(@"fontSize", 16.0);',
-    '            CGFloat fs = [(NSNumber *)LCGet(@"fontSize") doubleValue];',
-    "B10-panel")
+# ---- B10: LCFontSizeController 退回 [(NSNumber *)LCGet(...)] 强转 ----
+_bad = BASE_PANEL.split("@implementation LCFontSizeController")
+assert len(_bad) == 2, "找不到 LCFontSizeController @implementation"
+_lc_impl = "@implementation LCFontSizeController" + _bad[1]
+target = '    CGFloat fs = LCGetNum(@"fontSize", 16.0);'
+if target not in _lc_impl:
+    raise AssertionError("LCFontSizeController 内未找到 fontSize=16.0 赋值")
+# 只替换第一处（viewDidLoad 里的读取）
+_replaced_impl = _lc_impl.replace(target, '    CGFloat fs = [(NSNumber *)LCGet(@"fontSize") doubleValue];', 1)
+bad_panel = _bad[0] + _replaced_impl
 errs = run_check(BASE_SRC, bad_panel)
 hit = [e for e in errs if "强转" in e]
-print("  [B10] 面板强转 NSNumber 读字号 -> %s"
+print("  [B10] LCFontSizeController 强转 NSNumber 读字号 -> %s"
       % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
 if not hit:
     sys.exit(1)
 
-# ---- B11: 面板默认值又变回 28（与 tweak 的 16 不一致）----
-bad_panel = mutate(
-    BASE_PANEL,
-    '            CGFloat fs = LCGetNum(@"fontSize", 16.0);',
-    '            CGFloat fs = LCGetNum(@"fontSize", 28.0);',
-    "B11-panel")
+# ---- B11: LCFontSizeController 默认值又变回 28 ----
+_replaced_impl2 = _lc_impl.replace(target, '    CGFloat fs = LCGetNum(@"fontSize", 28.0);', 1)
+bad_panel = _bad[0] + _replaced_impl2
 errs = run_check(BASE_SRC, bad_panel)
 hit = [e for e in errs if "默认值" in e]
-print("  [B11] 面板字号默认值回到 28 -> %s"
+print("  [B11] LCFontSizeController 字号默认值回到 28 -> %s"
       % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
 if not hit:
     sys.exit(1)
@@ -262,20 +254,32 @@ print("  [B12] 在 LCLogF 定义之前调用它 -> %s"
 if not hit:
     sys.exit(1)
 
-# ---- B13: 字号选择器只剩前向声明（CI 第二次构建失败的根因）----
-# 模拟：把 @interface/@implementation 整块删掉，只留 @class 前向声明，
-#       此时 [[LCFontSizeController alloc] 会报
-#       "receiver for class message is a forward declaration"。
-bad_panel = BASE_PANEL
-_i = bad_panel.find('#pragma mark - v1.0.87\\uff1a\\u5b57\\u5e55\\u5b57\\u53f7\\u9009\\u62e9\\u5668\\uff08\\u6ed1\\u5757 + \\u5b9e\\u65f6\\u9884\\u89c8\\uff09')
-_j = bad_panel.find('@interface LCRootListController : PSViewController')
+# ---- B13: LCFontSizeController 只剩前向声明（CI 第二次构建失败根因）----
+# 模拟：把 @interface/@implementation 整块替换为 @class 前向声明
+_i = BASE_PANEL.find("@interface LCFontSizeController")
+_j = BASE_PANEL.find("@end\n", _i)
 assert _i > 0 and _j > _i
-bad_panel = (bad_panel[:_i]
-             + "@class LCFontSizeController;\n\n"
-             + bad_panel[_j:])
+bad_panel = (BASE_PANEL[:_i]
+             + "@class LCFontSizeController;\n"
+             + BASE_PANEL[_j:])
 errs = run_check(BASE_SRC, bad_panel)
 hit = [e for e in errs if "forward declaration" in e or "LCFontSizeController" in e]
-print("  [B13] 字号选择器只剩前向声明 -> %s"
+print("  [B13] LCFontSizeController 只剩前向声明 -> %s"
+      % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
+if not hit:
+    sys.exit(1)
+
+# ---- B14: LCFontSizeController 缺少完整实现（只有 interface 没有 implementation）----
+_i_impl = BASE_PANEL.find("@implementation LCFontSizeController")
+assert _i_impl > 0
+_j_impl = BASE_PANEL.find("\n@end\n", _i_impl)
+bad_panel = (BASE_PANEL[:_i_impl]
+             + "// @implementation removed\n"
+             + BASE_PANEL[_j_impl+1:])
+errs = run_check(BASE_SRC, bad_panel)
+# 应至少被某条检查拦（LCFontSizeController 缺失或 incomplete）
+hit = any("LCFontSizeController" in e or "implement" in e.lower() for e in errs)
+print("  [B14] LCFontSizeController 只有接口没有实现 -> %s"
       % ("拦截 ✅" if hit else "❌ 没拦住！ (%s)" % errs[:1]))
 if not hit:
     sys.exit(1)
@@ -299,16 +303,6 @@ if errs:
     print("  [FAIL] 注释里提及旧标识符被误报：%s" % errs[0])
     sys.exit(1)
 print("  [PASS] 注释里提及旧标识符不误报")
-
-# 面板注释里举的「错误写法」例子不得误报
-t = BASE_PANEL.replace(
-    '// 面板却用 [(NSNumber *)LCGet(@"fontSize") doubleValue] 强转 —— 类型不匹配，',
-    '// 面板却用 NSNumber 强转读值 —— 类型不匹配，')
-errs = run_check(BASE_SRC, t)
-if errs:
-    print("  [FAIL] 面板注释里的示例被误报：%s" % errs[0])
-    sys.exit(1)
-print("  [PASS] 面板注释里的示例不误报")
 
 print("")
 print("=" * 70)

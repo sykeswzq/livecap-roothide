@@ -101,9 +101,10 @@ if not hit:
     sys.exit(1)
 
 # ---- B2: postinst 又去杀 mediaserverd ----
+# v2.0.0 postinst 已经没有旧的注释行，改在 killall runningboardd 之后插一行
 bad_post = BASE_POST.replace(
-    'echo "skip mediaserverd restart (not injected since v1.0.86)" >> "$LOG"',
-    'killall mediaserverd 2>/dev/null || true')
+    'killall runningboardd 2>/dev/null || true',
+    'killall runningboardd 2>/dev/null || true\nkillall mediaserverd 2>/dev/null || true')
 errs = run_check(BASE_SRC, BASE_PLIST, bad_post)
 hit = [e for e in errs if "mediaserverd" in e and "postinst" in e]
 print("  [B2] postinst 恢复 killall mediaserverd -> %s"
