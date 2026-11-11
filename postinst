@@ -74,6 +74,15 @@ else
   echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
 fi
 
+# v2.2.4：注入系统读取的 Filter 目录必须让 mobile 可写。
+# 已注入 App 内的 dylib 以 mobile 身份运行，写 Filter 用的是
+# writeToFile:atomically:YES —— 原子写入会在该目录创建临时文件，需要目录写权限；
+# 目录若是 755 root，mobile 创建临时文件会被拒绝（"filter sync: write failed"）。
+# 把目录改成 777 后，dylib 才能成功改写 Bundles（勾选/取消勾选才会真正生效）。
+# 注意：这是 jbroot 内的私有 tweak 目录，777 仅放开同机 app 对其的写权限，可接受。
+chmod 777 "$DYLIB_PATH" 2>/dev/null && echo "chmod dynlib dir 777 OK" >> "$LOG" \
+  || echo "WARN: chmod dynlib dir 777 failed" >> "$LOG"
+
 # v2.2.2：Filter 必须是 666，由「已注入 App 内的 dylib」（mobile 身份）改写 Bundles。
 # roothide 下 /var/jb 在「设置」面板（未注入）进程里是影子视图、写会被沙盒拒绝，
 # 只有 libroothide 注入后的 App 才能写到真实的 .jbroot 目录。

@@ -1290,6 +1290,12 @@ def check_v221_fixes(src, applist_src, postinst_src):
             errors.append("v2.2.1 回归: postinst 缺少相对安装路径的 Filter 权限修复")
         if "chmod 666" not in postinst_src:
             errors.append("v2.2.1 回归: Filter 未开放 666，dylib 无法改写 Bundles")
+        # v2.2.4：DynamicLibraries 目录必须 777，否则 dylib（mobile 身份）的
+        # 原子写入会在该目录创建临时文件失败（"filter sync: write failed"）。
+        if "chmod 777" not in postinst_src:
+            errors.append("v2.2.4 回归: postinst 未把 DynamicLibraries 目录改成 777 —— "
+                          "dylib 原子写 Filter 需目录写权限，目录 755 root 会导致 "
+                          "mobile 写不进去（filter sync: write failed）")
 
 
 def main():
@@ -1360,6 +1366,7 @@ def main():
     print("  OK: v2.1.1 修复在位（RFC3986编码/中间结果兜底翻译/握手与零产出看门狗/流式开关）")
     print("  OK: v2.2.0 修复在位（整句断句/忠实直译/时序对账/队列与回落排序）")
     print("  OK: v2.2.1/2.2.2 注入修复在位（偏好存勾选/dylib 代写 Filter/不拦hook/Filter 666/幂等刷新）")
+    print("  OK: v2.2.4 注入修复在位（DynamicLibraries 目录 777，dylib 原子写 Filter 不再失败）")
     return 0
 
 
