@@ -1318,6 +1318,28 @@ def check_v221_fixes(src, applist_src, postinst_src):
         if "st == 1 || st == 0" not in src:
             errors.append("v2.2.6 回归: slice_type=0（句首）未并入累积，首帧文本可能丢失（缺头半句）")
 
+        # v2.2.7：回译自检（给不懂外语的用户提供翻译可信度弱信号）。
+        # 必须存在：源语言配置(srcLang/backCheckEnabled)、回译入口(selfCheckOriginal)、
+        # 回译实现(backTranslate/backTranslateMyMemory)、语言探测(LCDetectLang)、
+        # 相似度比对(LCSimilarity)、overlay 标记(showConfidence/✓/⚠)。
+        for need in ["srcLang", "backCheckEnabled", "selfCheckOriginal", "backTranslate",
+                     "backTranslateMyMemory", "LCDetectLang", "LCSimilarity",
+                     "showConfidence", "回译自检", "_confidenceMark"]:
+            if need not in src:
+                errors.append("v2.2.7 回归: 回译自检缺失关键实现 [%s]" % need)
+        # tencentTranslate 必须支持显式源/目标语言（回译 zh->源语言需要），
+        # 且 raceTranslate 调用处仍保留原前向行为（源=auto-detected 目标=zh）。
+        if "- (void)tencentTranslate:(NSString *)text source:(NSString *)src target:(NSString *)tgt" not in src:
+            errors.append("v2.2.7 回归: tencentTranslate 未参数化源/目标语言，回译无法指定目标")
+        if "source:LCTmtLang(@\"auto-detected\") target:LCTmtLang(@\"zh-CN\")" not in src:
+            errors.append("v2.2.7 回归: raceTranslate 前向调用未保留原行为（源=auto-detected 目标=zh）")
+        # LCDetectLang 必须「先判假名(jp)后判汉字(han)」：日语是汉字+假名混合，中文只有汉字，
+        # 若汉字先于假名返回 zh，含汉字的日语会被误判成中文，导致回译被跳过、失去 ✓/⚠ 信号。
+        ip_jp = src.find("NSMakeRange(0x3040")
+        ip_han = src.find("NSMakeRange(0x4E00")
+        if ip_jp == -1 or ip_han == -1 or not (ip_jp < ip_han):
+            errors.append("v2.2.7 回归: LCDetectLang 假名(jp)判定必须先于汉字(han)，否则日语被误判为 zh")
+
 
 def main():
     try:
@@ -1390,6 +1412,8 @@ def main():
     print("  OK: v2.2.4 注入修复在位（DynamicLibraries 目录 777，dylib 原子写 Filter 不再失败）")
     print("  OK: v2.2.5 注入修复在位（postinst 从 selectedApps 重建 Filter，升版不再丢失用户勾选）")
     print("  OK: v2.2.6 断句修复在位（静音阈值 2.5s/VAD 1000ms/句首累积，不再半句翻译）")
+    print("  OK: v2.2.7 回译自检在位（srcLang/backCheck/selfCheck/backTranslate/LCDetectLang/"
+          "LCSimilarity/showConfidence，给不懂外语用户提供 ✓/⚠ 弱信号）")
     return 0
 
 

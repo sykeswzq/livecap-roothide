@@ -217,6 +217,16 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
     return (k.length == 0) ? @"未设置" : @"已设置";
 }
 
+// v2.2.7：源语言选项中文名
+- (NSString *)lc_srcLangTitle {
+    NSString *v = LCStr(@"srcLang", @"auto");
+    NSDictionary *map = @{@"auto":@"自动", @"en":@"英语", @"ja":@"日语", @"ko":@"韩语",
+                          @"fr":@"法语", @"de":@"德语", @"es":@"西班牙语", @"ru":@"俄语",
+                          @"ar":@"阿拉伯语", @"th":@"泰语", @"zh":@"中文"};
+    NSString *t = map[v];
+    return t ? t : @"自动";
+}
+
 #pragma mark - 表格数据源
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -233,21 +243,21 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0)
-        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。流式识别边说边推、不攒音频；关闭后回到旧的分片识别。分片时长只在关闭流式时生效。严格同步：凑成整句才翻译，字幕与原版字幕对齐；关闭则回到旧的定时兜底（可作对照）。";
+        return @"启用后会自动监听目标 App 音频并生成实时字幕翻译。流式识别边说边推、不攒音频；关闭后回到旧的分片识别。分片时长只在关闭流式时生效。严格同步：凑成整句才翻译，字幕与原版字幕对齐；关闭则回到旧的定时兜底（可作对照）。「视频源语言」用于回译自检，看不懂外语选「自动」即可。";
     if (section == 1)
         return @"使用 OpenAI 兼容的翻译 API，默认使用 agnes-3.0-flash。";
     if (section == 2)
         return @"字幕可长按拖动，位置按 App 记忆。字号拖完立即生效无需重启。";
     if (section == 3)
-        return @"打开后同时显示英文原文 + 中文译文两行。";
+        return @"「同时显示原文」打开后显示英文原文 + 中文译文两行。「回译自检」开启后，字幕末尾会显示 ✓（翻译可信）或 ⚠（可能不准），帮你判断翻译质量——这是弱提示，不能替代核对。";
     return nil;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) return 5;
+    if (section == 0) return 6;
     if (section == 1) return 3;
     if (section == 2) return 4;
-    if (section == 3) return 1;
+    if (section == 3) return 2;
     return 0;
 }
 
@@ -292,7 +302,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             [sw addTarget:self action:@selector(lc_streamChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        } else {
+        } else if (indexPath.row == 4) {
             // v2.2.0：整句才送译。关掉回到 v2.1.1 的定时兜底，便于真机对照。
             cell.textLabel.text = @"严格同步（整句才翻译）";
             cell.detailTextLabel.text = LCGetBool(@"strictSubtitleSync", YES) ? @"开" : @"关";
@@ -301,6 +311,11 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             [sw addTarget:self action:@selector(lc_strictSyncChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = sw;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        } else {
+            // v2.2.7：视频源语言（回译自检用）。默认自动（按脚本探测）。
+            cell.textLabel.text = @"视频源语言";
+            cell.detailTextLabel.text = [self lc_srcLangTitle];
+            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         }
     }
     else if (indexPath.section == 1) {
@@ -343,12 +358,22 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         }
     }
     else if (indexPath.section == 3) {
-        cell.textLabel.text = @"同时显示原文";
-        UISwitch *sw = [[UISwitch alloc] init];
-        sw.on = LCGetBool(@"showBilingual", NO);
-        [sw addTarget:self action:@selector(lc_showEnglishChanged:) forControlEvents:UIControlEventValueChanged];
-        cell.accessoryView = sw;
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        if (indexPath.row == 0) {
+            cell.textLabel.text = @"同时显示原文";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = LCGetBool(@"showBilingual", NO);
+            [sw addTarget:self action:@selector(lc_showEnglishChanged:) forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = sw;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        } else {
+            // v2.2.7：回译自检开关（字幕末尾显示 ✓/⚠，提示翻译可信度）。
+            cell.textLabel.text = @"回译自检（✓/⚠）";
+            UISwitch *sw = [[UISwitch alloc] init];
+            sw.on = LCGetBool(@"backCheckEnabled", YES);
+            [sw addTarget:self action:@selector(lc_backCheckChanged:) forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = sw;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        }
     }
     return cell;
 }
@@ -379,6 +404,23 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
                                ([n doubleValue] == 1.5) ? @"（推荐）" : @""];
             [alert addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
                 LCSet(n, @"asrChunkSeconds");
+                [self.lc_tv reloadData];
+            }]];
+        }
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+    }
+    else if (indexPath.section == 0 && indexPath.row == 5) {
+        // v2.2.7：视频源语言选择（回译自检用）。看不懂外语时一般选「自动」即可。
+        UIAlertController *alert = [UIAlertController
+            alertControllerWithTitle:@"视频源语言"
+                           message:@"用于「回译自检」判断翻译可信度。看不懂外语通常选「自动」；若自动识别不准可手动指定。"
+                    preferredStyle:UIAlertControllerStyleActionSheet];
+        NSArray *items = @[@"自动 auto", @"英语 en", @"日语 ja", @"韩语 ko",
+                           @"法语 fr", @"德语 de", @"西班牙语 es", @"俄语 ru", @"阿拉伯语 ar", @"泰语 th"];
+        for (NSString *s in items) {
+            [alert addAction:[UIAlertAction actionWithTitle:s style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                LCSet([s componentsSeparatedByString:@" "].lastObject, @"srcLang");
                 [self.lc_tv reloadData];
             }]];
         }
@@ -509,6 +551,7 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 - (void)lc_enabledChanged:(UISwitch *)sw { LCSet(@(sw.on), @"enabled"); }
 - (void)lc_boldChanged:(UISwitch *)sw { LCSet(@(sw.on), @"boldText"); }
 - (void)lc_showEnglishChanged:(UISwitch *)sw { LCSet(@(sw.on), @"showBilingual"); }
+- (void)lc_backCheckChanged:(UISwitch *)sw { LCSet(@(sw.on), @"backCheckEnabled"); }
 
 #pragma mark - 颜色选择器
 

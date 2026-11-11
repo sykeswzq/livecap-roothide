@@ -419,6 +419,8 @@ static NSString *LCJBRootPath(NSString *path) {
 @property (readonly) NSString *backgroundStyle;
 @property (readonly) BOOL showEnglish;   // 是否同时显示英文原文（默认 NO：只显示中文一行）
 @property (readonly) BOOL strictSubtitleSync;  // v2.2.0：整句才送译（默认 YES，可回退）
+@property (readonly) NSString *srcLang;  // v2.2.7：视频源语言（auto/en/ja/ko/fr/de/es/ru/ar/th），回译自检用
+@property (readonly) BOOL backCheckEnabled; // v2.2.7：回译自检开关（默认 YES）
 @property (readonly) CGFloat manualX;
 @property (readonly) CGFloat manualY;
 - (void)saveManualX:(CGFloat)x y:(CGFloat)y;
@@ -530,6 +532,27 @@ static NSString *LCJBRootPath(NSString *path) {
 // 便于真机对照，确认断句重构是否有效。
 - (BOOL)strictSubtitleSync {
     id v = [self freshValueForKey:@"strictSubtitleSync"];
+    if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v boolValue];
+    if ([v isKindOfClass:[NSString class]]) return [(NSString *)v boolValue];
+    return YES;
+}
+
+// v2.2.7：视频源语言。回译自检需要把「中文译文」翻回源语言再与原句比对，
+// 因此必须知道源语言。默认 auto（按原句脚本探测 ja/ko/ru/ar/th/zh，否则英语）。
+- (NSString *)srcLang {
+    id v = [self freshValueForKey:@"srcLang"];
+    if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length > 0) {
+        NSString *s = (NSString *)v;
+        // 只接受已知代码，防止误写导致回译目标错乱
+        NSArray *ok = @[@"auto", @"en", @"ja", @"ko", @"fr", @"de", @"es", @"ru", @"ar", @"th", @"zh"];
+        if ([ok containsObject:s]) return s;
+    }
+    return @"auto";
+}
+
+// v2.2.7：回译自检总开关（默认开）。关掉则字幕不再显示 ✓/⚠ 标记，也不发回译请求。
+- (BOOL)backCheckEnabled {
+    id v = [self freshValueForKey:@"backCheckEnabled"];
     if ([v isKindOfClass:[NSNumber class]]) return [(NSNumber *)v boolValue];
     if ([v isKindOfClass:[NSString class]]) return [(NSString *)v boolValue];
     return YES;
@@ -697,6 +720,8 @@ static NSString *LCJBRootPath(NSString *path) {
 @interface LCTranslator : NSObject
 + (instancetype)shared;
 - (void)translate:(NSString *)text completion:(void (^)(NSString *result))completion;
+// v2.2.7：回译自检入口（正向翻译出中文后，翻回源语言与原句比对，结果给 overlay 标 ✓/⚠）
+- (void)selfCheckOriginal:(NSString *)original translation:(NSString *)tr seq:(NSUInteger)seq;
 // 串行翻译队列：同一时刻只有一条请求在飞，新文本覆盖排队中的旧文本
 - (void)pumpQueue;
 // 带重试的 OpenAI 兼容翻译（网络超时自动重试，最多 3 次）
@@ -982,7 +1007,8 @@ static NSString *LCJBRootPath(NSString *path) {
         NSString *p = [provider copy];
         if ([p isEqualToString:@"tencent"]) {
             LCLogF(@"translate: race -> tencent");
-            [self tencentTranslate:text systemPrompt:sysPrompt cacheKey:cacheKey
+            [self tencentTranslate:text source:LCTmtLang(@"auto-detected") target:LCTmtLang(@"zh-CN")
+                          cacheKey:cacheKey
                           secretId:secretId secretKey:secretKey
                        completion:^(NSString *r) { onResult(p, r); }];
         } else if ([p isEqualToString:@"agnes"]) {
@@ -996,7 +1022,7 @@ static NSString *LCJBRootPath(NSString *path) {
                 BOOL alreadyWon = NO;
                 @synchronized (state) { alreadyWon = [state[@"won"] boolValue]; }
                 if (alreadyWon) return;   // agnes 已赢，别再发无效请求抢上行带宽
-                [self mymemoryTranslate:text
+                [self mymemoryTranslate:text src:@"en" dst:@"zh-CN"
                              completion:^(NSString *r) { onResult(p, r); }];
             };
             if (preferAgnes) {
@@ -1041,12 +1067,13 @@ static NSString *LCShortLang(NSString *lc) {
 }
 
 // v2.0.0：目标语言固定为中文；MyMemory 免费翻译（GET api.mymemory.translated.net，无需密钥）
-- (void)mymemoryTranslate:(NSString *)text completion:(void (^)(NSString *result))completion {
+// v2.2.7：src/dst 可配置，回译自检复用它做「中文→源语言」（无需密钥的免费通道）。
+- (void)mymemoryTranslate:(NSString *)text src:(NSString *)src dst:(NSString *)dst
+                completion:(void (^)(NSString *result))completion {
     // v2.0.0 修复：MyMemory 不接受 langpair 里的 "auto"（设备实测 403
     // "'AUTO' IS AN INVALID SOURCE LANGUAGE"），此前免费兜底 100% 失败。
-    // 目标语言固定 zh-CN；源语言按英文处理（非英文源由 agnes 竞速兜住）。
-    NSString *src = @"en";
-    NSString *dst = @"zh-CN";
+    if (!src.length) src = @"en";
+    if (!dst.length) dst = @"zh-CN";
     // 关键：langpair 的分隔符 | 属于 URL 保留字符，必须百分号编码，
     // 否则 NSURL 报 -1002 (unsupported URL)，MyMemory 永远失败
     NSString *langPair = [NSString stringWithFormat:@"%@%%7C%@", src, dst];
@@ -1110,17 +1137,17 @@ static NSString *LCTmtLang(NSString *lcLang) {
     return @"en";
 }
 
-- (void)tencentTranslate:(NSString *)text systemPrompt:(NSString *)sysPrompt
-               cacheKey:(NSString *)cacheKey
-               secretId:(NSString *)secretId secretKey:(NSString *)secretKey
-             completion:(void (^)(NSString *result))completion {
+- (void)tencentTranslate:(NSString *)text source:(NSString *)src target:(NSString *)tgt
+                cacheKey:(NSString *)cacheKey
+                secretId:(NSString *)secretId secretKey:(NSString *)secretKey
+              completion:(void (^)(NSString *result))completion {
     if (text.length > 1800) text = [text substringToIndex:1800];  // TextTranslate 单次上限
-    NSString *src = LCTmtLang(@"auto-detected");
-    NSString *dst = LCTmtLang(@"zh-CN");
+    NSString *srcLang = (src.length ? src : LCTmtLang(@"auto-detected"));
+    NSString *tgtLang = (tgt.length ? tgt : LCTmtLang(@"zh-CN"));
     NSDictionary *body = @{
         @"SourceText": text,
-        @"Source": src,
-        @"Target": dst,
+        @"Source": srcLang,
+        @"Target": tgtLang,
         @"ProjectId": @0
     };
     NSError *__autoreleasing err = nil;
@@ -1191,6 +1218,157 @@ static NSString *LCTmtLang(NSString *lcLang) {
         }
     }];
     [task resume];
+}
+
+// ===== v2.2.7：回译自检 =====
+// 背景：用户不懂外语，无法核对中文译文是否忠实原话。做法——
+//   正向：外语原句 → 中文译文（现有翻译链路）
+//   回译：中文译文 → 源语言（本段新增），再与原句（同语言）比对相似度
+//   相似度高 → 标 ✓（可信）；低 → 标 ⚠（可能不准）。
+// 这是给「单语者」的【弱信号】，不是语义校验，不能替代人工核对。
+
+// 按原句脚本粗略判定源语言（覆盖用户主要语种），返回腾讯 TMT 语言码。
+// 拉丁字母默认英语（en 覆盖 fr/es/de/pt/it 等）；中文视频直接返回 zh（不做回译）。
+static NSString *LCDetectLang(NSString *text) {
+    if (![text isKindOfClass:[NSString class]] || text.length == 0) return @"en";
+    // 先判假名：日语是「汉字+假名」混合，中文只有汉字。先扫假名可正确区分中日，
+    // 否则含汉字的日语会被误判成中文（zh 会跳过回译，失去 ✓/⚠ 信号）。
+    NSRange jp = [text rangeOfCharacterFromSet:
+        [NSCharacterSet characterSetWithRange:NSMakeRange(0x3040, 0x30FF - 0x3040 + 1)]];
+    if (jp.location != NSNotFound) return @"ja";
+    NSRange han = [text rangeOfCharacterFromSet:
+        [NSCharacterSet characterSetWithRange:NSMakeRange(0x4E00, 0x9FFF - 0x4E00 + 1)]];
+    if (han.location != NSNotFound) return @"zh";
+    NSRange ko = [text rangeOfCharacterFromSet:
+        [NSCharacterSet characterSetWithRange:NSMakeRange(0xAC00, 0xD7A3 - 0xAC00 + 1)]];
+    if (ko.location != NSNotFound) return @"ko";
+    NSRange ru = [text rangeOfCharacterFromSet:
+        [NSCharacterSet characterSetWithRange:NSMakeRange(0x0400, 0x04FF - 0x0400 + 1)]];
+    if (ru.location != NSNotFound) return @"ru";
+    NSRange ar = [text rangeOfCharacterFromSet:
+        [NSCharacterSet characterSetWithRange:NSMakeRange(0x0600, 0x06FF - 0x0600 + 1)]];
+    if (ar.location != NSNotFound) return @"ar";
+    NSRange th = [text rangeOfCharacterFromSet:
+        [NSCharacterSet characterSetWithRange:NSMakeRange(0x0E00, 0x0E7F - 0x0E00 + 1)]];
+    if (th.location != NSNotFound) return @"th";
+    return @"en";
+}
+
+// 归一化：只保留字母/数字（ASCII 转小写），丢弃空格与标点。CJK 属 letter 会被保留。
+static NSString *LCNormalize(NSString *s) {
+    if (![s isKindOfClass:[NSString class]] || s.length == 0) return @"";
+    NSMutableString *m = [NSMutableString string];
+    NSCharacterSet *alnum = [NSCharacterSet alphanumericCharacterSet];
+    for (NSUInteger i = 0; i < s.length; i++) {
+        unichar c = [s characterAtIndex:i];
+        if ([alnum characterIsMember:c]) {
+            if (c >= 'A' && c <= 'Z') c = (unichar)(c - 'A' + 'a');
+            [m appendFormat:@"%C", c];
+        }
+    }
+    return m;
+}
+
+// 生成长度为 n 的字符 n-gram 集合（短于 n 则整体作为一项）。
+static NSMutableSet *LCNGrams(NSString *s, NSUInteger n) {
+    NSMutableSet *set = [NSMutableSet set];
+    if (s.length < n) { if (s.length) [set addObject:s]; return set; }
+    for (NSUInteger i = 0; i + n <= s.length; i++) {
+        [set addObject:[s substringWithRange:NSMakeRange(i, n)]];
+    }
+    return set;
+}
+
+// 相似度：字符 2-gram 的 Jaccard。同语言两段文本越接近 → 越接近 1.0。
+static double LCSimilarity(NSString *a, NSString *b) {
+    a = LCNormalize(a); b = LCNormalize(b);
+    if (a.length == 0 || b.length == 0) return 0.0;
+    if ([a isEqualToString:b]) return 1.0;
+    NSUInteger n = 2;
+    NSMutableSet *sa = LCNGrams(a, n);
+    NSMutableSet *sb = LCNGrams(b, n);
+    if (sa.count == 0 || sb.count == 0) return [a isEqualToString:b] ? 1.0 : 0.0;
+    NSMutableSet *inter = [NSMutableSet setWithSet:sa];
+    [inter intersectSet:sb];
+    NSUInteger unionN = sa.count + sb.count - inter.count;
+    if (unionN == 0) return 0.0;
+    return (double)inter.count / (double)unionN;
+}
+
+// 把中文译文翻回「源语言」。优先腾讯 TMT（有密钥），否则 MyMemory 免费通道。
+- (void)backTranslate:(NSString *)zhText toLang:(NSString *)tmtLang
+           completion:(void (^)(NSString *back))completion {
+    if (![zhText isKindOfClass:[NSString class]] || zhText.length == 0 ||
+        ![tmtLang isKindOfClass:[NSString class]] || tmtLang.length == 0) {
+        if (completion) completion(nil); return;
+    }
+    NSString *sid = [[LCConfig shared] tencentSecretId];
+    NSString *sk = [[LCConfig shared] tencentSecretKey];
+    if (sid.length && sk.length) {
+        [self tencentTranslate:zhText source:@"zh" target:tmtLang cacheKey:nil
+                      secretId:sid secretKey:sk
+                    completion:^(NSString *r) {
+            if (r.length) { if (completion) completion(r); }
+            else { [self backTranslateMyMemory:zhText toLang:tmtLang completion:completion]; }
+        }];
+    } else {
+        [self backTranslateMyMemory:zhText toLang:tmtLang completion:completion];
+    }
+}
+
+// 回译兜底：MyMemory 免费翻译，中文(zh-CN) → 源语言(tmtLang)，无需密钥。
+- (void)backTranslateMyMemory:(NSString *)zhText toLang:(NSString *)tmtLang
+                   completion:(void (^)(NSString *back))completion {
+    NSString *langPair = [NSString stringWithFormat:@"zh-CN%%7C%@", tmtLang];
+    NSString *urlStr = [NSString stringWithFormat:
+        @"https://api.mymemory.translated.net/get?q=%@&langpair=%@",
+        [zhText stringByAddingPercentEncodingWithAllowedCharacters:
+            [NSCharacterSet URLQueryAllowedCharacterSet]],
+        langPair];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
+    [req setValue:@"LiveCap/1.0" forHTTPHeaderField:@"User-Agent"];
+    req.timeoutInterval = 6.0;
+    LCLogF(@"translate: backcheck mymemory url=%@", urlStr);
+    NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
+        if (taskErr) { if (completion) completion(nil); return; }
+        NSError *__autoreleasing pe = nil;
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&pe];
+        if (pe || !json) { if (completion) completion(nil); return; }
+        NSDictionary *rd = json[@"responseData"];
+        NSString *content = rd[@"translatedText"];
+        if (![content isKindOfClass:[NSString class]] || content.length == 0) {
+            if (completion) completion(nil); return;
+        }
+        if ([content hasPrefix:@"MY MEMORY WARNING"] || [content hasPrefix:@"NO QUERY SPECIFIED"]) {
+            if (completion) completion(nil); return;
+        }
+        NSString *result = [[content stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
+        result = LCDecodeHTMLEntities(result);
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(result); });
+    }];
+    [task resume];
+}
+
+// v2.2.7：回译自检入口。正向翻译出中文后，把中文翻回源语言，与原句（同语言）比对
+// 相似度，结果经 overlay 的 ✓/⚠ 标记告知不懂外语的用户「这句翻译可信度」。
+// 这是弱信号（回译本身会改写述），仅供参考，不能替代人工核对。
+- (void)selfCheckOriginal:(NSString *)original translation:(NSString *)tr seq:(NSUInteger)seq {
+    if (![[LCConfig shared] backCheckEnabled]) return;
+    if (![tr isKindOfClass:[NSString class]] || tr.length == 0) return;
+    if (![original isKindOfClass:[NSString class]] || original.length == 0) return;
+    NSString *cfgLang = [[LCConfig shared] srcLang];
+    NSString *tgt = ([cfgLang isEqualToString:@"auto"]) ? LCDetectLang(original) : LCTmtLang(cfgLang);
+    if ([tgt isEqualToString:@"zh"]) return;   // 源本来就是中文，无需回译
+    [self backTranslate:tr toLang:tgt completion:^(NSString *back) {
+        if (![back isKindOfClass:[NSString class]] || back.length == 0) return;  // 无密钥/失败，静默跳过
+        double sim = LCSimilarity(original, back);
+        // 阈值 0.55：回译会改写述，放宽避免误报 ⚠。
+        NSString *mark = (sim >= 0.55) ? @"ok" : @"warn";
+        LCLogF(@"backcheck: sim=%.2f mark=%@ cfg=%@ tgt=%@", sim, mark, cfgLang, tgt);
+        [[LCSubtitleOverlay shared] showConfidence:mark forSeq:seq];
+    }];
 }
 
 // OpenAI 兼容翻译（agnes AI / 任何兼容的 chat/completions 接口）
@@ -2725,6 +2903,7 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     NSUInteger _transSeq;
     NSString *_placeholder;
     BOOL _toastActive;         // toast 展示中：不要覆盖/隐藏 origin 标签
+    NSString *_confidenceMark; // v2.2.7：回译自检标记（✓/⚠），显示层，不参与对账
     BOOL _userMoved;              // 用户手动拖动过 → 不再按配置重置位置
     CGPoint _userCenter;          // 用户拖到的位置（_userMoved 时沿用）
     // ===== v1.0.87：配置热重载（字号改完立即生效）=====
@@ -3219,10 +3398,12 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
             _displayedOrigin = origin;
             _transSeq = seq ? seq : _transSeq;
             _placeholder = nil;
+            _confidenceMark = nil;   // 新译文上屏，先清旧标记，等回译自检填回
             if (seq && seq == _pendingSeq) _pendingOrigin = nil;
             LCLogF(@"overlay: showPair seq=%lu origin=[%@] trans=[%@] transLen=%lu (zh-only)",
                    (unsigned long)seq, origin, translation, (unsigned long)translation.length);
             [self renderCurrent];
+            [[LCTranslator shared] selfCheckOriginal:_displayedOrigin translation:_displayedTranslation seq:(seq ? seq : _transSeq)];
             return;
         }
         if (seq != 0 && seq < _displayedSeq) {
@@ -3233,13 +3414,29 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         _displayedOrigin = origin;
         _displayedTranslation = translation;
         _displayedSeq = seq ? seq : _displayedSeq;
+        _confidenceMark = nil;   // 新译文上屏，先清旧标记，等回译自检填回
         if (seq && seq == _pendingSeq) _pendingOrigin = nil;
         LCLogF(@"overlay: showPair seq=%lu origin=[%@] trans=[%@] transLen=%lu",
                (unsigned long)seq, origin, translation, (unsigned long)translation.length);
         [self renderCurrent];
+        [[LCTranslator shared] selfCheckOriginal:_displayedOrigin translation:_displayedTranslation seq:(seq ? seq : _displayedSeq)];
     } @catch (NSException *e) {
         LCLog(@"overlay: showPair error");
     }
+}
+
+// v2.2.7：回译自检结果标记。mark=@"ok"→✓，@"warn"→⚠，只在该 seq 仍是当前显示句时生效。
+- (void)showConfidence:(NSString *)mark forSeq:(NSUInteger)seq {
+    if (!_container || !_installed) return;
+    @try {
+        BOOL showEn = [[LCConfig shared] showEnglish];
+        NSUInteger cur = showEn ? _displayedSeq : _transSeq;
+        if (seq != 0 && seq != cur) return;  // 这句已滚过，丢弃旧标记
+        if ([mark isEqualToString:@"ok"]) _confidenceMark = @"✓";
+        else if ([mark isEqualToString:@"warn"]) _confidenceMark = @"⚠";
+        else _confidenceMark = @"";
+        [self renderCurrent];
+    } @catch (NSException *e) {}
 }
 
 // 翻译彻底失败：画面已经是这句英文（showPending 已刷过），无需重刷，只做记账。
@@ -3310,6 +3507,11 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         // 只显示中文且还没有任何译文 → 显示占位提示，不要空框
         if (!showEn && translation.length == 0) {
             translation = _placeholder ?: @"";
+        }
+
+        // v2.2.7：回译自检标记追加到译文末尾（仅真实译文，不污染占位符）。
+        if (_confidenceMark.length && _displayedTranslation.length) {
+            translation = [translation stringByAppendingFormat:@"  %@", _confidenceMark];
         }
 
         if (!_toastActive) {
