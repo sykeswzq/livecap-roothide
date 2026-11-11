@@ -105,19 +105,45 @@ def do_diag(host):
                   '"asr: sending" "showFailed"; do '
                   'printf "%-34s %s\\n" "$k" "$(grep -a -c "$k" "$f")"; done')
     print(out2.decode('utf-8', 'replace'))
-    print('\n=== 注入状态（v2.2.1）===')
-    inj_cmd = (
-        'echo "--- Filter 文件（权限必须是 -rw-rw-rw-）---"; '
-        'for p in /var/jb/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist '
-        '/var/containers/Bundle/Application/.jbroot-*/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist; do '
-        '[ -f "$p" ] || continue; ls -la "$p"; plutil -p "$p" 2>/dev/null | head -40; done; '
-        'echo "--- 偏好 selectedApps / Filter 写入诊断 ---"; '
-        'plutil -p /var/mobile/Library/Preferences/com.sykes.livecap.plist 2>/dev/null | '
-        'grep -i -A3 -e selectedApps -e lastFilterWrite | head -40; '
-        'echo "--- 版本 ---"; dpkg -l com.sykes.livecap | tail -1'
-    )
-    inj, _ = ssh(host, inj_cmd)
-    print(inj.decode('utf-8', 'replace')[:5000])
+    print('\n=== 注入状态（v2.2.3/2.2.4 架构：面板只写勾选，dylib 代写 Filter）===')
+    # 1) 偏好：勾选真相 + dylib 自写结果
+    try:
+        d = read_plist(host)
+    except Exception as e:
+        d = {}
+        print('  [warn] 读取偏好失败: %s' % e)
+    sa = d.get('selectedApps') or []
+    eb = d.get('enabledBundles') or []
+    ok = d.get('lastFilterWriteOK', '<未设置>')
+    fp = d.get('lastFilterWritePath', '')
+    print('  selectedApps 总数      : %d' % len(sa))
+    print('  enabledBundles 总数    : %d' % len(eb))
+    print('  com.look.avbox 在勾选? : %s' % ('是（暮色）' if 'com.look.avbox' in sa else '否'))
+    print('  lastFilterWriteOK      : %s' % ok)
+    print('  lastFilterWritePath    : %r' % fp)
+    # 2) 真实 jbroot 注入目录/文件权限 + Filter 是否含目标
+    fdir, _ = ssh(host,
+        'D=$(ls -d /var/containers/Bundle/Application/.jbroot-*/Library/MobileSubstrate/DynamicLibraries 2>/dev/null | head -1); '
+        'ls -ld "$D"; echo "---"; ls -la "$D/LiveCap.plist"')
+    print('  注入目录/文件权限:')
+    for line in fdir.decode('utf-8', 'replace').splitlines():
+        if line.strip():
+            print('    ' + line)
+    fout, _ = ssh(host,
+        'F=$(ls -d /var/containers/Bundle/Application/.jbroot-*/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist 2>/dev/null | head -1); '
+        'base64 "$F"')
+    try:
+        fbundles = plistlib.loads(
+            base64.b64decode(re.sub(rb'\s+', b'', fout))
+        ).get('Filter', {}).get('Bundles', [])
+    except Exception as e:
+        fbundles = []
+        print('  [warn] 解析 Filter 失败: %s' % e)
+    print('  Filter 含 bundle 数    : %d' % len(fbundles))
+    print('  com.look.avbox 在 Filter?: %s' % ('是（已具备注入条件）' if 'com.look.avbox' in fbundles else '否（未注入）'))
+    # 3) 版本行
+    vout, _ = ssh(host, 'dpkg -l com.sykes.livecap | tail -1')
+    print('  设备版本行             : ' + vout.decode('utf-8', 'replace').strip())
     print('=== 判读 ===')
     print('  ws code= 非 0        -> 签名/计费/服务问题，看 message 原文')
     print('  handshake timeout 6s -> WebSocket 连接层不通，已按设计回落 HTTP')
@@ -135,6 +161,12 @@ def do_diag(host):
     print('  selectedApps 缺失    -> 面板还没打开过，首次打开会做一次性迁移')
     print('  selectedApps 只有 1 个 -> 迁移兜底没生效，原有 App 被抹掉了')
     print('  仍不生效             -> 先打开任意已注入 App（如 B站/YouTube）触发 dylib 同步，再彻底重开目标 App')
+    print('=== v2.2.3/2.2.4 注入判读（当前架构）===')
+    print('  lastFilterWriteOK=False -> dylib 上次自写 Filter 失败（目录无写权限）')
+    print('                          v2.2.4 已把目录改 777，重开任意已注入 App 即翻转 True')
+    print('  lastFilterWriteOK=True  -> dylib 自写成功，面板勾选/取消已真正同步到 Filter')
+    print('  Filter 含目标 App       -> 重开该 App 即被注入；否则仍不注入')
+    print('  com.look.avbox 在勾选但 Filter 无 -> 重开暮色触发 dylib 同步一次即可')
     return 0
 
 
