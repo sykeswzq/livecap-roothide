@@ -22,3 +22,9 @@ device_cfg_*.plist
 
 # 本地生成的合成测试音频（可由 verify_ws_asr.py 自动重建）
 test_ws_asr.wav
+
+# CI 调试临时文件（API 响应 / job 日志，非源码）
+runs_api.json
+run_jobs.json
+job_log.txt
+*.json.bak
