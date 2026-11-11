@@ -82,6 +82,32 @@ def self_check_mark(original, back_translation):
     return "ok" if sim >= 0.55 else "warn"
 
 
+def is_usable_translation(res, text):
+    """镜像 v2.2.8 的 isUsableTranslation：译文目标是简体中文。
+    v2.2.8 起：结果含日文假名(0x3040-0x30FF)或韩文(0xAC00-0xD7A3)一律拒绝，
+    否则翻译引擎回显/未翻译的日韩文会被误判成有效中文上屏。"""
+    if not res:
+        return False
+    norm = res.strip()
+    if not norm:
+        return False
+    if text is not None and norm.strip() == text.strip():
+        return False
+    has_cjk = False
+    has_kana_or_hangul = False
+    for ch in norm:
+        cp = ord(ch)
+        if 0x4E00 <= cp <= 0x9FFF:
+            has_cjk = True
+        elif (0x3040 <= cp <= 0x30FF) or (0xAC00 <= cp <= 0xD7A3):
+            has_kana_or_hangul = True
+    if not has_cjk:
+        return False
+    if has_kana_or_hangul:
+        return False
+    return True
+
+
 def _assert(name, cond):
     print(("  PASS " if cond else "  FAIL ") + name)
     if not cond:
@@ -126,6 +152,19 @@ if __name__ == "__main__":
     s_low = lc_similarity("I want to go home now", "we should eat lunch later")
     _assert("高相似 >= 0.55", s_high >= 0.55)
     _assert("低相似 < 0.55", s_low < 0.55)
+
+    print("[5] v2.2.8 isUsableTranslation：拒绝日/韩文，只接受中文")
+    ja_res = "マンションの1室でやってるようなサロン"   # 真实录像里错误上屏的日文
+    ko_res = "안녕하세요 반갑습니다"
+    zh_res = "像在公寓单间里经营的美容沙龙"             # 正确的中文译文
+    en_res = "This is a salon in a single apartment room"
+    _assert("日文结果 -> 拒绝(非中文)", is_usable_translation(ja_res, "マンションの1室でやってるようなサロン") is False)
+    _assert("韩文结果 -> 拒绝(非中文)", is_usable_translation(ko_res, ko_res) is False)
+    _assert("中文结果 -> 接受", is_usable_translation(zh_res, "マンションの1室でやってるようなサロン") is True)
+    _assert("英文结果 -> 拒绝(无汉字)", is_usable_translation(en_res, "apartment salon") is False)
+    _assert("空结果 -> 拒绝", is_usable_translation("", "xxx") is False)
+    # 含假名的中文边角：纯汉字中文应接受；夹带假名(如注音)应拒绝，避免漏放日文
+    _assert("纯汉字中文 -> 接受", is_usable_translation("今天天气很好", "今日はいい天気") is True)
 
     print("")
     if _assert.failed == 0:

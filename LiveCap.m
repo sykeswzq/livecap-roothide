@@ -934,6 +934,10 @@ static NSString *LCJBRootPath(NSString *path) {
 }
 
 // v2.0.0：目标语言固定为中文，译文校验只需检查是否含中文字符
+// v2.2.8：旧校验只查「含 CJK」，而日文汉字也落在 CJK 区间(0x4E00-0x9FFF)，
+//   导致翻译引擎回显/未翻译的日文被误判成有效中文上屏——不懂外语的用户直接看到日文。
+//   追加：结果若含【日文假名(平/片假名 0x3040-0x30FF)或韩文(0xAC00-0xD7A3)】，
+//   一律判为非中文拒绝，确保只有真正的中文（或基本是汉字的中文）才会显示。
 - (BOOL)isUsableTranslation:(NSString *)res forText:(NSString *)text {
     if (!res.length) return NO;
     NSString *norm = [res stringByTrimmingCharactersInSet:
@@ -943,11 +947,18 @@ static NSString *LCJBRootPath(NSString *path) {
         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if ([norm isEqualToString:orig]) return NO;
     BOOL hasCJK = NO;
+    BOOL hasKanaOrHangul = NO;
     for (NSUInteger i = 0; i < norm.length; i++) {
         unichar ch = [norm characterAtIndex:i];
-        if (ch >= 0x4E00 && ch <= 0x9FFF) { hasCJK = YES; break; }
+        if (ch >= 0x4E00 && ch <= 0x9FFF) {
+            hasCJK = YES;
+        } else if ((ch >= 0x3040 && ch <= 0x30FF) ||   // 平/片假名 → 日文
+                   (ch >= 0xAC00 && ch <= 0xD7A3)) {   // 谚文 → 韩文
+            hasKanaOrHangul = YES;
+        }
     }
-    if (!hasCJK) return NO;
+    if (!hasCJK) return NO;          // 完全不含汉字，肯定不是中文译文
+    if (hasKanaOrHangul) return NO;  // 含假名/谚文 → 是日/韩文，拒绝上屏
     return YES;
 }
 
@@ -959,6 +970,12 @@ static NSString *LCJBRootPath(NSString *path) {
 //   实测 agnes-2.5-flash 0.87~3.4s、MyMemory 1.25~2.4s，
 //   竞速后整体延迟 = min(两者) ≈ 1s。
 // 竞速天然提供了冗余：一家失败另一家顶上，不再需要靠重试放大延迟。
+
+// 前向声明：raceTranslate 内需要按实际语种计算 MyMemory 的源语言，
+// 而 LCShortLang / LCDetectLang 的定义在文件后部（与 LCTmtLang 同样后定义先调用）。
+static NSString *LCShortLang(NSString *lc);
+static NSString *LCDetectLang(NSString *text);
+
 - (void)raceTranslate:(NSString *)text sysPrompt:(NSString *)sysPrompt
                cacheKey:(NSString *)cacheKey
              completion:(void (^)(NSString *result))completion {
@@ -1050,7 +1067,11 @@ static NSString *LCJBRootPath(NSString *path) {
                 BOOL alreadyWon = NO;
                 @synchronized (state) { alreadyWon = [state[@"won"] boolValue]; }
                 if (alreadyWon) return;   // agnes 已赢，别再发无效请求抢上行带宽
-                [self mymemoryTranslate:text src:@"en" dst:@"zh-CN"
+                // v2.2.8：源语言按实际语种传，不再写死 en。
+                // 旧版对日语/韩语视频用 src=en 调 MyMemory，等于拿「英→中」去翻日/韩文，
+                // 免费兜底基本翻不出中文 → 用户看不到译文。改为按实际语种(ja/ko/...)翻译。
+                NSString *mmSrc = LCShortLang(LCDetectLang(text));
+                [self mymemoryTranslate:text src:mmSrc dst:@"zh-CN"
                              completion:^(NSString *r) { onResult(p, r); }];
             };
             if (preferAgnes) {

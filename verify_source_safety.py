@@ -1341,6 +1341,22 @@ def check_v221_fixes(src, applist_src, postinst_src):
             errors.append("v2.2.7 回归: LCDetectLang 假名(jp)判定必须先于汉字(han)，否则日语被误判为 zh")
 
 
+def check_v228_fixes(src):
+    # v2.2.8：翻译结果校验 + MyMemory 源语言修复
+    # 1) isUsableTranslation 必须拒绝「含日文假名/韩文」的结果，
+    #    否则翻译引擎回显/未翻译的日文会被误判成有效中文上屏（用户直接看到日文）。
+    need = ["0x3040", "0x30FF", "0xAC00", "hasKanaOrHangul"]
+    for n in need:
+        if n not in src:
+            errors.append("v2.2.8 回归: isUsableTranslation 缺少日文假名/韩文拒绝逻辑 [%s]" % n)
+    # 2) MyMemory 兜底不能再写死 src=en（否则日语/韩语视频翻不出中文）。
+    #    应改为按实际语种 LCShortLang(LCDetectLang(text))。
+    if 'src:@"en" dst:@"zh-CN"' in src:
+        errors.append("v2.2.8 回归: MyMemory 源语言仍写死 en，日语/韩语视频免费兜底翻不出中文")
+    if "LCShortLang(LCDetectLang(text))" not in src:
+        errors.append("v2.2.8 回归: raceTranslate 未改用实际语种调用 MyMemory")
+
+
 def main():
     try:
         src = read_src()
@@ -1385,6 +1401,7 @@ def main():
     check_v211_fixes(src, panel_src)
     check_v220_fixes(src, panel_src)
     check_v221_fixes(src, applist_src, postinst_src)
+    check_v228_fixes(src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -1414,6 +1431,7 @@ def main():
     print("  OK: v2.2.6 断句修复在位（静音阈值 2.5s/VAD 1000ms/句首累积，不再半句翻译）")
     print("  OK: v2.2.7 回译自检在位（srcLang/backCheck/selfCheck/backTranslate/LCDetectLang/"
           "LCSimilarity/showConfidence，给不懂外语用户提供 ✓/⚠ 弱信号）")
+    print("  OK: v2.2.8 修复在位（isUsableTranslation 拒绝日/韩文；MyMemory 按实际语种翻译）")
     return 0
 
 
