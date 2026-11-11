@@ -27,4 +27,7 @@ test_ws_asr.wav
 runs_api.json
 run_jobs.json
 job_log.txt
+job_log*.txt
+rj.json
+rj_*.json
 *.json.bak
