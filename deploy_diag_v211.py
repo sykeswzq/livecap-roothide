@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 KEY = 'E:/SynologyDrive/单位/F/wangziqing/00000/ucs_ssh_key'
 HOST_DEFAULT = '10.10.201.107'
 DEB = os.path.join(HERE, 'releases',
-                   'com.sykes.livecap_2.2.1_iphoneos-arm64e.deb')
+                   'com.sykes.livecap_2.2.3_iphoneos-arm64e.deb')
 PLIST = '/var/mobile/Library/Preferences/com.sykes.livecap.plist'
 
 
@@ -134,7 +134,7 @@ def do_diag(host):
     print('  Filter 里没目标 App  -> 勾选没写进去，看 lastFilterWritePath/OK')
     print('  selectedApps 缺失    -> 面板还没打开过，首次打开会做一次性迁移')
     print('  selectedApps 只有 1 个 -> 迁移兜底没生效，原有 App 被抹掉了')
-    print('  仍不生效             -> 还要 Dopamine → Inject Manager 勾选 + 彻底重开 App')
+    print('  仍不生效             -> 先打开任意已注入 App（如 B站/YouTube）触发 dylib 同步，再彻底重开目标 App')
     return 0
 
 

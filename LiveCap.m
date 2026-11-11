@@ -4987,30 +4987,27 @@ static void LCAuthSpeech(void) {
 // 必须幂等（仅当 Bundles 集合变化时才写文件 + killall runningboardd），否则
 // 启动同步 / 通知同步会反复触发 runningboardd 重启，造成循环。
 static NSString *LCInjectedFilterPlistPath(void) {
-    // 已注入 App 进程内，LiveCap.dylib 已被加载，从 dyld 镜像推导真实 Filter 路径
+    // 注入进程内，直接用项目已有的 jbroot() 把标准 substrate Filter 路径映射到真实 jbroot 位置。
+    // 不依赖 dylib 自身的镜像路径：roothide 下 dylib 可能从 usr/lib/TweakInject 加载，
+    // 若从镜像目录直接拼 LiveCap.plist 会把 Filter 写到错误目录（.jbroot-*/LiveCap.plist），
+    // 注入系统根本不会读它。jbroot() 对任意 roothide 进程都返回正确的真实路径。
+    NSString *p = LCJBRootPath(@"/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist");
+    if (p.length) return p;
+    // 兜底：从 dyld 镜像推导 jbroot 根目录（剥掉 /usr/lib/TweakInject 或
+    // /Library/MobileSubstrate/DynamicLibraries 之后），再拼标准相对路径。
     uint32_t n = _dyld_image_count();
     for (uint32_t i = 0; i < n; i++) {
-        const char *p = _dyld_get_image_name(i);
-        if (!p || !p[0]) continue;
-        NSString *s = [NSString stringWithUTF8String:p];
-        NSRange r = [s rangeOfString:@"/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"];
+        const char *im = _dyld_get_image_name(i);
+        if (!im || !im[0]) continue;
+        NSString *s = [NSString stringWithUTF8String:im];
+        NSRange r = [s rangeOfString:@"/usr/lib/TweakInject/LiveCap.dylib"];
+        if (r.location == NSNotFound)
+            r = [s rangeOfString:@"/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"];
         if (r.location != NSNotFound) {
-            NSString *dir = [s substringToIndex:r.location];
-            return [dir stringByAppendingPathComponent:@"LiveCap.plist"];
+            NSString *root = [s substringToIndex:r.location];
+            return [root stringByAppendingPathComponent:
+                        @"Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"];
         }
-        r = [s rangeOfString:@"/usr/lib/TweakInject/LiveCap.dylib"];
-        if (r.location != NSNotFound) {
-            NSString *dir = [s substringToIndex:r.location];
-            return [dir stringByAppendingPathComponent:@"LiveCap.plist"];
-        }
-    }
-    // 兜底：jbroot() 转换（roothide 提供）
-    void *sym = dlsym(RTLD_DEFAULT, "jbroot");
-    if (sym) {
-        typedef const char *(*fn_t)(const char *);
-        fn_t fn = (fn_t)sym;
-        const char *r = fn("/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist");
-        if (r && r[0]) return [NSString stringWithUTF8String:r];
     }
     return nil;
 }
