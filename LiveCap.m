@@ -20,6 +20,9 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <CFNetwork/CFNetwork.h>
 #import "fishhook.h"
+#import <spawn.h>
+#import <sys/wait.h>
+#import <notify.h>
 
 // TC3 签名函数前置声明（定义在腾讯云 ASR 区，翻译区先调用）
 static NSString *LCTencentAuthHeaderEx(NSString *secretId, NSString *secretKey,
@@ -4975,6 +4978,140 @@ static void LCAuthSpeech(void) {
     }];
 }
 
+#pragma mark - v2.2.2：dylib 代写 Filter（roothide 注入修复）
+// 背景：roothide 下设置面板（Preferences App）未被注入，进程视图里看不到 .jbroot 挂载，
+// /var/jb/.../LiveCap.plist 对它不可写（实测 mobile 直写 Permission denied）。
+// 而已注入 App 的 dylib 在 roothide 下有权访问并写入该 Filter 文件。
+// 因此改为：面板只写 selectedApps 偏好 + notify_post；由本函数在已注入 App 内
+// 读取 selectedApps 并写入 Filter，从而让用户在面板勾选的 App 真正被注入。
+// 必须幂等（仅当 Bundles 集合变化时才写文件 + killall runningboardd），否则
+// 启动同步 / 通知同步会反复触发 runningboardd 重启，造成循环。
+static NSString *LCInjectedFilterPlistPath(void) {
+    // 已注入 App 进程内，LiveCap.dylib 已被加载，从 dyld 镜像推导真实 Filter 路径
+    uint32_t n = _dyld_image_count();
+    for (uint32_t i = 0; i < n; i++) {
+        const char *p = _dyld_get_image_name(i);
+        if (!p || !p[0]) continue;
+        NSString *s = [NSString stringWithUTF8String:p];
+        NSRange r = [s rangeOfString:@"/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"];
+        if (r.location != NSNotFound) {
+            NSString *dir = [s substringToIndex:r.location];
+            return [dir stringByAppendingPathComponent:@"LiveCap.plist"];
+        }
+        r = [s rangeOfString:@"/usr/lib/TweakInject/LiveCap.dylib"];
+        if (r.location != NSNotFound) {
+            NSString *dir = [s substringToIndex:r.location];
+            return [dir stringByAppendingPathComponent:@"LiveCap.plist"];
+        }
+    }
+    // 兜底：jbroot() 转换（roothide 提供）
+    void *sym = dlsym(RTLD_DEFAULT, "jbroot");
+    if (sym) {
+        typedef const char *(*fn_t)(const char *);
+        fn_t fn = (fn_t)sym;
+        const char *r = fn("/Library/MobileSubstrate/DynamicLibraries/LiveCap.plist");
+        if (r && r[0]) return [NSString stringWithUTF8String:r];
+    }
+    return nil;
+}
+
+static void LCApplySelectedAppsToFilter(void) {
+    @try {
+        // 1) 读 selectedApps（dylib 视角；roothide 重映射后指向面板写的同一份偏好）
+        NSString *cfgPath = LCJBRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+        NSDictionary *cfg = [NSDictionary dictionaryWithContentsOfFile:cfgPath];
+        NSArray *picked = nil;
+        if ([cfg[@"selectedApps"] isKindOfClass:[NSArray class]] && ((NSArray *)cfg[@"selectedApps"]).count)
+            picked = cfg[@"selectedApps"];
+        else if ([cfg[@"enabledBundles"] isKindOfClass:[NSArray class]] && ((NSArray *)cfg[@"enabledBundles"]).count)
+            picked = cfg[@"enabledBundles"];
+        if (!picked || picked.count == 0) {
+            LCLog("filter sync: no selectedApps, skip");
+            return;
+        }
+        // 2) 过滤：排除 com.apple.* / springboard（注入这些无意义）
+        NSMutableArray *bundles = [NSMutableArray array];
+        for (id b in picked) {
+            if (![b isKindOfClass:[NSString class]]) continue;
+            NSString *bid = (NSString *)b;
+            if (bid.length == 0) continue;
+            if ([bid isEqualToString:@"com.apple.springboard"]) continue;
+            if ([bid hasPrefix:@"com.apple."]) continue;
+            [bundles addObject:bid];
+        }
+        if (bundles.count == 0) bundles = [@[@"com.sykes.livecap.disabled"] mutableCopy];
+        NSSet *want = [NSSet setWithArray:bundles];
+
+        // 3) 定位 Filter 路径（已注入 App 进程内）
+        NSString *primary = LCInjectedFilterPlistPath();
+        if (!primary.length) {
+            LCLog("filter sync: cannot resolve filter path, skip");
+            return;
+        }
+        // 4) 幂等：当前 Bundles 集合已一致则跳过（不 killall，避免循环重启）
+        NSDictionary *cur = [NSDictionary dictionaryWithContentsOfFile:primary];
+        NSSet *curB = [NSSet setWithArray:(cur[@"Filter"][@"Bundles"] ?: @[])];
+        NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:cfgPath] ?: [NSMutableDictionary dictionary];
+        if ([curB isEqualToSet:want]) {
+            d[@"lastFilterWriteOK"] = @YES;
+            d[@"lastFilterWritePath"] = primary;
+            [d writeToFile:cfgPath atomically:YES];
+            LCLog("filter sync: already in sync, skip write");
+            return;
+        }
+        // 5) 写 Filter（保留 Filter 外的其它键，仅覆盖 Bundles）
+        NSMutableDictionary *plist = [NSMutableDictionary dictionary];
+        if (cur) [plist addEntriesFromDictionary:cur];
+        plist[@"Filter"] = @{@"Bundles": bundles};
+        NSError *err = nil;
+        NSData *data = [NSPropertyListSerialization dataWithPropertyList:plist
+                                          format:NSPropertyListXMLFormat_v1_0
+                                         options:0 error:&err];
+        if (!data.length) { LCLog("filter sync: serialize failed"); return; }
+        if (![data writeToFile:primary atomically:YES]) { LCLog("filter sync: write failed"); return; }
+        @try {
+            [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions: @(0666)}
+                                             ofItemAtPath:primary error:nil];
+        } @catch (NSException *e) {}
+        // 6) 回读校验
+        NSDictionary *back = [NSDictionary dictionaryWithContentsOfFile:primary];
+        NSSet *backB = [NSSet setWithArray:(back[@"Filter"][@"Bundles"] ?: @[])];
+        BOOL ok = [backB isEqualToSet:want];
+        d[@"lastFilterWriteOK"] = @(ok);
+        d[@"lastFilterWritePath"] = primary;
+        [d writeToFile:cfgPath atomically:YES];
+        LCLogF(@"filter sync: wrote %lu bundles, ok=%d", (unsigned long)bundles.count, ok);
+        // 7) 刷新注入框架缓存（仅成功时）
+        if (ok) {
+            const char *bins[] = {"/usr/bin/killall", "/var/jb/usr/bin/killall",
+                                  "/basebin/usr/bin/killall", NULL};
+            for (int i = 0; bins[i]; i++) {
+                if (access(bins[i], X_OK) != 0) continue;
+                pid_t pid = 0;
+                const char *argv[] = {"killall", "runningboardd", NULL};
+                if (posix_spawn(&pid, bins[i], NULL, NULL, (char *const *)argv, NULL) == 0) {
+                    waitpid(pid, NULL, 0);
+                    break;
+                }
+            }
+        }
+    } @catch (NSException *e) {
+        LCLogF(@"filter sync: exception %@", e);
+    }
+}
+
+static void LCRegisterReloadNotify(void) {
+    int token = 0;
+    if (notify_register_dispatch("com.sykes.livecap.reload", &token,
+                                 dispatch_get_main_queue(),
+                                 ^(int t){
+        LCLog("filter sync: reload notify received");
+        LCApplySelectedAppsToFilter();
+    }) == NOTIFY_STATUS_OK) {
+        LCLog("filter sync: reload notify registered");
+    }
+}
+
 static void LCLazyInit(void) {
     if (LCLazyStarted) return;
     LCLazyStarted = YES;
@@ -5006,6 +5143,8 @@ static void LCLazyInit(void) {
         [[LCSubtitleOverlay shared] install];
     }
     LCLog("init: done");
+    // v2.2.2：启动同步一次 Filter（把面板勾选的 App 应用到注入声明）
+    LCApplySelectedAppsToFilter();
 }
 
 // v2.2.1：对齐 XL-Roothide —— 运行时【不】做 App 白名单拦截。
@@ -5087,6 +5226,8 @@ static void LCInit(void) {
     if (strncmp(exe, "/bin", 4) == 0) return;
     // v2.2.1：不再用偏好白名单拦 hook（详见 LCLogBundleSelection 注释）
     LCLogBundleSelection();
+    // v2.2.2：注册 reload 通知，面板勾选 App 后由 dylib 代写 Filter
+    LCRegisterReloadNotify();
 
     // 注入后先等 App 完全启动（3s），再在下一轮主线程空闲时做 hook，
     // 最大程度避免干扰 App 自身初始化。

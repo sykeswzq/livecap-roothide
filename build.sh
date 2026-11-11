@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=2.2.1
+VER=2.2.2
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -120,7 +120,7 @@ Maintainer: sykes
 Author: sykes
 Section: Tweaks
 Priority: optional
-Description: 任意App实时视频字幕翻译。抓取 AVPlayer 系 App 的音频，腾讯云一句话识别（在线 ASR，无需iOS授权）转写 + OpenAI 兼容接口翻译，悬浮双语字幕。兼容 Dopamine2-roothide 白名单注入。目标App需在 Dopamine Inject Manager 白名单勾选。
+Description: 任意App实时视频字幕翻译。抓取 AVPlayer 系 App 的音频，腾讯云一句话识别（在线 ASR，无需iOS授权）转写 + OpenAI 兼容接口翻译，悬浮双语字幕。兼容 Dopamine2-roothide 注入。目标App需在设置面板「选择注入App」中勾选，由已注入 App 自动同步注入声明。
 EOF
 cp postinst pkg/DEBIAN/postinst
 cp postrm pkg/DEBIAN/postrm

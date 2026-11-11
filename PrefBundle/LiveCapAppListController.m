@@ -96,89 +96,6 @@ static NSArray<NSString *> *LCDefaultBundles(void) {
     return list;
 }
 
-// 照 XL-Roothide：改完 Filter 立刻让注入框架重读，否则要手动注销才生效。
-static void LCRefreshInjection(void) {
-    @try {
-        const char *bins[] = {"/usr/bin/killall", "/var/jb/usr/bin/killall",
-                              "/basebin/usr/bin/killall", NULL};
-        for (int i = 0; bins[i]; i++) {
-            if (access(bins[i], X_OK) != 0) continue;
-            pid_t pid = 0;
-            const char *argv[] = {"killall", "runningboardd", NULL};
-            if (posix_spawn(&pid, bins[i], NULL, NULL, (char *const *)argv, NULL) == 0) {
-                waitpid(pid, NULL, 0);
-                return;
-            }
-        }
-    } @catch (NSException *e) {}
-}
-
-static BOOL LCWriteFilterBundles(NSArray *raw) {
-    @try {
-        NSMutableArray *bundles = [NSMutableArray array];
-        for (id b in raw) {
-            if (![b isKindOfClass:[NSString class]]) continue;
-            NSString *bid = (NSString *)b;
-            if (bid.length == 0) continue;
-            if ([bid isEqualToString:@"com.apple.springboard"]) continue;
-            if ([bid hasPrefix:@"com.apple."]) continue;
-            [bundles addObject:bid];
-        }
-        if (bundles.count == 0) bundles = [@[@"com.sykes.livecap.disabled"] mutableCopy];
-        NSSet *want = [NSSet setWithArray:bundles];
-
-        // v2.2.1：所有候选路径都写，主路径（能读到有效 Filter 的那条）成功才算成功。
-        // v2.2.0 曾「第一条写成就 return」，可能只写进影子目录，真正的 Filter 没改。
-        NSString *primary = LCFilterPlistPath();
-        BOOL primaryOK = NO;
-        NSUInteger okCount = 0;
-        NSString *usedPath = nil;
-
-        for (NSString *path in LCFilterPlistCandidates()) {
-            NSMutableDictionary *plist = [NSMutableDictionary dictionary];
-            NSDictionary *old = [NSDictionary dictionaryWithContentsOfFile:path];
-            if (old) [plist addEntriesFromDictionary:old];
-            NSMutableDictionary *filter = [NSMutableDictionary dictionary];
-            if ([plist[@"Filter"] isKindOfClass:[NSDictionary class]])
-                [filter addEntriesFromDictionary:plist[@"Filter"]];
-            filter[@"Bundles"] = bundles;
-            plist[@"Filter"] = filter;
-
-            NSData *data = [NSPropertyListSerialization
-                            dataWithPropertyList:plist
-                                          format:NSPropertyListXMLFormat_v1_0
-                                         options:0 error:NULL];
-            if (!data.length) continue;
-            if (![data writeToFile:path atomically:YES]) continue;
-
-            NSDictionary *back = [NSDictionary dictionaryWithContentsOfFile:path];
-            NSArray *bb = back[@"Filter"][@"Bundles"];
-            if (![bb isKindOfClass:[NSArray class]]) continue;
-            if (![[NSSet setWithArray:bb] isEqualToSet:want]) continue;
-
-            // 面板写入后别把 Filter 变成只读，否则下次勾选会静默失败
-            @try {
-                [[NSFileManager defaultManager]
-                    setAttributes:@{NSFilePosixPermissions: @(0666)}
-                    ofItemAtPath:path error:NULL];
-            } @catch (NSException *e) {}
-
-            okCount++;
-            if (!usedPath) usedPath = path;
-            if ([path isEqualToString:primary]) primaryOK = YES;
-        }
-
-        BOOL ok = (primaryOK || okCount > 0);
-        LCAppListSetValue(usedPath ?: @"", @"lastFilterWritePath");
-        LCAppListSetValue(@(ok), @"lastFilterWriteOK");
-        if (ok) LCRefreshInjection();
-        return ok;
-    } @catch (NSException *e) {
-        LCAppListSetValue(@NO, @"lastFilterWriteOK");
-        return NO;
-    }
-}
-
 @interface LiveCapAppListController : PSViewController <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate>
 @end
 
@@ -363,7 +280,7 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     NSUInteger n = [[self lc_selected] count];
     NSMutableString *s = [NSMutableString stringWithFormat:
         @"已勾选 %lu 个 App（偏好已保存）", (unsigned long)n];
-    [s appendString:_filterWriteOK ? @" · Filter 写入成功" : @" · Filter 写入失败"];
+    [s appendString:_filterWriteOK ? @" · 注入同步成功" : @" · 注入同步失败"];
     [s appendFormat:@" · Filter 声明 %lu 个", (unsigned long)[LCReadFilterBundles() count]];
     return s;
 }
@@ -378,12 +295,12 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     lb.numberOfLines = 0;
     lb.font = [UIFont systemFontOfSize:12];
     lb.textColor = [UIColor secondaryLabelColor];
-    lb.text = @"勾选后会立即刷新注入缓存（killall runningboardd）。\n"
-             @"新增 App 真正生效还需两步：\n"
-             @"① Dopamine → Inject Manager 里勾选该 App；\n"
-             @"② 彻底杀掉目标 App 再打开（或注销设备）。\n"
-             @"取消勾选：重启该 App 后停用。若显示「Filter 写入失败」，"
-             @"说明 Filter 路径不可写，可在 Filza 手动改 LiveCap.plist。";
+    lb.text = @"勾选后由已注入的 App 自动把列表同步进注入声明并刷新缓存。\n"
+             @"新增 App 首次生效：\n"
+             @"① 本工具会自动写入注入声明；\n"
+             @"② 先打开任意一个已注入 App（如 B站/YouTube）触发同步，\n"
+             @"   再彻底杀掉目标 App（上滑关闭）重新打开即可。\n"
+             @"若列表旁显示「注入同步失败」，说明 Filter 文件不可写。";
     [v addSubview:lb];
     return v;
 }
@@ -422,8 +339,12 @@ static BOOL LCWriteFilterBundles(NSArray *raw) {
     LCAppListSetValue(picked, LCAppListKey);
     // 兼容 v2.2.0 残留键：保留同一份列表，避免回滚旧包时被运行时白名单误杀
     LCAppListSetValue(picked, @"enabledBundles");
-    // ② 注入声明写 Filter + 刷新注入缓存
-    _filterWriteOK = LCWriteFilterBundles(picked);
+    // ② Filter 写入交由「已注入 App 内的 dylib」代为完成（roothide 下面板无写权限）。
+    //    面板只负责写偏好 + notify_post("com.sykes.livecap.reload")，
+    //    由 dylib 监听后在进程内写入 Filter 并刷新注入缓存。
+    //    是否成功以 dylib 回写的 lastFilterWriteOK 为准。
+    id ok = LCAppListValue(@"lastFilterWriteOK");
+    _filterWriteOK = [ok isKindOfClass:[NSNumber class]] ? [ok boolValue] : YES;
 }
 
 - (void)lc_switchChanged:(UISwitch *)sw {

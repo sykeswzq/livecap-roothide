@@ -1,5 +1,5 @@
 #!/bin/sh
-# postinst v2.2.1 —— 预写默认配置 + 修复注入 + 刷新缓存
+# postinst v2.2.2 —— 预写默认配置 + 确保 Filter 权限 + 刷新缓存
 LOG=/var/mobile/Documents/livecap_install.log
 mkdir -p /var/mobile/Documents
 chmod 777 /var/mobile/Documents
@@ -74,11 +74,11 @@ else
   echo "ERROR: LiveCap.plist not found at $DYLIB_PATH" >> "$LOG"
 fi
 
-# v2.2.1 对齐 XL-Roothide：再按 deb 解包目录的相对路径修一次 Filter 权限。
-# roothide 下 /var/jb 在不同进程里可能指向影子目录，硬编码那条可能落空；
-# 相对 CWD（dpkg 执行 maintainer script 时的安装根）才是真正解包的位置。
-# Filter 必须是 666，「设置」面板（mobile 用户）才能改写 Bundles，
-# 否则勾选会静默失败 —— XL 的 build.sh/postinst 都是这个做法。
+# v2.2.2：Filter 必须是 666，由「已注入 App 内的 dylib」（mobile 身份）改写 Bundles。
+# roothide 下 /var/jb 在「设置」面板（未注入）进程里是影子视图、写会被沙盒拒绝，
+# 只有 libroothide 注入后的 App 才能写到真实的 .jbroot 目录。
+# 故面板只写 selectedApps 偏好 + notify_post，Filter 实际由 dylib 代写（详见 LiveCap.m）。
+# 这里确保文件权限为 666 即可，让 dylib 后续能写。
 FILTER_CWD="Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
 FILTER_REL="$(dirname "$0")/../../Library/MobileSubstrate/DynamicLibraries/LiveCap.plist"
 for fp in "$FILTER_CWD" "$FILTER_REL"; do

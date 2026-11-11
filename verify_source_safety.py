@@ -1220,15 +1220,18 @@ def check_v220_fixes(src, panel_src):
 
 
 def check_v221_fixes(src, applist_src, postinst_src):
-    """v2.2.1：照 XL-Roothide 成熟实现重做注入勾选链路。
+    """v2.2.1/v2.2.2：注入勾选链路（对照 XL-Roothide）。
 
-    用户反馈「注入还是有问题，选其他 App 无效」。对照 sykeswzq/XL-Roothide：
-      - XL 把勾选状态存偏好 plist(apps)，LiveCap 却从 Filter plist 回读，
-        roothide 下回读为空 → 勾 1 个就把默认 27 个 bundle 抹成 1 个；
-      - XL 写完 Filter 立刻 killall runningboardd，LiveCap 没有 → 不刷新缓存；
-      - XL dylib 运行时不做白名单判定，LiveCap v2.2.0 加了 enabledBundles
-        硬卡「不在列表就 return」→ 列表写坏时连 YouTube 一起挡掉。
-    这里锚定修复关键串，并显式禁止硬卡回归。
+    v2.2.1：勾选真相存偏好 + 不拦 hook + Filter 666。
+    v2.2.2（关键变更）：roothide 下「设置」面板（未注入）看不到 .jbroot 视图、
+            写 Filter 会被沙盒拒绝（实测 mobile 直写 Permission denied），
+            故 Filter 实际由【已注入 App 内的 dylib】代写。面板只写 selectedApps
+            偏好 + notify_post，dylib 监听 notify 后在进程内写 Filter 并刷新缓存。
+            必须守住的约束（v2.2.2）：
+              - dylib 必须有 LCApplySelectedAppsToFilter 且写完 killall runningboardd；
+              - 必须幂等（isEqualToSet 判断），否则启动/通知同步会反复重启 runningboardd 循环；
+              - 必须 notify_register_dispatch 监听 com.sykes.livecap.reload；
+              - 面板不得再直接写 Filter（LCWriteFilterBundles / LCRefreshInjection 必须消失）。
     """
     # ① dylib 绝不能再拦 hook
     if "if (!LCBundleAllowedByPrefs()) return;" in src:
@@ -1238,7 +1241,24 @@ def check_v221_fixes(src, applist_src, postinst_src):
     if "not in enabledBundles (log only" not in src:
         errors.append("v2.2.1 回归: 注入诊断日志未标明「仅记录不拦截」")
 
-    # ② 面板：状态真相在偏好 + 刷新注入缓存 + 全候选同步写 + 默认值兜底
+    # ② v2.2.2：Filter 写入 + 刷新缓存 必须在 dylib 侧（面板无写权限）
+    for token, why in (
+            ("LCApplySelectedAppsToFilter", "dylib 代写 Filter 的入口（roothide 下面板无写权限）"),
+            ("runningboardd", "写完 Filter 必须 killall runningboardd 刷新注入框架缓存"),
+            ("notify_register_dispatch", "dylib 监听 reload 通知，面板勾选后即时生效"),
+            ("com.sykes.livecap.reload", "与面板 notify_post 对应的通知名"),
+            ("lastFilterWritePath", "Filter 写入诊断（dylib 写回偏好）"),
+            ("lastFilterWriteOK", "Filter 写入结果诊断（dylib 写回偏好）"),
+            ("isEqualToSet", "幂等判断：Bundles 集合未变则跳过写+刷新，避免循环重启")):
+        if token not in src:
+            errors.append("v2.2.2 回归: dylib 缺少 %s —— %s" % (token, why))
+    # 启动同步 + 通知注册 必须到位
+    if "LCApplySelectedAppsToFilter();" not in src:
+        errors.append("v2.2.2 回归: 没有调用 LCApplySelectedAppsToFilter —— 启动/通知同步都不会写 Filter")
+    if "LCRegisterReloadNotify();" not in src:
+        errors.append("v2.2.2 回归: LCInit 未注册 reload 通知监听")
+
+    # ③ 面板：状态真相在偏好 + 发通知；不得再直接写 Filter
     if applist_src is None:
         errors.append("v2.2.1 回归: 读不到 App 列表控制器源码")
     else:
@@ -1247,29 +1267,29 @@ def check_v221_fixes(src, applist_src, postinst_src):
         for token, why in (
                 ("selectedApps", "勾选状态必须存偏好，不能从 Filter 回读"),
                 ("LCAppListSetValue", "偏好写入 + notify_post（XL 的 XLSetValue）"),
-                ("notify_post", "配置变更通知"),
+                ("notify_post", "配置变更通知（dylib 据此代写 Filter）"),
                 ("LCReadFilterBundles", "老配置一次性迁移入口"),
-                ("LCDefaultBundles", "Filter 回读为空时用打包默认列表兜底"),
-                ("LCRefreshInjection", "写完 Filter 必须刷新注入缓存"),
-                ("runningboardd", "XL 同款 killall runningboardd"),
-                ("primaryOK", "所有候选路径同步写，不能第一条成功就 return"),
-                ("lastFilterWritePath", "Filter 写入诊断")):
+                ("LCDefaultBundles", "Filter 回读为空时用打包默认列表兜底")):
             if token not in code:
                 errors.append("v2.2.1 回归: 面板缺少 %s —— %s" % (token, why))
-        # 只留函数定义、删掉调用点也不行：Filter 改了但注入框架不重读
-        if "LCRefreshInjection();" not in code:
-            errors.append("v2.2.1 回归: 写完 Filter 没有调用刷新注入缓存，改了 plist 也不生效")
+        # v2.2.2：面板必须把 Filter 写入交给 dylib，自己不得再写
+        if "LCWriteFilterBundles" in code:
+            errors.append("v2.2.2 回归: 面板仍含 LCWriteFilterBundles —— "
+                          "roothide 下面板无 Filter 写权限，必须交由 dylib 代写")
+        if "LCRefreshInjection" in code:
+            errors.append("v2.2.2 回归: 面板仍含 LCRefreshInjection —— "
+                          "刷新注入缓存现在由 dylib 在写 Filter 后完成")
         if "CFPreferencesAppSynchronize" in code:
             errors.append("v2.2.1 回归: 面板又用 CFPreferences 同步，cfprefsd 旧快照会覆盖文件")
 
-    # ③ postinst：按 deb 解包相对路径修 Filter 权限（XL 做法）
+    # ④ postinst：按 deb 解包相对路径修 Filter 权限（XL 做法）
     if postinst_src is None:
         errors.append("v2.2.1 回归: 读不到 postinst")
     else:
         if "FILTER_CWD" not in postinst_src:
             errors.append("v2.2.1 回归: postinst 缺少相对安装路径的 Filter 权限修复")
         if "chmod 666" not in postinst_src:
-            errors.append("v2.2.1 回归: Filter 未开放 666，面板无法改写 Bundles")
+            errors.append("v2.2.1 回归: Filter 未开放 666，dylib 无法改写 Bundles")
 
 
 def main():
@@ -1339,7 +1359,7 @@ def main():
     print("  OK: v1.0.87 修复在位（ADTS 封装/失败可恢复/分片不丢音/字号滑块+实时生效）")
     print("  OK: v2.1.1 修复在位（RFC3986编码/中间结果兜底翻译/握手与零产出看门狗/流式开关）")
     print("  OK: v2.2.0 修复在位（整句断句/忠实直译/时序对账/队列与回落排序）")
-    print("  OK: v2.2.1 注入修复在位（偏好存勾选/写后刷新缓存/不拦hook/Filter 666）")
+    print("  OK: v2.2.1/2.2.2 注入修复在位（偏好存勾选/dylib 代写 Filter/不拦hook/Filter 666/幂等刷新）")
     return 0
 
 
