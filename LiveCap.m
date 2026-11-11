@@ -717,6 +717,15 @@ static NSString *LCJBRootPath(NSString *path) {
 
 #pragma mark - 翻译（OpenAI 兼容 chat/completions）
 
+// v2.2.7：回译自检需要 LCTranslator 反向通知 overlay 刷新可信度标记（✓/⚠）。
+// LCSubtitleOverlay 的 @interface 在本文件更靠后（line ~1630），此处前向声明类与方法，
+// 否则 LCTranslator 的 selfCheckOriginal: 在 line 1370 调用 [[LCSubtitleOverlay shared]
+// showConfidence:forSeq:]] 会因「未声明标识符」编译失败。
+@class LCSubtitleOverlay;
+@interface LCSubtitleOverlay (BackCheckForward)
+- (void)showConfidence:(NSString *)mark forSeq:(NSUInteger)seq;
+@end
+
 @interface LCTranslator : NSObject
 + (instancetype)shared;
 - (void)translate:(NSString *)text completion:(void (^)(NSString *result))completion;
@@ -1645,6 +1654,8 @@ static BOOL gProcessingFormatValid = NO;
 // v1.0.87：配置热重载（面板改字号后无需重启 App，字幕立即变大/变小）
 - (void)startConfigWatcher;
 - (void)checkConfigChange;
+// v2.2.7：回译自检标记刷新（ok->✓ / warn->⚠ / 其他清空），按当前显示 seq 校验后重绘
+- (void)showConfidence:(NSString *)mark forSeq:(NSUInteger)seq;
 @end
 
 #pragma mark - 腾讯云实时语音识别 WebSocket（v2.1.0：不攒音频，边说边推）
