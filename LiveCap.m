@@ -1567,7 +1567,7 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
         @"engine_model_type": engine,
         @"voice_format": @"1",
         @"needvad": @"1",
-        @"vad_silence_time": @"800",
+        @"vad_silence_time": @"1000",
         @"max_speak_time": @"15000",
         @"filter_empty_result": @"1",
         @"voice_id": [[NSUUID UUID] UUIDString],
@@ -1710,9 +1710,10 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
         [self lc_commitSentence:merged reason:@"slice2"];
         return;
     }
-    if (st == 1) {
+    if (st == 1 || st == 0) {
         // v2.2.0：中间结果【只登记、只累积，绝不单独送翻译】。
         // v2.1.1 每 3 秒把半句当整句送译，是本轮「字幕对不上」的首因。
+        // v2.2.6：slice_type=0（一句话开始）也并入累积，避免首帧文本被丢（缺头型半句）。
         [[LCSubtitleOverlay shared] showPartial:txt];
         NSString *merged = [self lc_mergePartial:txt];
         [self lc_updateSentence:merged];
@@ -1755,7 +1756,7 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     unichar last = [s characterAtIndex:s.length - 1];
     if (last == '.' || last == '?' || last == '!' ||
         last == 0x3002 || last == 0xFF1F || last == 0xFF01) return YES;   // 句末标点
-    if (now - _lastChangeAt >= 1.0 && s.length >= 8) return YES;          // 静音断句
+    if (now - _lastChangeAt >= 2.5 && s.length >= 8) return YES;          // 静音断句（v2.2.6: 1.0->2.5，避免句内停顿误切半句）
     if (s.length >= 100) return YES;                                       // 长度上限
     if (_sentenceStartAt > 0 && now - _sentenceStartAt >= 8.0) return YES; // 硬上限
     return NO;
@@ -1767,7 +1768,7 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     NSString *s = [_sentence copy];
     if (s.length < 2) return;
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-    if (now - _lastChangeAt >= 1.0 && s.length >= 8)
+    if (now - _lastChangeAt >= 2.5 && s.length >= 8)
         [self lc_commitSentence:s reason:@"silence"];
     else if (_sentenceStartAt > 0 && now - _sentenceStartAt >= 8.0)
         [self lc_commitSentence:s reason:@"timeout"];

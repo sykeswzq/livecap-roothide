@@ -1308,6 +1308,16 @@ def check_v221_fixes(src, applist_src, postinst_src):
         if "<key>Filter</key>" not in postinst_src or "Bundles" not in postinst_src:
             errors.append("v2.2.5 回归: postinst 未重建 Filter.plist（写回 Bundles）")
 
+        # v2.2.6：断句静音阈值 1.0s -> 2.5s（两处），避免口语句内停顿被误切成半句；
+        # 服务端 VAD 静音 800ms -> 1000ms；slice_type=0（句首）并入累积，防丢句头。
+        if src.count("now - _lastChangeAt >= 2.5") < 2:
+            errors.append("v2.2.6 回归: 断句静音阈值未设为 2.5s（两处），"
+                          "句内停顿会再次被误切成半句翻译")
+        if '"vad_silence_time": @"1000"' not in src:
+            errors.append("v2.2.6 回归: 服务端 VAD vad_silence_time 未设为 1000ms")
+        if "st == 1 || st == 0" not in src:
+            errors.append("v2.2.6 回归: slice_type=0（句首）未并入累积，首帧文本可能丢失（缺头半句）")
+
 
 def main():
     try:
@@ -1379,6 +1389,7 @@ def main():
     print("  OK: v2.2.1/2.2.2 注入修复在位（偏好存勾选/dylib 代写 Filter/不拦hook/Filter 666/幂等刷新）")
     print("  OK: v2.2.4 注入修复在位（DynamicLibraries 目录 777，dylib 原子写 Filter 不再失败）")
     print("  OK: v2.2.5 注入修复在位（postinst 从 selectedApps 重建 Filter，升版不再丢失用户勾选）")
+    print("  OK: v2.2.6 断句修复在位（静音阈值 2.5s/VAD 1000ms/句首累积，不再半句翻译）")
     return 0
 
 
