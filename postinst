@@ -83,6 +83,51 @@ fi
 chmod 777 "$DYLIB_PATH" 2>/dev/null && echo "chmod dynlib dir 777 OK" >> "$LOG" \
   || echo "WARN: chmod dynlib dir 777 failed" >> "$LOG"
 
+# v2.2.5：升版后从偏好 selectedApps 重建 Filter，避免打包默认 Filter（28 bundle、无 com.look.avbox）
+# 覆盖掉用户勾选。否则 deb 重装会把默认 Filter 写回，导致暮色等不在默认表里的 App 重开不被注入
+# （鸡生蛋：Filter 无它 -> 不注入 -> dylib 不跑 -> 不补写）。设备无 python，这里用 plutil -convert xml1
+# 把偏好转 XML 后 awk 抽 selectedApps，过滤 com.apple.*/springboard 重建 Filter。
+# 若偏好里还没有 selectedApps（首次安装、面板未打开过），则保留打包默认 Filter，交给 dylib 首次启动补齐。
+CFG_PLIST="/var/mobile/Library/Preferences/com.sykes.livecap.plist"
+if [ -f "$CFG_PLIST" ]; then
+  cp "$CFG_PLIST" /tmp/lc_prefs_xml 2>/dev/null
+  plutil -convert xml1 /tmp/lc_prefs_xml 2>/dev/null
+  APPS=$(awk "/<key>selectedApps<\/key>/ {f=1;next} f&&/<\/array>/ {f=0} f&&/<string>/ {gsub(/<\\/?string>/,\"\");print}" /tmp/lc_prefs_xml 2>/dev/null)
+  rm -f /tmp/lc_prefs_xml
+  if [ -n "$APPS" ]; then
+    NRAW=$(echo "$APPS" | grep -c .)
+    {
+      echo '<?xml version="1.0" encoding="UTF-8"?>'
+      echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+      echo '<plist version="1.0">'
+      echo '<dict>'
+      echo '  <key>Filter</key>'
+      echo '  <dict>'
+      echo '    <key>Bundles</key>'
+      echo '    <array>'
+      for a in $APPS; do
+        case "$a" in
+          com.apple.*|*springboard*) continue;;
+          *) echo "      <string>$a</string>";;
+        esac
+      done
+      echo '    </array>'
+      echo '    <key>Mode</key>'
+      echo '    <string>Any</string>'
+      echo '  </dict>'
+      echo '</dict>'
+      echo '</plist>'
+    } > "$DYLIB_PATH/LiveCap.plist"
+    chown mobile:staff "$DYLIB_PATH/LiveCap.plist" 2>/dev/null || true
+    chmod 666 "$DYLIB_PATH/LiveCap.plist" 2>/dev/null || true
+    echo "Filter rebuilt from selectedApps (raw=$NRAW) -> $DYLIB_PATH/LiveCap.plist" >> "$LOG"
+  else
+    echo "selectedApps empty/absent, keep packaged Filter" >> "$LOG"
+  fi
+else
+  echo "prefs plist absent, keep packaged Filter" >> "$LOG"
+fi
+
 # v2.2.2：Filter 必须是 666，由「已注入 App 内的 dylib」（mobile 身份）改写 Bundles。
 # roothide 下 /var/jb 在「设置」面板（未注入）进程里是影子视图、写会被沙盒拒绝，
 # 只有 libroothide 注入后的 App 才能写到真实的 .jbroot 目录。

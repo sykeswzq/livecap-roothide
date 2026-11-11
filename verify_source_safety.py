@@ -1296,6 +1296,17 @@ def check_v221_fixes(src, applist_src, postinst_src):
             errors.append("v2.2.4 回归: postinst 未把 DynamicLibraries 目录改成 777 —— "
                           "dylib 原子写 Filter 需目录写权限，目录 755 root 会导致 "
                           "mobile 写不进去（filter sync: write failed）")
+        # v2.2.5：deb 升版后必须从 selectedApps 重建 Filter，否则打包默认 Filter
+        # 会覆盖用户勾选（含暮色），导致鸡生蛋（Filter 无它 -> 不注入 -> dylib 不跑 -> 不补写）。
+        if "selectedApps" not in postinst_src:
+            errors.append("v2.2.5 回归: postinst 未读 selectedApps —— "
+                          "升版会把打包默认 Filter 写回，丢失用户勾选，"
+                          "暮色等不在默认表的 App 将无法注入")
+        if "plutil -convert xml1" not in postinst_src:
+            errors.append("v2.2.5 回归: postinst 未用 plutil 转 XML 抽 selectedApps "
+                          "（设备无 python，必须走 plutil+awk）")
+        if "<key>Filter</key>" not in postinst_src or "Bundles" not in postinst_src:
+            errors.append("v2.2.5 回归: postinst 未重建 Filter.plist（写回 Bundles）")
 
 
 def main():
@@ -1367,6 +1378,7 @@ def main():
     print("  OK: v2.2.0 修复在位（整句断句/忠实直译/时序对账/队列与回落排序）")
     print("  OK: v2.2.1/2.2.2 注入修复在位（偏好存勾选/dylib 代写 Filter/不拦hook/Filter 666/幂等刷新）")
     print("  OK: v2.2.4 注入修复在位（DynamicLibraries 目录 777，dylib 原子写 Filter 不再失败）")
+    print("  OK: v2.2.5 注入修复在位（postinst 从 selectedApps 重建 Filter，升版不再丢失用户勾选）")
     return 0
 
 
