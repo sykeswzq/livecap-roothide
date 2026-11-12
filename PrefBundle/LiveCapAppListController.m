@@ -281,28 +281,17 @@ static NSArray<NSString *> *LCDefaultBundles(void) {
     NSMutableString *s = [NSMutableString stringWithFormat:
         @"已勾选 %lu 个 App（偏好已保存）", (unsigned long)n];
     [s appendString:_filterWriteOK ? @" · 注入同步成功" : @" · 注入同步失败"];
-    [s appendFormat:@" · Filter 声明 %lu 个", (unsigned long)[LCReadFilterBundles() count]];
     return s;
 }
 
+// v2.2.10：移除底部灰色小字说明块（用户反馈影响观看）。
+// 同步状态已体现在分组标题末尾的「注入同步成功/失败」，无需再占一块 footer。
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    return 116.0;
+    return 0.0;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-    UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, 116.0)];
-    UILabel *lb = [[UILabel alloc] initWithFrame:CGRectMake(16, 8, tableView.bounds.size.width - 32, 104)];
-    lb.numberOfLines = 0;
-    lb.font = [UIFont systemFontOfSize:12];
-    lb.textColor = [UIColor secondaryLabelColor];
-    lb.text = @"勾选后由已注入的 App 自动把列表同步进注入声明并刷新缓存。\n"
-             @"新增 App 首次生效：\n"
-             @"① 本工具会自动写入注入声明；\n"
-             @"② 先打开任意一个已注入 App（如 B站/YouTube）触发同步，\n"
-             @"   再彻底杀掉目标 App（上滑关闭）重新打开即可。\n"
-             @"若列表旁显示「注入同步失败」，说明 Filter 文件不可写。";
-    [v addSubview:lb];
-    return v;
+    return nil;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
