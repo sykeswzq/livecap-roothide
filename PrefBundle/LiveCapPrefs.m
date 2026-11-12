@@ -279,12 +279,10 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else if (indexPath.row == 1) {
             cell.textLabel.text = @"选择注入 App";
-            // v2.2.1：与 App 列表页一致，勾选数取自偏好 selectedApps；
-            // 老配置尚未迁移时退回 Filter 声明数，不要显示 0 误导用户。
-            id saved = LCGet(@"selectedApps");
-            NSUInteger n = [saved isKindOfClass:[NSArray class]]
-                ? [(NSArray *)saved count] : [LCReadFilterBundles() count];
-            cell.detailTextLabel.text = [NSString stringWithFormat:@"已勾选 %lu 个", (unsigned long)n];
+            // v2.2.13：与 App 列表页同口径，显示「实际注入」数（Filter ∩ 已安装），
+            // 不再数旧版落盘的 29 个默认 Bundle。
+            NSUInteger n = [LCRealInjectedList() count];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"实际注入 %lu 个", (unsigned long)n];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 2) {
             cell.textLabel.text = @"识别分片时长";

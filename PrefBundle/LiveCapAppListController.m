@@ -155,27 +155,24 @@ static NSArray<NSString *> *LCDefaultBundles(void) {
     [_tv reloadData];
 }
 
-// 对齐 XL-Roothide：勾选状态只认偏好 plist（selectedApps）。
-// 偏好为空时回显 dylib 已写入 Filter 的实际注入，保证「显示 = 真实注入」，
-// 绝不臆造默认勾选。旧版用 LCDefaultBundles() 把 29 个默认 App 全勾上，
-// 正是「明明只注入 2 个、列表却显示 29 个」的根因 —— 已去除。
+// v2.2.13：勾选状态 = 实际注入（Filter 声明 ∩ 本机已安装 App），三处显示同口径。
+// 旧版把 29 个打包默认 Bundle 落盘进 selectedApps，postinst 与 dylib 又拿它
+// 重建 Filter，所以「已勾选 29 个」而实际只有装在机上的 2 个生效 —— 只改标题
+// 没用，必须同时把这份脏数据对齐掉，否则下次同步又被写回 29。
 - (NSMutableSet<NSString *> *)lc_selected {
     if (_selected) return _selected;
-    _selected = [NSMutableSet set];
-    id saved = LCAppListValue(LCAppListKey);
-    if ([saved isKindOfClass:[NSArray class]] && ((NSArray *)saved).count) {
-        for (id s in (NSArray *)saved)
-            if ([s isKindOfClass:[NSString class]] && ((NSString *)s).length)
-                [_selected addObject:(NSString *)s];
-        return _selected;
-    }
-    // 偏好为空：回显 Filter 里 dylib 实际注入的 bundles（真实注入范围），
-    // 不为空则显示真实数量，为空则显示 0（像 XL 一样干净，装好不自动勾满）。
-    for (id b in LCReadFilterBundles()) {
-        if (![b isKindOfClass:[NSString class]]) continue;
-        NSString *bid = (NSString *)b;
-        if (bid.length == 0 || [bid hasSuffix:@".disabled"]) continue;
-        [_selected addObject:bid];
+    NSArray<NSString *> *real = LCRealInjectedList();
+    _selected = [NSMutableSet setWithArray:real];
+    // 一次性对齐：把历史落盘的 29 个默认 Bundle 清成真实注入集合，让
+    // selectedApps / enabledBundles / injectApps 与 Filter 一致。标记存在后
+    // 永不再执行，之后完全以用户勾选为准（避免抹掉刚勾、Filter 还没同步的 App）。
+    id flag = LCAppListValue(@"appListAlignedV213");
+    if (!([flag isKindOfClass:[NSNumber class]] && [flag boolValue])) {
+        NSArray *picked = [real sortedArrayUsingSelector:@selector(compare:)];
+        LCAppListSetValue(picked, LCAppListKey);
+        LCAppListSetValue(picked, @"enabledBundles");
+        LCAppListSetValue(picked, @"injectApps");
+        LCAppListSetValue(@YES, @"appListAlignedV213");
     }
     return _selected;
 }
@@ -274,12 +271,11 @@ static NSArray<NSString *> *LCDefaultBundles(void) {
     return (NSInteger)_shown.count;
 }
 
+// v2.2.13：只显示「实际注入」数量，不再出现与真实注入不符的 29，
+// 也不带同步状态小尾巴（用户反馈界面要干净）。
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     NSUInteger n = [[self lc_selected] count];
-    NSMutableString *s = [NSMutableString stringWithFormat:
-        @"已勾选 %lu 个 App（偏好已保存）", (unsigned long)n];
-    [s appendString:_filterWriteOK ? @" · 注入同步成功" : @" · 注入同步失败"];
-    return s;
+    return [NSString stringWithFormat:@"实际注入 %lu 个 App", (unsigned long)n];
 }
 
 // v2.2.10：移除底部灰色小字说明块（用户反馈影响观看）。

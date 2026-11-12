@@ -158,3 +158,33 @@ static inline NSSet *LCReallyInjectedIDs(void) {
     } @catch (NSException *e) {}
     return out;
 }
+
+// v2.2.13：UI 统一口径「实际注入」= Filter 声明 ∩ 本机已安装 App，
+// 排除 com.apple.* 系统项与 .disabled。旧版把 29 个打包默认 Bundle 落盘到
+// selectedApps，postinst/dylib 又拿它重建 Filter，于是界面显示 29 个而真正
+// 生效的只有装在机上的那几个。Filter 在设置进程读不到时退回偏好，避免误显示 0。
+static inline NSArray<NSString *> *LCRealInjectedList(void) {
+    NSArray *src = LCReadFilterBundles();
+    if (src.count == 0) {
+        @try {
+            NSString *p = LCJbRootPath(@"/var/mobile/Library/Preferences/com.sykes.livecap.plist");
+            NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:p];
+            id s = d[@"selectedApps"] ?: d[@"enabledBundles"];
+            if ([s isKindOfClass:[NSArray class]]) src = (NSArray *)s;
+        } @catch (NSException *e) {}
+    }
+    NSSet *installed = LCInstalledAppIDs();
+    NSMutableArray *out = [NSMutableArray array];
+    NSMutableSet *seen = [NSMutableSet set];
+    for (id b in (src ?: @[])) {
+        if (![b isKindOfClass:[NSString class]]) continue;
+        NSString *bid = (NSString *)b;
+        if (!bid.length || [bid hasSuffix:@".disabled"]) continue;
+        if ([bid hasPrefix:@"com.apple."]) continue;
+        if (installed.count && ![installed containsObject:bid]) continue;
+        if ([seen containsObject:bid]) continue;
+        [seen addObject:bid];
+        [out addObject:bid];
+    }
+    return [out sortedArrayUsingSelector:@selector(compare:)];
+}

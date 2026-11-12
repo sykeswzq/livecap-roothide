@@ -1268,7 +1268,7 @@ def check_v221_fixes(src, applist_src, postinst_src):
                 ("selectedApps", "勾选状态必须存偏好，不能从 Filter 回读"),
                 ("LCAppListSetValue", "偏好写入 + notify_post（XL 的 XLSetValue）"),
                 ("notify_post", "配置变更通知（dylib 据此代写 Filter）"),
-                ("LCReadFilterBundles", "偏好为空时回显 dylib 已写入 Filter 的真实注入")):
+                ("LCRealInjectedList", "显示口径统一为实际注入（Filter ∩ 已安装）")):
             if token not in code:
                 errors.append("v2.2.1 回归: 面板缺少 %s —— %s" % (token, why))
         # v2.2.11：彻底去除「29 个默认 App 兜底勾选」——对齐 XL「只显示用户真正勾选的」。
@@ -1287,6 +1287,29 @@ def check_v221_fixes(src, applist_src, postinst_src):
                           "刷新注入缓存现在由 dylib 在写 Filter 后完成")
         if "CFPreferencesAppSynchronize" in code:
             errors.append("v2.2.1 回归: 面板又用 CFPreferences 同步，cfprefsd 旧快照会覆盖文件")
+        # v2.2.13：必须按实际注入显示，并带一次性脏数据对齐
+        if "appListAlignedV213" not in code:
+            errors.append("v2.2.13 回归: 缺少一次性清理 29 个历史脏数据的对齐逻辑")
+        if "实际注入 %lu 个 App" not in code:
+            errors.append("v2.2.13 回归: App 列表页标题未改为「实际注入 N 个 App」")
+
+    # ⑤ v2.2.13：三处显示统一「实际注入」口径 + 设置图标由 PreferenceLoader 声明
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, 'PrefBundle', 'LiveCapPrefs.m'), encoding='utf-8') as f:
+            prefs_code = f.read()
+        if 'LCRealInjectedList' not in prefs_code:
+            errors.append("v2.2.13 回归: 主设置页仍数 selectedApps，会显示 29 而非实际注入数")
+    except Exception as e:
+        errors.append("v2.2.13 回归: 读不到 LiveCapPrefs.m (%s)" % e)
+    try:
+        with open(os.path.join(base, 'PrefLoader.plist'), encoding='utf-8') as f:
+            pl_src = f.read()
+        if '<key>icon</key>' not in pl_src or 'icon.png' not in pl_src:
+            errors.append("v2.2.13 回归: PrefLoader.plist 的 entry 缺少 icon 键 —— "
+                          "设置里只会显示系统默认占位图标（与 XL 相同）")
+    except Exception as e:
+        errors.append("v2.2.13 回归: 读不到 PrefLoader.plist (%s)" % e)
 
     # ④ postinst：按 deb 解包相对路径修 Filter 权限（XL 做法）
     if postinst_src is None:
