@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 KEY = 'E:/SynologyDrive/单位/F/wangziqing/00000/ucs_ssh_key'
 HOST_DEFAULT = '10.10.201.107'
 DEB = os.path.join(HERE, 'releases',
-                   'com.sykes.livecap_2.2.14_iphoneos-arm64e.deb')
+                   'com.sykes.livecap_2.2.15_iphoneos-arm64e.deb')
 PLIST = '/var/mobile/Library/Preferences/com.sykes.livecap.plist'
 
 

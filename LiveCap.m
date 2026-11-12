@@ -780,7 +780,16 @@ static NSString *LCJBRootPath(NSString *path) {
     BOOL _inflight;
     BOOL _tencentDisabled;   // 腾讯云机器翻译服务未开通时，本次会话内跳过
     // v2.0.2：agnes 免费额度限流后的暂停截止时间戳（0 = 正常参赛）
+    // v2.2.15 起改为「10 秒短冷却 + 半开探测」，不再一刀切 90 秒。
     NSTimeInterval _agnesPausedUntil;
+    // v2.2.15：MyMemory 当日免费额度耗尽后的冷却截止时间戳。
+    // 旧代码每句都发一个注定 429 的请求（设备实测 45 次/分钟），
+    // 既抢 ASR 上行带宽，又把免费额度刷爆。冷却期间不列入参赛厂商。
+    NSTimeInterval _mymemoryPausedUntil;
+    // v2.2.15：agnes 上次发请求的（预约）时间，用于 350ms 最小间隔节流；
+    // race 序号，用于冷却期内每 5 句做一次半开探测。
+    NSTimeInterval _lastAgnesSendAt;
+    NSUInteger _raceSeq;
 }
 
 + (instancetype)shared {
@@ -794,6 +803,10 @@ static NSString *LCJBRootPath(NSString *path) {
         s->_lastSentText = [NSMutableDictionary dictionary];
         s->_lastSentTime = [NSMutableDictionary dictionary];
         s->_pendingItems = [NSMutableArray array];
+        s->_agnesPausedUntil = 0;
+        s->_mymemoryPausedUntil = 0;
+        s->_lastAgnesSendAt = 0;
+        s->_raceSeq = 0;
     });
     return s;
 }
@@ -985,22 +998,38 @@ static NSString *LCDetectLang(NSString *text);
     NSString *model = [[LCConfig shared] model];
 
     // 参赛厂商
-    // v2.0.2：agnes 免费额度报「速率限制」后暂停 90 秒，不再发无效请求。
-    // 设备实测 22 次 provider 失败几乎全是这个错误：白跑一个 HTTPS 请求，
-    // 还会和 ASR 抢上行带宽（ASR p90 高达 4.8s）。MyMemory 始终是兜底。
+    // v2.2.15 限流恢复策略（设备日志 2026-11-12 13:44 实证）：
+    //   agnes 偶发一次 HTTP 429 就暂停 90 秒、期间完全不参赛；而同一时段
+    //   MyMemory 当日免费额度已耗尽(429)、腾讯 TMT 服务未开通 → 三条通道
+    //   同时断，连续 38 句 showFailed，用户看到的就是「没在翻译」。
+    //   实测 agnes 事后单次 / 连续 6 次请求全部 HTTP 200 → 429 是短时 QPS
+    //   限流而不是当日额度用尽，90 秒一刀切属于过度反应。
+    // 改法：① 429 后只冷却 10 秒；② 冷却期每 5 句做一次半开探测；
+    //       ③ MyMemory 当日额度耗尽后冷却 10 分钟，不再发无效请求；
+    //       ④ MyMemory 冷却时 agnes 即使处于冷却也强制参赛，保证任何时刻
+    //          都有一条真正可用的翻译通道在跑；⑤ providers 永不为空。
     NSMutableArray *providers = [NSMutableArray array];
     BOOL tencentDisabled = NO;
     BOOL agnesPaused = NO;
+    BOOL mymemoryCooling = NO;
+    NSUInteger seq = 0;
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     @synchronized(self) {
         tencentDisabled = _tencentDisabled;
-        agnesPaused = (_agnesPausedUntil > 0 &&
-                       [NSDate timeIntervalSinceReferenceDate] < _agnesPausedUntil);
+        agnesPaused = (_agnesPausedUntil > 0 && now < _agnesPausedUntil);
+        mymemoryCooling = (_mymemoryPausedUntil > 0 && now < _mymemoryPausedUntil);
+        _raceSeq += 1;
+        seq = _raceSeq;
     }
-    if (apiKey.length && apiBase.length && !agnesPaused) [providers addObject:@"agnes"];
-    [providers addObject:@"mymemory"];               // 永远保留的免费兜底
+    BOOL halfOpenProbe = (seq % 5 == 0);
+    BOOL forceAgnes = mymemoryCooling;   // 免费兜底停摆时，agnes 是唯一希望
+    if (apiKey.length && apiBase.length &&
+        (!agnesPaused || halfOpenProbe || forceAgnes)) [providers addObject:@"agnes"];
+    if (!mymemoryCooling) [providers addObject:@"mymemory"];
     NSString *secretId = [[LCConfig shared] tencentSecretId];
     NSString *secretKey = [[LCConfig shared] tencentSecretKey];
     if (!tencentDisabled && secretId.length && secretKey.length) [providers addObject:@"tencent"];
+    if (providers.count == 0) [providers addObject:@"mymemory"];  // 不能让 pending=0 卡住回调
 
     // 竞速状态：pending=未结束请求数，won=是否已有赢家
     NSMutableDictionary *state = [NSMutableDictionary dictionary];
@@ -1032,6 +1061,9 @@ static NSString *LCDetectLang(NSString *text);
             @synchronized(self) {
                 _cache[cacheKey] = res;
                 if (_cache.count > 300) [_cache removeAllObjects];
+                // v2.2.15：agnes 一旦翻出有效中文，说明限流已解除，
+                // 立刻清掉冷却，别让后续句子还被拦在门外。
+                if ([provider isEqualToString:@"agnes"]) _agnesPausedUntil = 0;
             }
             LCLogF(@"translate: provider '%@' WON len=%lu", provider, (unsigned long)res.length);
             if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(res); });
@@ -1059,9 +1091,27 @@ static NSString *LCDetectLang(NSString *text);
                        completion:^(NSString *r) { onResult(p, r); }];
         } else if ([p isEqualToString:@"agnes"]) {
             LCLogF(@"translate: race -> agnes model=%@", model);
-            [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
-                          apiKey:apiKey apiBase:apiBase model:model maxAttempts:1
-                       completion:^(NSString *r) { onResult(p, r); }];
+            // v2.2.15：最小发送间隔 350ms。ASR 分片重叠时 1 秒内会并发
+            // 3~4 个 agnes 请求，正是把免费网关打成 QPS 429 的诱因。
+            NSTimeInterval agnesDelay = 0;
+            @synchronized(self) {
+                NSTimeInterval t = [NSDate timeIntervalSinceReferenceDate];
+                if (_lastAgnesSendAt > 0 && t - _lastAgnesSendAt < 0.35) {
+                    agnesDelay = 0.35 - (t - _lastAgnesSendAt);
+                }
+                _lastAgnesSendAt = t + agnesDelay;   // 预约，避免并发请求同时算出 0
+            }
+            void (^fireAgnes)(void) = ^{
+                [self openaiTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
+                              apiKey:apiKey apiBase:apiBase model:model maxAttempts:1
+                           completion:^(NSString *r) { onResult(p, r); }];
+            };
+            if (agnesDelay > 0) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(agnesDelay * NSEC_PER_SEC)),
+                    dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), fireAgnes);
+            } else {
+                fireAgnes();
+            }
         } else {
             LCLogF(@"translate: race -> mymemory%@", preferAgnes ? @" (delayed 1.0s)" : @"");
             void (^fireMyMemory)(void) = ^{
@@ -1157,6 +1207,25 @@ static NSString *LCShortLang(NSString *lc) {
         NSDictionary *rd = json[@"responseData"];
         NSString *content = rd[@"translatedText"];
         LCLogF(@"translate: mymemory response status=%@ content=[%@]", json[@"responseStatus"], content);
+        // v2.2.15：当日免费额度耗尽会返回 responseStatus=429 + 警告文本
+        // "MYMEMORY WARNING: YOU USED ALL AVAILABLE FREE TRANSLATIONS FOR TODAY"。
+        // 旧代码只挡 "MY MEMORY WARNING"（多一个空格），这条没挡住，于是每句
+        // 都发一个注定失败的请求（设备实测 45 次/分钟），既拖慢 ASR 又刷额度。
+        // 命中后冷却 10 分钟，期间 raceTranslate 不再把它列入参赛厂商。
+        id rs = json[@"responseStatus"];
+        BOOL quotaHit = ([rs isKindOfClass:[NSString class]] && [rs isEqualToString:@"429"]) ||
+                        [rs isEqual:@429] ||
+                        ([content isKindOfClass:[NSString class]] &&
+                         [content rangeOfString:@"USED ALL AVAILABLE FREE TRANSLATIONS"
+                                        options:NSCaseInsensitiveSearch].location != NSNotFound);
+        if (quotaHit) {
+            @synchronized(self) {
+                _mymemoryPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 600.0;
+            }
+            LCLogF(@"translate: mymemory daily quota exhausted -> cooldown 600s");
+            if (completion) completion(nil);
+            return;
+        }
         if (![content isKindOfClass:[NSString class]] || content.length == 0) { if (completion) completion(nil); return; }
         // 空查询/警告时不当作结果
         if ([content hasPrefix:@"NO QUERY SPECIFIED"] || [content hasPrefix:@"MY MEMORY WARNING"]) { if (completion) completion(nil); return; }
@@ -1501,16 +1570,18 @@ static double LCSimilarity(NSString *a, NSString *b) {
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
         // v2.0.2：网关限流识别。agnes 免费额度限流返回的是 HTTP 200 +
         // {"error":{"message":"...速率限制..."}}，不是 429，所以状态码和响应体都要判。
-        // 命中后暂停 90 秒参赛，到期自动恢复；只针对 agnes 域名，不误伤自建 API。
+        // v2.2.15：只冷却 10 秒（原 90 秒过长，期间没有任何翻译通道可用）；
+        // 配合 raceTranslate 的半开探测，限流一解除就能立刻恢复中文。
+        // 只针对 agnes 域名，不误伤自建 API。
         BOOL isAgnes = ([apiBase rangeOfString:@"agnes"
                                       options:NSCaseInsensitiveSearch].location != NSNotFound);
         NSInteger status = [resp isKindOfClass:[NSHTTPURLResponse class]]
             ? [(NSHTTPURLResponse *)resp statusCode] : 0;
         if (isAgnes && (status == 429 || status == 403)) {
             @synchronized(self) {
-                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 90.0;
+                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 10.0;
             }
-            LCLogF(@"translate: agnes http %ld -> pause 90s", (long)status);
+            LCLogF(@"translate: agnes http %ld -> cooldown 10s", (long)status);
         }
         if (taskErr) {
             LCLogF(@"translate: openai req err %@ url=%@ attempt=%ld", taskErr, chatUrl, (long)attempt);
@@ -1573,9 +1644,9 @@ static double LCSimilarity(NSString *a, NSString *b) {
              [gwMsg rangeOfString:@"Token Plan"].location != NSNotFound ||
              [gwMsg rangeOfString:@"rate" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
             @synchronized(self) {
-                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 90.0;
+                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 10.0;
             }
-            LCLogF(@"translate: agnes rate-limited -> pause 90s");
+            LCLogF(@"translate: agnes rate-limited -> cooldown 10s");
         }
         NSArray *choices = json[@"choices"];
         if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {

@@ -1473,6 +1473,26 @@ def main():
                               % (name, got, want))
     except Exception:
         pass
+    # v2.2.15：翻译通道限流恢复（设备日志 2026-11-12 13:44 实证：
+    # agnes 429 -> 停 90s + MyMemory 当日额度耗尽 -> 连续 38 句没有中文）。
+    # 同样只放主流程、读不到文件静默跳过，避免 CI 双向验证误报。
+    try:
+        with io.open("LiveCap.m", "r", encoding="utf-8") as f:
+            lc_src = f.read()
+        for token, why in (
+                ("_mymemoryPausedUntil", "MyMemory 日额度耗尽冷却"),
+                ("mymemory daily quota exhausted", "429 日额度识别"),
+                ("halfOpenProbe", "agnes 冷却期半开探测"),
+                ("forceAgnes", "兜底停摆时 agnes 强制参赛"),
+                ("providers.count == 0", "providers 永不为空"),
+                ("_lastAgnesSendAt", "agnes 请求节流"),
+                ("cooldown 10s", "agnes 429 短冷却")):
+            if token not in lc_src:
+                errors.append("v2.2.15 回归: 缺少 %s —— %s" % (token, why))
+        if "pause 90s" in lc_src:
+            errors.append("v2.2.15 回归: 仍残留 agnes pause 90s，会让翻译长时间全断")
+    except Exception:
+        pass
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -1505,6 +1525,7 @@ def main():
     print("  OK: v2.2.8 修复在位（isUsableTranslation 拒绝日/韩文；MyMemory 按实际语种翻译）")
     print("  OK: v2.2.9 修复在位（asrEngine 默认 16k_multi_lang；PCM16 去 16k_zh；面板源语言接入翻译）")
     print("  OK: v2.2.14 图标规格在位（29/58/87 三件套带圆角，设置里与其他插件等大）")
+    print("  OK: v2.2.15 限流恢复在位（agnes 10s 短冷却+半开探测+节流，MyMemory 日额度冷却 600s）")
     return 0
 
 
