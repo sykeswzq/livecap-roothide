@@ -1456,6 +1456,23 @@ def main():
                           "设置里只会显示系统默认占位图标（与 XL 相同）")
     except Exception:
         pass
+    # v2.2.14：设置图标必须按 1x/2x/3x 三件套打包（29/58/87）。
+    # 单张 512 大图会被当成 1x，设置列表里明显比别的插件大。
+    try:
+        with io.open("build.sh", "r", encoding="utf-8") as f:
+            sh_src = f.read()
+        for name in ("icon.png", "icon@2x.png", "icon@3x.png"):
+            if name not in sh_src:
+                errors.append("v2.2.14 回归: build.sh 未打包 %s —— 设置图标缺倍率" % name)
+        for name, want in (("icon.png", 29), ("icon@2x.png", 58), ("icon@3x.png", 87)):
+            with io.open("PrefBundle/" + name, "rb") as f:
+                head = f.read(24)
+            got = int.from_bytes(head[16:20], "big")
+            if got != want:
+                errors.append("v2.2.14 回归: %s 宽 %d，应为 %d —— 大图会被设置放大显示"
+                              % (name, got, want))
+    except Exception:
+        pass
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -1487,6 +1504,7 @@ def main():
           "LCSimilarity/showConfidence，给不懂外语用户提供 ✓/⚠ 弱信号）")
     print("  OK: v2.2.8 修复在位（isUsableTranslation 拒绝日/韩文；MyMemory 按实际语种翻译）")
     print("  OK: v2.2.9 修复在位（asrEngine 默认 16k_multi_lang；PCM16 去 16k_zh；面板源语言接入翻译）")
+    print("  OK: v2.2.14 图标规格在位（29/58/87 三件套带圆角，设置里与其他插件等大）")
     return 0
 
 

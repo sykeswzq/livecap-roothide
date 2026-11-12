@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 PKG=com.sykes.livecap
 NAME="实时字幕翻译"
-VER=2.2.13
+VER=2.2.14
 ARCH="iphoneos-arm64e"
 OUT="${PKG}_${VER}_${ARCH}.deb"
 NEWID="@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/LiveCap.dylib"
@@ -57,7 +57,11 @@ xcrun --sdk iphoneos clang \
   PrefBundle/LiveCapPrefs.m PrefBundle/LiveCapAppListController.m
 chmod 755 "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/LiveCapPrefs"
 cp PrefBundle/Info.plist "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/Info.plist"
-cp PrefBundle/icon.png "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/icon.png"
+# 设置项图标按 iOS 规格提供 1x/2x/3x 三件套（29/58/87）。
+# 只放一张大图会被当成 1x 渲染，在设置列表里明显比其他插件大。
+cp PrefBundle/icon.png    "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/icon.png"
+cp PrefBundle/icon@2x.png "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/icon@2x.png"
+cp PrefBundle/icon@3x.png "$STAGE/Library/PreferenceBundles/LiveCapPrefs.bundle/icon@3x.png"
 cp PrefLoader.plist "$STAGE/Library/PreferenceLoader/Preferences/LiveCap.plist"
 
 echo "[3/4] verify install name + ldid + Mach-O header"
