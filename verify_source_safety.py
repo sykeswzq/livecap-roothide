@@ -1293,24 +1293,6 @@ def check_v221_fixes(src, applist_src, postinst_src):
         if "实际注入 %lu 个 App" not in code:
             errors.append("v2.2.13 回归: App 列表页标题未改为「实际注入 N 个 App」")
 
-    # ⑤ v2.2.13：三处显示统一「实际注入」口径 + 设置图标由 PreferenceLoader 声明
-    base = os.path.dirname(os.path.abspath(__file__))
-    try:
-        with open(os.path.join(base, 'PrefBundle', 'LiveCapPrefs.m'), encoding='utf-8') as f:
-            prefs_code = f.read()
-        if 'LCRealInjectedList' not in prefs_code:
-            errors.append("v2.2.13 回归: 主设置页仍数 selectedApps，会显示 29 而非实际注入数")
-    except Exception as e:
-        errors.append("v2.2.13 回归: 读不到 LiveCapPrefs.m (%s)" % e)
-    try:
-        with open(os.path.join(base, 'PrefLoader.plist'), encoding='utf-8') as f:
-            pl_src = f.read()
-        if '<key>icon</key>' not in pl_src or 'icon.png' not in pl_src:
-            errors.append("v2.2.13 回归: PrefLoader.plist 的 entry 缺少 icon 键 —— "
-                          "设置里只会显示系统默认占位图标（与 XL 相同）")
-    except Exception as e:
-        errors.append("v2.2.13 回归: 读不到 PrefLoader.plist (%s)" % e)
-
     # ④ postinst：按 deb 解包相对路径修 Filter 权限（XL 做法）
     if postinst_src is None:
         errors.append("v2.2.1 回归: 读不到 postinst")
@@ -1456,6 +1438,24 @@ def main():
     check_v221_fixes(src, applist_src, postinst_src)
     check_v228_fixes(src)
     check_v229_fixes(src)
+    # v2.2.13 文件级断言只能放主流程：CI 双向验证会把脚本复制到临时目录后
+    # 调用 check_* 函数，那边读不到工程文件，放进去会让每个用例都误报。
+    # 注意：CI 的双向验证会 chdir 到临时目录后调用主流程，此时工程文件本来
+    # 就不存在；读不到必须静默跳过，否则每个用例都会多出一条误报。
+    try:
+        with io.open("PrefBundle/LiveCapPrefs.m", "r", encoding="utf-8") as f:
+            if "LCRealInjectedList" not in f.read():
+                errors.append("v2.2.13 回归: 主设置页仍数 selectedApps，会显示 29 而非实际注入数")
+    except Exception:
+        pass
+    try:
+        with io.open("PrefLoader.plist", "r", encoding="utf-8") as f:
+            pl = f.read()
+        if "<key>icon</key>" not in pl or "icon.png" not in pl:
+            errors.append("v2.2.13 回归: PrefLoader.plist 的 entry 缺少 icon 键 —— "
+                          "设置里只会显示系统默认占位图标（与 XL 相同）")
+    except Exception:
+        pass
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
