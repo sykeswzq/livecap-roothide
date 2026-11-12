@@ -1357,6 +1357,30 @@ def check_v228_fixes(src):
         errors.append("v2.2.8 回归: raceTranslate 未改用实际语种调用 MyMemory")
 
 
+def check_v229_fixes(src):
+    # v2.2.9：ASR 识别引擎错配修复（实机日志：278 次空结果 + 英文碎片）
+    # 1) asrEngine getter 默认不能再是 16k_en（会把日/韩当英文喂给识别引擎 → 大量空结果）。
+    #    应返回 16k_multi_lang（多语言大模型引擎，账号实测已开通，支持 15 语种自动识别）。
+    import re
+    # 提取 asrEngine 方法体
+    m = re.search(r"- \(NSString \*\)asrEngine \{.*?return @\"(16k_[^\"]+)\";", src, re.S)
+    if not m:
+        errors.append("v2.2.9 回归: 无法定位 asrEngine 默认返回值")
+    else:
+        eng = m.group(1)
+        if eng == "16k_en":
+            errors.append("v2.2.9 回归: asrEngine 默认仍是 16k_en，日语/韩语会被当英文 → 大量空结果")
+    if 'return @"16k_multi_lang";' not in src:
+        errors.append("v2.2.9 回归: asrEngine 未默认返回 16k_multi_lang")
+    # 2) processChunk16（PCM16 路径）不能再写死 16k_zh（会把中日韩语当中文误识别）。
+    #    用就近匹配：该方法体内 EngSerViceType 赋值应为 16k_multi_lang。
+    if 'NSString *eng = @"16k_zh";' in src:
+        errors.append("v2.2.9 回归: processChunk16 仍写死 16k_zh，PCM16 路径会把日韩语当中文误识别")
+    # 3) raceTranslate 的 MyMemory 源语言应尊重面板「视频源语言」(srcLang) 当显式指定时。
+    if 'cfgLang = [[LCConfig shared] srcLang]' not in src:
+        errors.append("v2.2.9 回归: raceTranslate 未把面板「视频源语言」接入 MyMemory 源语言")
+
+
 def main():
     try:
         src = read_src()
@@ -1402,6 +1426,7 @@ def main():
     check_v220_fixes(src, panel_src)
     check_v221_fixes(src, applist_src, postinst_src)
     check_v228_fixes(src)
+    check_v229_fixes(src)
     print("=== LiveCap 源码安全检查 ===")
     print("  文件: %s (%d 字节)" % (SRC, len(src.encode("utf-8"))))
     print("")
@@ -1432,6 +1457,7 @@ def main():
     print("  OK: v2.2.7 回译自检在位（srcLang/backCheck/selfCheck/backTranslate/LCDetectLang/"
           "LCSimilarity/showConfidence，给不懂外语用户提供 ✓/⚠ 弱信号）")
     print("  OK: v2.2.8 修复在位（isUsableTranslation 拒绝日/韩文；MyMemory 按实际语种翻译）")
+    print("  OK: v2.2.9 修复在位（asrEngine 默认 16k_multi_lang；PCM16 去 16k_zh；面板源语言接入翻译）")
     return 0
 
 

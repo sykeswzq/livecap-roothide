@@ -514,11 +514,12 @@ static NSString *LCJBRootPath(NSString *path) {
 
 - (NSString *)asrEngine {
     NSString *s = _d[@"asrEngine"];
-    if (s.length) return s;
-    // 16k_en 是账号已开通的通用引擎（实测 code=0）。
-    // 大模型引擎 16k_multi_lang / 16k_zh_en / Hy-ASR-3.0-preview 属独立计费项，
-    // 未开通后付费时会返回 4004；开通后把 asrEngine 改成对应值即可，无需重新编译。
-    return @"16k_en";
+    // 显式覆盖（如 16k_ja / 16k_zh_en）仍生效；但旧默认 16k_en 会把日/韩等语种
+    // 当英文喂给识别引擎 → 大量空结果/碎片（v2.2.9 实机日志：278 次空结果、识别出英文碎片）。
+    // 改用 16k_multi_lang（多语言大模型引擎，账号实测已开通，支持 15 语种自动识别），
+    // 对日语/韩语等正确识别；如需更高精度单语种引擎，在 plist 显式写 asrEngine 即可。
+    if (s.length && ![s isEqualToString:@"16k_en"]) return s;
+    return @"16k_multi_lang";
 }
 
 - (BOOL)streamASREnabled {
@@ -1070,7 +1071,11 @@ static NSString *LCDetectLang(NSString *text);
                 // v2.2.8：源语言按实际语种传，不再写死 en。
                 // 旧版对日语/韩语视频用 src=en 调 MyMemory，等于拿「英→中」去翻日/韩文，
                 // 免费兜底基本翻不出中文 → 用户看不到译文。改为按实际语种(ja/ko/...)翻译。
-                NSString *mmSrc = LCShortLang(LCDetectLang(text));
+                // v2.2.9：若用户在面板显式指定「视频源语言」（非 auto），优先用它做确定性的
+                // 翻译源语言；否则回退到按原句脚本探测。使面板设置真正驱动整条翻译链路。
+                NSString *cfgLang = [[LCConfig shared] srcLang];
+                NSString *mmSrc = (cfgLang.length && ![cfgLang isEqualToString:@"auto"])
+                    ? cfgLang : LCShortLang(LCDetectLang(text));
                 [self mymemoryTranslate:text src:mmSrc dst:@"zh-CN"
                              completion:^(NSString *r) { onResult(p, r); }];
             };
@@ -1685,8 +1690,8 @@ static BOOL gProcessingFormatValid = NO;
 //   · needvad=1 让服务端按语义断句，slice_type=2 才是稳态句末，只有它送翻译。
 //   · 音频回调本身是实时的，「缓冲满 6400 字节就切一帧」天然满足 1:1，不需要攒分片。
 //   · 发送必须串行（上一帧 completion 后再发下一帧），否则会被服务端判 4000。
-//   · 引擎默认 16k_en（通用引擎，账号已开通）；开通大模型 ASR 后付费后
-//     把 asrEngine 改成 16k_multi_lang 即可，无需重新编译。
+//   · 引擎默认 16k_multi_lang（多语言大模型引擎，支持 15 语种自动识别，账号实测已开通）；
+//     对日语/韩语等正确识别。如需更高精度单语种引擎（16k_ja/16k_ko），在 plist 显式写 asrEngine 即可。
 
 static NSString *LCPercentEncodeAll(NSString *s) {
     // RFC 3986 unreserved = A-Z a-z 0-9 - _ . ~
@@ -2793,8 +2798,8 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
                     LC_ASR_DONE();
                     return;
                 }
-                // v2.0.0：源语言自动检测，统一用中文引擎（默认已覆盖主要场景）
-                NSString *eng = @"16k_zh";
+                // v2.2.9：PCM16 路径同样用多语言大模型引擎，避免中日韩语被中文引擎（16k_zh）误识别成碎片
+                NSString *eng = @"16k_multi_lang";
 
                 NSDictionary *body = @{
                     @"ProjectId": @0,
