@@ -15,10 +15,22 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.2.9</string>
+	<string>2.2.11</string>
 	<key>CFBundleVersion</key>
-	<string>2.2.9</string>
+	<string>2.2.11</string>
 	<key>NSPrincipalClass</key>
 	<string>LCRootListController</string>
+	<key>CFBundleIconFile</key>
+	<string>icon</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>icon</string>
+			</array>
+		</dict>
+	</dict>
 </dict>
 </plist>

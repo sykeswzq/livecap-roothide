@@ -155,29 +155,27 @@ static NSArray<NSString *> *LCDefaultBundles(void) {
     [_tv reloadData];
 }
 
-// 勾选状态只认偏好 plist；老配置做一次性迁移，迁移失败用打包默认列表兜底。
+// 对齐 XL-Roothide：勾选状态只认偏好 plist（selectedApps）。
+// 偏好为空时回显 dylib 已写入 Filter 的实际注入，保证「显示 = 真实注入」，
+// 绝不臆造默认勾选。旧版用 LCDefaultBundles() 把 29 个默认 App 全勾上，
+// 正是「明明只注入 2 个、列表却显示 29 个」的根因 —— 已去除。
 - (NSMutableSet<NSString *> *)lc_selected {
     if (_selected) return _selected;
     _selected = [NSMutableSet set];
-    NSArray *src = nil;
     id saved = LCAppListValue(LCAppListKey);
     if ([saved isKindOfClass:[NSArray class]] && ((NSArray *)saved).count) {
-        src = (NSArray *)saved;
-    } else {
-        NSMutableArray *migrated = [NSMutableArray array];
-        for (id b in LCReadFilterBundles()) {
-            if (![b isKindOfClass:[NSString class]]) continue;
-            NSString *bid = (NSString *)b;
-            if (bid.length == 0 || [bid hasSuffix:@".disabled"]) continue;
-            [migrated addObject:bid];
-        }
-        if (migrated.count == 0) [migrated addObjectsFromArray:LCDefaultBundles()];
-        src = migrated;
-        LCAppListSetValue(src, LCAppListKey);   // 落盘，此后不再依赖 Filter 回读
+        for (id s in (NSArray *)saved)
+            if ([s isKindOfClass:[NSString class]] && ((NSString *)s).length)
+                [_selected addObject:(NSString *)s];
+        return _selected;
     }
-    for (id b in src) {
-        if ([b isKindOfClass:[NSString class]] && ((NSString *)b).length)
-            [_selected addObject:(NSString *)b];
+    // 偏好为空：回显 Filter 里 dylib 实际注入的 bundles（真实注入范围），
+    // 不为空则显示真实数量，为空则显示 0（像 XL 一样干净，装好不自动勾满）。
+    for (id b in LCReadFilterBundles()) {
+        if (![b isKindOfClass:[NSString class]]) continue;
+        NSString *bid = (NSString *)b;
+        if (bid.length == 0 || [bid hasSuffix:@".disabled"]) continue;
+        [_selected addObject:bid];
     }
     return _selected;
 }

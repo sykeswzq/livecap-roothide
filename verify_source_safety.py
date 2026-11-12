@@ -1268,10 +1268,16 @@ def check_v221_fixes(src, applist_src, postinst_src):
                 ("selectedApps", "勾选状态必须存偏好，不能从 Filter 回读"),
                 ("LCAppListSetValue", "偏好写入 + notify_post（XL 的 XLSetValue）"),
                 ("notify_post", "配置变更通知（dylib 据此代写 Filter）"),
-                ("LCReadFilterBundles", "老配置一次性迁移入口"),
-                ("LCDefaultBundles", "Filter 回读为空时用打包默认列表兜底")):
+                ("LCReadFilterBundles", "偏好为空时回显 dylib 已写入 Filter 的真实注入")):
             if token not in code:
                 errors.append("v2.2.1 回归: 面板缺少 %s —— %s" % (token, why))
+        # v2.2.11：彻底去除「29 个默认 App 兜底勾选」——对齐 XL「只显示用户真正勾选的」。
+        # 旧版 addObjectsFromArray:LCDefaultBundles 会把 29 个默认 App 全勾上，
+        # 造成「明明只注入 2 个、列表却显示 29 个」。LCDefaultBundles 函数体可保留，
+        # 但绝不能再被调用。
+        if "addObjectsFromArray:LCDefaultBundles" in code:
+            errors.append("v2.2.11 回归: 面板仍调用 LCDefaultBundles 兜底勾选，"
+                          "会造成「只注入 N 个却显示 29 个」")
         # v2.2.2：面板必须把 Filter 写入交给 dylib，自己不得再写
         if "LCWriteFilterBundles" in code:
             errors.append("v2.2.2 回归: 面板仍含 LCWriteFilterBundles —— "
