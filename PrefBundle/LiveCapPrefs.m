@@ -54,11 +54,17 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 
 #pragma mark - 字体大小控制器
 
-@interface LCFontSizeController : UIViewController <UIColorPickerViewControllerDelegate>
+// v2.2.17：字号改为手动输入。范围与 tweak 侧 -fontSize 严格一致（8~72，默认 16），
+// 放宽上限是因为手动输入本来就是为了拿到滑块拖不准/够不到的值。
+static const CGFloat kLCFontMin = 8.0;
+static const CGFloat kLCFontMax = 72.0;
+
+@interface LCFontSizeController : UIViewController <UIColorPickerViewControllerDelegate, UITextFieldDelegate>
 @end
 
 @implementation LCFontSizeController {
     UISlider *_slider;
+    UITextField *_input;
     UILabel *_valueLabel;
     UILabel *_preview;
     double _lastWritten;
@@ -67,77 +73,151 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"字幕字号";
+    self.view.backgroundColor = [UIColor systemBackgroundColor];
     CGFloat fs = LCGetNum(@"fontSize", 16.0);
-    if (fs < 10 || fs > 40) fs = 16.0;
+    if (fs < kLCFontMin || fs > kLCFontMax) fs = 16.0;
+    _lastWritten = fs;
 
     UILabel *tip = [[UILabel alloc] init];
-    tip.text = @"拖动调节，立即生效";
+    tip.text = @"直接输入字号（8~72），下方滑块可微调";
     tip.font = [UIFont systemFontOfSize:13];
     tip.textColor = [UIColor secondaryLabelColor];
     tip.textAlignment = NSTextAlignmentCenter;
+    tip.numberOfLines = 0;
     tip.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:tip];
 
-    _slider = [[UISlider alloc] init];
-    _slider.minimumValue = 10.0;
-    _slider.maximumValue = 40.0;
-    _slider.value = (float)fs;
-    _slider.transform = CGAffineTransformMakeRotation(M_PI_2);
-    _slider.translatesAutoresizingMaskIntoConstraints = NO;
-    [_slider addTarget:self action:@selector(lc_sliderChanged:) forControlEvents:UIControlEventValueChanged];
-    [self.view addSubview:_slider];
+    // 主输入：数字键盘 + 严格数值校验（lc_parse:value: 整串匹配）。
+    // 旧的竖直旋转滑块手指拖不准，现在只留水平滑块做微调。
+    _input = [[UITextField alloc] init];
+    _input.borderStyle = UITextFieldBorderStyleRoundedRect;
+    _input.keyboardType = UIKeyboardTypeDecimalPad;
+    _input.textAlignment = NSTextAlignmentCenter;
+    _input.font = [UIFont boldSystemFontOfSize:24];
+    _input.text = [NSString stringWithFormat:@"%g", (double)fs];
+    _input.placeholder = @"16";
+    _input.clearButtonMode = UITextFieldViewModeWhileEditing;
+    _input.autocorrectionType = UITextAutocorrectionTypeNo;
+    _input.delegate = self;
+    [_input addTarget:self action:@selector(lc_inputChanged:) forControlEvents:UIControlEventEditingChanged];
+    _input.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_input];
+
+    // 数字键盘没有 return 键，补一条「收起键盘」工具条
+    UIToolbar *kbBar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, 0, 44)];
+    UIBarButtonItem *flex = [[UIBarButtonItem alloc]
+        initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    UIBarButtonItem *kbDone = [[UIBarButtonItem alloc]
+        initWithTitle:@"收起键盘" style:UIBarButtonItemStyleDone target:self action:@selector(lc_dismissKeyboard)];
+    [kbBar setItems:@[flex, kbDone] animated:NO];
+    _input.inputAccessoryView = kbBar;
 
     _valueLabel = [[UILabel alloc] init];
-    [_valueLabel sizeToFit];
-    _valueLabel.text = [NSString stringWithFormat:@"%.0f", fs];
     _valueLabel.font = [UIFont boldSystemFontOfSize:17];
+    _valueLabel.textAlignment = NSTextAlignmentCenter;
+    _valueLabel.text = [NSString stringWithFormat:@"%g pt", (double)fs];
     _valueLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_valueLabel];
 
     _preview = [[UILabel alloc] init];
     _preview.text = @"实时字幕翻译";
-    _preview.font = [UIFont systemFontOfSize:(float)fs];
+    _preview.font = [UIFont systemFontOfSize:fs];
+    _preview.textAlignment = NSTextAlignmentCenter;
+    _preview.numberOfLines = 0;
     _preview.alpha = 0.85;
     _preview.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:_preview];
 
-    // 保存按钮
+    // 微调滑块：不再旋转 90°（旧版旋转后约束与手势都错乱）
+    _slider = [[UISlider alloc] init];
+    _slider.minimumValue = (float)kLCFontMin;
+    _slider.maximumValue = (float)kLCFontMax;
+    _slider.value = (float)fs;
+    _slider.translatesAutoresizingMaskIntoConstraints = NO;
+    [_slider addTarget:self action:@selector(lc_sliderChanged:) forControlEvents:UIControlEventValueChanged];
+    [self.view addSubview:_slider];
+
     UIBarButtonItem *doneBtn = [[UIBarButtonItem alloc]
         initWithTitle:@"完成" style:UIBarButtonItemStyleDone target:self action:@selector(lc_done)];
     self.navigationItem.rightBarButtonItem = doneBtn;
 
-    NSArray<NSLayoutConstraint *> *constraints = @[
-        [tip.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16],
-        [tip.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],
-        [tip.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16],
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
+        initWithTarget:self action:@selector(lc_dismissKeyboard)];
+    tap.cancelsTouchesInView = NO;
+    [self.view addGestureRecognizer:tap];
 
-        [_slider.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-        [_slider.centerYAnchor constraintEqualToAnchor:tip.bottomAnchor constant:24],
-        [_slider.widthAnchor constraintEqualToConstant:180],
+    [NSLayoutConstraint activateConstraints:@[
+        [tip.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:24],
+        [tip.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:24],
+        [tip.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-24],
 
-        [_valueLabel.centerXAnchor constraintEqualToAnchor:_slider.centerXAnchor],
-        [_valueLabel.topAnchor constraintEqualToAnchor:_slider.bottomAnchor constant:12],
+        [_input.topAnchor constraintEqualToAnchor:tip.bottomAnchor constant:20],
+        [_input.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [_input.widthAnchor constraintEqualToConstant:140],
+        [_input.heightAnchor constraintEqualToConstant:44],
+
+        [_valueLabel.topAnchor constraintEqualToAnchor:_input.bottomAnchor constant:18],
+        [_valueLabel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
 
         [_preview.topAnchor constraintEqualToAnchor:_valueLabel.bottomAnchor constant:24],
-        [_preview.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-    ];
-    [NSLayoutConstraint activateConstraints:constraints];
+        [_preview.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:24],
+        [_preview.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-24],
+
+        [_slider.topAnchor constraintEqualToAnchor:_preview.bottomAnchor constant:28],
+        [_slider.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:32],
+        [_slider.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-32],
+    ]];
+}
+
+// 严格数值解析：整串必须被 NSScanner 完整消费。
+// "16abc" / "abc" / 空串 / 超范围一律拒绝；输入途中（想输 16 只打了 1）也先不动作，
+// 避免预览和滑块跟着乱跳，更不会把 1 或 999 这种脏值写进 plist。
+- (BOOL)lc_parse:(NSString *)raw value:(double *)out {
+    NSString *s = [raw stringByTrimmingCharactersInSet:
+                   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (s.length == 0) return NO;
+    NSScanner *sc = [NSScanner scannerWithString:s];
+    double v = 0;
+    if (![sc scanDouble:&v] || ![sc isAtEnd]) return NO;
+    if (v < kLCFontMin || v > kLCFontMax) return NO;
+    if (out) *out = v;
+    return YES;
+}
+
+// 单一写入口：预览 / 数值标签 / 滑块 / 输入框 / plist 全部同步，避免三处各写各的。
+- (void)lc_apply:(double)v syncInput:(BOOL)sync {
+    _preview.font = [UIFont systemFontOfSize:(CGFloat)v];
+    _valueLabel.text = [NSString stringWithFormat:@"%g pt", v];
+    _slider.value = (float)v;
+    if (sync) _input.text = [NSString stringWithFormat:@"%g", v];
+    LCSet(@(v), @"fontSize");
+    _lastWritten = v;
+}
+
+- (void)lc_inputChanged:(UITextField *)sender {
+    double v = 0;
+    if (![self lc_parse:sender.text value:&v]) return;
+    [self lc_apply:v syncInput:NO];
 }
 
 - (void)lc_sliderChanged:(UISlider *)sender {
     CGFloat v = sender.value;
-    _valueLabel.text = [NSString stringWithFormat:@"%.0f", v];
-    _preview.font = [UIFont systemFontOfSize:v];
-    if ((v - _lastWritten) >= 1.0 || fabs(v - _lastWritten) > 99.0) {
-        LCSet(@(v), @"fontSize");
-        _lastWritten = v;
-    }
+    [self lc_apply:(double)v syncInput:YES];
+}
+
+- (void)lc_dismissKeyboard {
+    [self.view endEditing:YES];
 }
 
 - (void)lc_done {
-    CGFloat v = _slider.value;
-    LCSet(@(v), @"fontSize");
-    _lastWritten = v;
+    double v = 0;
+    if (![self lc_parse:_input.text value:&v]) {
+        // 非法/清空：回落到最近一次有效值，绝不写脏数据
+        v = _lastWritten;
+        _input.text = [NSString stringWithFormat:@"%g", v];
+    }
+    [self lc_apply:v syncInput:NO];
+    [self lc_dismissKeyboard];
     if (self.navigationController)
         [self.navigationController popViewControllerAnimated:YES];
     else
@@ -335,8 +415,8 @@ static BOOL LCGetBool(NSString *key, BOOL fallback) {
         if (indexPath.row == 0) {
             cell.textLabel.text = @"字体大小";
             CGFloat fs = LCGetNum(@"fontSize", 16.0);
-            if (fs < 10 || fs > 40) fs = 16.0;
-            cell.detailTextLabel.text = [NSString stringWithFormat:@"%.0f", fs];
+            if (fs < kLCFontMin || fs > kLCFontMax) fs = 16.0;
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"%g", (double)fs];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if (indexPath.row == 1) {
             cell.textLabel.text = @"粗体";

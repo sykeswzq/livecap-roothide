@@ -574,13 +574,15 @@ static NSString *LCJBRootPath(NSString *path) {
 // ===== v1.0.87：字号实时读盘，改完立即生效 =====
 // 原实现读 dispatch_once 缓存的 _d → 面板改字号后必须重启 App 才生效。
 // 现在每次都从 plist 重新读；文件读不到时回退缓存值。
-// 范围 10~40（面板滑块同范围），与面板默认值 16 保持一致。
+// 范围 8~72（v2.2.17 起与面板手动输入框同范围），与面板默认值 16 保持一致。
+// 面板改成手动输入后允许更大/更小的字号，这里必须同步放宽，
+// 否则输入 50 会被静默打回 16，用户会以为「改了没生效」。
 - (CGFloat)fontSize {
     id v = [self freshValueForKey:@"fontSize"];
     double val = 16.0;
     if ([v isKindOfClass:[NSString class]]) val = [(NSString *)v doubleValue];
     else if ([v isKindOfClass:[NSNumber class]]) val = [(NSNumber *)v doubleValue];
-    if (val < 10 || val > 40) val = 16.0;
+    if (val < 8 || val > 72) val = 16.0;
     return val;
 }
 

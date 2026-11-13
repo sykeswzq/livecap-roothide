@@ -1425,6 +1425,44 @@ def check_v2216_fixes(src):
                       "会回落 HTTP 分片把日语切碎")
 
 
+def check_v2217_font_input(src, panel_src):
+    """v2.2.17：字号改手动输入，三处范围必须一致（面板输入框 / 主面板显示 / tweak getter）。
+
+    旧版是旋转 90° 的竖直滑块（10~40），手指拖不准、约束也错乱。
+    现在以 UITextField 数字输入为主，滑块降为微调；范围放宽到 8~72，
+    tweak 侧 -fontSize 必须同步放宽，否则输入 50 会被静默打回 16。
+    """
+    if panel_src is None:
+        return
+    for token, why in (
+            ("UITextField *_input;", "必须有手动输入框实例"),
+            ("UIKeyboardTypeDecimalPad", "必须用数字键盘（允许小数）"),
+            ("lc_inputChanged:", "输入变化必须绑定回调"),
+            ("- (BOOL)lc_parse:(NSString *)raw value:(double *)out",
+             "严格数值解析入口"),
+            ("[sc scanDouble:&v] || ![sc isAtEnd]",
+             "整串匹配，拒绝 16abc / abc / 空串"),
+            ("- (void)lc_apply:(double)v syncInput:(BOOL)sync",
+             "单一写入口，避免预览/滑块/输入框各写各的"),
+            ('LCSet(@(v), @"fontSize")', "必须写回 fontSize 配置"),
+            ("kLCFontMin = 8.0", "字号下限 8"),
+            ("kLCFontMax = 72.0", "字号上限 72"),
+            ("if (fs < kLCFontMin || fs > kLCFontMax) fs = 16.0;",
+             "主面板显示也要按新范围钳制"),
+            ("lc_dismissKeyboard", "数字键盘必须有收起入口")):
+        if token not in panel_src:
+            errors.append("v2.2.17 回归: 缺少 %s —— %s" % (token, why))
+    if "CGAffineTransformMakeRotation(M_PI_2)" in panel_src:
+        errors.append("v2.2.17 回归: 竖直旋转滑块仍在，手指拖不准且约束错乱")
+    if "< 10 || fs > 40" in panel_src:
+        errors.append("v2.2.17 回归: 面板仍按 10~40 钳制，手动输入 50 会被打回 16")
+    if "val < 8 || val > 72" not in src:
+        errors.append("v2.2.17 回归: tweak 侧 -fontSize 未按 8~72 同步放宽")
+    if "val < 10 || val > 40" in src:
+        errors.append("v2.2.17 回归: tweak 侧仍按 10~40 钳制，"
+                      "面板输入的大字号不会生效")
+
+
 def main():
     try:
         src = read_src()
@@ -1472,6 +1510,7 @@ def main():
     check_v228_fixes(src)
     check_v229_fixes(src)
     check_v2216_fixes(src)
+    check_v2217_font_input(src, panel_src)
     # v2.2.13 文件级断言只能放主流程：CI 双向验证会把脚本复制到临时目录后
     # 调用 check_* 函数，那边读不到工程文件，放进去会让每个用例都误报。
     # 注意：CI 的双向验证会 chdir 到临时目录后调用主流程，此时工程文件本来
@@ -1561,6 +1600,7 @@ def main():
     print("  OK: v2.2.14 图标规格在位（29/58/87 三件套带圆角，设置里与其他插件等大）")
     print("  OK: v2.2.15 限流恢复在位（agnes 10s 短冷却+半开探测+节流，MyMemory 日额度冷却 600s）")
     print("  OK: v2.2.16 听写链路在位（4004 降级可用引擎/译文闸门/回译复用冷却）")
+    print("  OK: v2.2.17 字号手动输入在位（数字键盘/严格校验/8~72 三处一致）")
     return 0
 
 

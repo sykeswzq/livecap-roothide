@@ -153,6 +153,9 @@ jobs:
           # v2.2.16：ASR 引擎降级决策 + 译文闸门（纯 Python 镜像，不依赖设备）
           python3 test_v2216_asr_engine.py
           echo "  (6.1) OK v2.2.16 听写链路回归通过"
+          # v2.2.17：字号手动输入 + 三处范围一致性（纯 Python 镜像，不依赖设备）
+          python3 test_v2217_font_input.py
+          echo "  (6.2) OK v2.2.17 字号手动输入回归通过"
 
       - name: Verify no mediaserverd injection
         run: |
