@@ -187,12 +187,20 @@ def mutate(text, old, new, tag):
     return text.replace(old, new, 1)
 
 
+def mutate_all(text, old, new, tag):
+    """v2.2.18：面板里同一实现出现在【主面板弹窗】和【微调页】两处，
+    双向验证必须把所有副本一起改掉，否则另一处仍满足断言导致假失败。"""
+    if old not in text:
+        raise AssertionError("[%s] 变异锚点未命中: %r" % (tag, old[:100]))
+    return text.replace(old, new)
+
+
 NEGATIVE = [
     ("去掉手动输入框", mutate(PANEL, "UITextField *_input;", "", "no-input"),
      SRC, "手动输入框"),
-    ("换回普通键盘", mutate(PANEL, "UIKeyboardTypeDecimalPad",
-                          "UIKeyboardTypeDefault", "kbd"), SRC, "数字键盘"),
-    ("放宽整串校验(允许 16abc)", mutate(PANEL,
+    ("换回普通键盘", mutate_all(PANEL, "UIKeyboardTypeDecimalPad",
+                              "UIKeyboardTypeDefault", "kbd"), SRC, "数字键盘"),
+    ("放宽整串校验(允许 16abc)", mutate_all(PANEL,
      "[sc scanDouble:&v] || ![sc isAtEnd]", "[sc scanDouble:&v]",
      "loose"), SRC, "整串匹配"),
     ("上限退回 40", mutate(PANEL, "kLCFontMax = 72.0",

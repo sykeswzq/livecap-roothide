@@ -55,6 +55,11 @@ if [ -f "$CFG" ]; then
 fi
 
 killall -9 cfprefsd 2>/dev/null || true
+# v2.2.18：Preferences 进程会缓存【已加载的 PreferenceBundle 二进制】。
+# 只 kill cfprefsd 不够 —— 装完新版后设置里仍显示旧面板（用户实机反馈
+# 「字体还是滑块、不能输入」正是这个）。杀掉 Preferences，下次打开设置
+# 才会强制重新加载新版 bundle。Sileo 是独立进程，不受影响。
+killall -9 Preferences 2>/dev/null || true
 
 DYLIB_PATH="/var/jb/Library/MobileSubstrate/DynamicLibraries"
 AUTOPATCHES_DIR="/usr/lib/DynamicPatches"

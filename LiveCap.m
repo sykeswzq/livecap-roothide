@@ -791,6 +791,8 @@ static NSString *LCJBRootPath(NSString *path) {
     //   —— 但中文单行模式下 completion 丢失 = 那句话的中文整句不显示。
     // 改为 FIFO 队列（有限长，超长时丢【最旧】的，因为它已经过时）。
     NSMutableArray *_pendingItems;   // 每项 = @{@"text": NSString, @"comp": block}
+    // v2.2.18：最近 2 句已送译原文，作为 LLM 上下文（只给 agnes，MyMemory 不受影响）
+    NSMutableArray *_recentLines;
     BOOL _inflight;
     BOOL _tencentDisabled;   // 腾讯云机器翻译服务未开通时，本次会话内跳过
     // v2.0.2：agnes 免费额度限流后的暂停截止时间戳（0 = 正常参赛）
@@ -924,29 +926,40 @@ static NSString *LCJBRootPath(NSString *path) {
 
     _inflight = YES;
 
-    // v2.0.0：目标语言硬编码为中文
-    // ===== prompt 精简（v1.0.81）=====
-    // 实测（设备 → apihub.agnes-ai.cn 网关）：
-    //   agnes-3.0-flash + 1401 字节长 prompt → 29~40s（必然超时）
-    //   agnes-2.5-flash +  232 字节中 prompt → 0.96~7.6s（可用）
-    // 长 prompt 不只是慢，还会显著抬高网关排队时间。
-    // 这里保留最关键的三条约束（只输出译文 / 输入可能是脏片段要照翻 / 绝不回显英文），
-    // 去掉示例和冗长规则，压到 ~230 字节。
-    // v2.0.0：目标语言硬编码为中文，直接写死在 sysPrompt 里
-    // v2.2.0：改回「忠实直译」。
-    // v2.1.0 让模型顺手纠错、补全截断词，实测会把碎片脑补成另一句完整话，
-    // 译文和 YouTube 原版字幕对不上（用户反馈）。字幕翻译必须逐字忠实，
-    // 宁可译出半句，也不要替观众猜内容。
-    NSString *sysPrompt = @"You are a subtitle translator. Translate the given speech-to-text "
-        @"fragment faithfully into natural Simplified Chinese. Keep the original meaning and word "
-        @"order; do NOT add, infer, complete, summarize or correct anything absent from the input. "
-        @"If the input is an incomplete fragment, translate only that fragment and leave it "
-        @"incomplete. Output ONLY the Chinese translation: no quotes, no explanation, no English. "
-        @"NEVER echo the input.";
+    // ===== prompt（v2.2.18 按 PC 实时字幕方案重写）=====
+    // 历史：长 prompt(1401B) 会让 agnes 排队 29~40s；精简到 ~230B 才可用。
+    // v2.2.0 定下的「忠实直译碎片、半成品照翻不补全」在日语生肉上翻车：
+    // ASR 碎片被逐字直译成「有时我告诉它」「他 ✓」这类怪中文（用户录屏实证）。
+    // 参考 realtime_subtitle / VideoCaptioner 的上下文感知翻译，改为：
+    //   ① 带最近 2 句原文作上下文，只用来消解代词/省略主语；
+    //   ② 要求译成自然中文短句，而不是词对词硬翻；
+    //   ③ 仍禁止臆造/补全（保留 v2.2.0 的防脑补约束）。
+    // 上下文只追加到 sysPrompt；MyMemory / TMT 拿的仍是单句 text，不受影响。
+    NSString *sysPrompt = @"You translate live Japanese subtitles into natural Simplified Chinese. "
+        @"Translate ONLY the current line; make it natural, not a word-for-word gloss. "
+        @"Context lines (if any) only resolve pronouns and omitted subjects; never translate them. "
+        @"Keep the meaning; do NOT add, infer, complete, or invent absent content. "
+        @"Output ONLY Chinese: no quotes, explanation, Japanese or English.";
+
+    // v2.2.18：最近 2 句【已送译】原文作为上下文（对齐 LLM_TRANSLATION_HISTORY_SIZE=2）。
+    // 必须在 pumpQueue（真正发请求时）才入列，不能在 translate: 入队时入列，
+    // 否则队列里还没翻的句子会变成「未来上下文」，反而误导模型。
+    NSString *ctx = @"";
+    @synchronized(self) {
+        if (_recentLines.count) ctx = [_recentLines componentsJoinedByString:@" / "];
+        if (!_recentLines) _recentLines = [NSMutableArray array];
+        [_recentLines addObject:text];
+        if (_recentLines.count > 2) [_recentLines removeObjectAtIndex:0];
+    }
+    NSString *fullPrompt = sysPrompt;
+    if (ctx.length) {
+        fullPrompt = [sysPrompt stringByAppendingFormat:
+            @"\nContext (previous subtitles, for reference only; do NOT translate or quote): %@", ctx];
+    }
 
     __weak typeof(self) weakSelf = self;
     NSDate *t0 = [NSDate date];
-    [self raceTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
+    [self raceTranslate:text sysPrompt:fullPrompt cacheKey:cacheKey
              completion:^(NSString *result) {
         LCLogF(@"translate: inflight rtt=%lldms len=%lu",
                (long long)([[NSDate date] timeIntervalSinceDate:t0] * 1000),
@@ -976,10 +989,12 @@ static NSString *LCJBRootPath(NSString *path) {
     if ([norm isEqualToString:orig]) return NO;
     BOOL hasCJK = NO;
     BOOL hasKanaOrHangul = NO;
+    NSUInteger cjkCount = 0;
     for (NSUInteger i = 0; i < norm.length; i++) {
         unichar ch = [norm characterAtIndex:i];
         if (ch >= 0x4E00 && ch <= 0x9FFF) {
             hasCJK = YES;
+            cjkCount++;
         } else if ((ch >= 0x3040 && ch <= 0x30FF) ||   // 平/片假名 → 日文
                    (ch >= 0xAC00 && ch <= 0xD7A3)) {   // 谚文 → 韩文
             hasKanaOrHangul = YES;
@@ -987,6 +1002,9 @@ static NSString *LCJBRootPath(NSString *path) {
     }
     if (!hasCJK) return NO;          // 完全不含汉字，肯定不是中文译文
     if (hasKanaOrHangul) return NO;  // 含假名/谚文 → 是日/韩文，拒绝上屏
+    // v2.2.18：原文不短却只翻出 1 个汉字（录屏里的「他 ✓」），
+    // 多半是 ASR 碎片或翻译通道回显残片，放行只会污染画面。
+    if (orig.length >= 6 && cjkCount <= 1) return NO;
     // v2.2.16：拦「半中半洋」的垃圾译文。设备录屏里出现过
     // 「您好，我是 La Von。」「哇，花 khöp」——ASR 把日语听成多语种碎片后，
     // 旧校验只要含汉字就放行，用户看到的正是这种怪句子。中文译文里偶尔有
@@ -1880,6 +1898,9 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     // v2.2.16：多语种大模型引擎资源包耗尽(4004)后的会话内降级引擎
     NSString *_engineOverride;
     BOOL _engineFallbackDone;
+    // v2.2.18：短句合并缓冲（参考 realtime_subtitle 的短句合并策略）
+    NSMutableString *_shortCarry;
+    NSTimeInterval _carryAt;
 }
 
 + (instancetype)shared {
@@ -1962,6 +1983,9 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     _lastRawPartial = nil;
     _lastChangeAt = now;
     _sentenceStartAt = 0;
+    if (!_shortCarry) _shortCarry = [NSMutableString string];
+    [_shortCarry setString:@""];
+    _carryAt = 0;
     NSURLSessionConfiguration *c = [NSURLSessionConfiguration defaultSessionConfiguration];
     c.connectionProxyDictionary = @{};   // 禁系统代理，直连（同 LCSessionDirect）
     _session = [NSURLSession sessionWithConfiguration:c delegate:self delegateQueue:nil];
@@ -2131,12 +2155,72 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     return NO;
 }
 
+// ===== v2.2.18：ASR 碎片 / 幻觉闸门 =====
+// 参考 PC 开源实时字幕方案：
+//   live-subtitle      —— 28 条 Whisper 幻觉黑名单（日语 16 / 英语 9 / 中文 3）
+//   realtime_subtitle  —— 短句合并(≤20 词) + 上下文管理(LLM_TRANSLATION_HISTORY_SIZE)
+//   VideoCaptioner     —— 上下文感知翻译、翻译-反思-翻译
+//   iOS Live Caption   —— partial 就地更新，完成的句子才滚动
+// 设备录屏里出现「有时我告诉它」「他 ✓」这类碎句：腾讯云 WS 的 slice_type=2
+// 稳态句本身可能被 VAD 切碎，旧代码无条件收句送译 + 忠实直译碎片 → 半句怪中文。
+static BOOL LCHasSentenceEnd(NSString *s) {
+    if (s.length == 0) return NO;
+    unichar last = [s characterAtIndex:s.length - 1];
+    return (last == '.' || last == '?' || last == '!' ||
+            last == 0x3002 || last == 0xFF1F || last == 0xFF01 ||
+            last == 0x3001 || last == 0xFF0C);
+}
+
+// 静音时 ASR 常编出片尾语/引导语，命中直接丢，不送译也不上屏。
+static BOOL LCIsHallucination(NSString *s) {
+    if (s.length == 0) return NO;
+    static NSArray *words = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        words = @[
+            @"ご視聴ありがとうございました", @"ご視聴有難うございました",
+            @"チャンネル登録をお願いします", @"高評価をお願いします",
+            @"次回もお楽しみに", @"ご清聴ありがとうございました",
+            @"Thank you for watching", @"Thanks for watching",
+            @"Please subscribe", @"Like and subscribe",
+            @"感谢您的观看", @"谢谢观看", @"字幕由", @"本字幕由",
+            @"请不吝点赞", @"未完待续",
+        ];
+    });
+    for (NSString *w in words) {
+        if ([s rangeOfString:w].location != NSNotFound) return YES;
+    }
+    return NO;
+}
+
+// 单字/纯语气词/整句同一字符重复：不是有效字幕，直接丢。
+static BOOL LCIsJunkFragment(NSString *s) {
+    if (s.length < 4) return YES;
+    unichar first = [s characterAtIndex:0];
+    BOOL allSame = YES;
+    for (NSUInteger i = 1; i < s.length; i++) {
+        if ([s characterAtIndex:i] != first) { allSame = NO; break; }
+    }
+    return allSame;
+}
+
 // 静音时服务端不再推 partial，靠 keepalive 定时器收句
 - (void)lc_flushIfSettled {
     if (![[LCConfig shared] strictSubtitleSync]) return;
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    // v2.2.18：短句合并缓冲超时先冲掉，否则视频最后一句（往往是短句）永远不出字幕
+    if (_shortCarry.length > 0 && now - _carryAt >= 2.5) {
+        NSString *carry = [_shortCarry copy];
+        [_shortCarry setString:@""];
+        if (carry.length >= 4 && !LCIsHallucination(carry)) {
+            LCLogF(@"asr: ws carry timeout flush [%@]", carry);
+            [self lc_translateFinal:carry];
+        } else {
+            LCLogF(@"asr: ws carry timeout drop junk [%@]", carry);
+        }
+    }
     NSString *s = [_sentence copy];
     if (s.length < 2) return;
-    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
     if (now - _lastChangeAt >= 2.5 && s.length >= 8)
         [self lc_commitSentence:s reason:@"silence"];
     else if (_sentenceStartAt > 0 && now - _sentenceStartAt >= 8.0)
@@ -2154,6 +2238,34 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     _lastChangeAt = now;
     _sentenceStartAt = 0;
     if (s.length < 2) return;
+    if (LCIsHallucination(s)) {
+        LCLogF(@"asr: ws drop hallucination [%@]", s);
+        return;
+    }
+    // v2.2.18：短句合并（realtime_subtitle 的 ≤20 词合并思路）。
+    // 无句末标点且 < 8 字的稳态句先攒着，等下一句拼起来再送译；
+    // 攒到 12 字或下一句到来时一起翻。否则「時々…」「彼」这类碎片会被
+    // 忠实直译成「有时我告诉它」「他」，正是用户录屏里的问题。
+    BOOL weakEnd = !LCHasSentenceEnd(s);
+    if (weakEnd && s.length < 8 && !LCIsJunkFragment(s)) {
+        if (!_shortCarry) _shortCarry = [NSMutableString string];
+        [_shortCarry appendString:s];
+        _carryAt = now;
+        if (_shortCarry.length < 12) {
+            LCLogF(@"asr: ws hold short [%@] carry=[%@]", s, _shortCarry);
+            return;
+        }
+        s = [_shortCarry copy];
+        [_shortCarry setString:@""];
+    } else if (_shortCarry.length) {
+        s = [_shortCarry stringByAppendingString:s];
+        [_shortCarry setString:@""];
+        LCLogF(@"asr: ws carry merged -> [%@]", s);
+    }
+    if (LCIsJunkFragment(s)) {
+        LCLogF(@"asr: ws drop junk [%@]", s);
+        return;
+    }
     if ([s isEqualToString:_lastTranslatedText]) {
         LCLog("asr: ws skip duplicate sentence");
         return;

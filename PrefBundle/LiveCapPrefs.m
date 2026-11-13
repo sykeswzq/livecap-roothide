@@ -169,6 +169,12 @@ static const CGFloat kLCFontMax = 72.0;
     ]];
 }
 
+// v2.2.18：进页面就弹出数字键盘，不必先点一下输入框
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [_input becomeFirstResponder];
+}
+
 // 严格数值解析：整串必须被 NSScanner 完整消费。
 // "16abc" / "abc" / 空串 / 超范围一律拒绝；输入途中（想输 16 只打了 1）也先不动作，
 // 避免预览和滑块跟着乱跳，更不会把 1 或 999 这种脏值写进 plist。
@@ -218,10 +224,10 @@ static const CGFloat kLCFontMax = 72.0;
     }
     [self lc_apply:v syncInput:NO];
     [self lc_dismissKeyboard];
-    if (self.navigationController)
-        [self.navigationController popViewControllerAnimated:YES];
-    else
-        [self dismissViewControllerAnimated:YES completion:nil];
+    // v2.2.18：本页是 [[UINavigationController alloc] initWithRootViewController:]
+    // 之后模态 present 的，self.navigationController 一定存在，但 pop 一个 root 无效。
+    // 旧写法让「完成」点了完全没反应（用户实机反馈）。必须直接 dismiss。
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end
@@ -237,7 +243,12 @@ static const CGFloat kLCFontMax = 72.0;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"实时字幕翻译";
+    // v2.2.18：标题直接带版本号。用户/排障时一眼能确认设置页加载的是哪一版
+    // PreferenceBundle —— Preferences 进程缓存旧 bundle 是「改了没生效」的常见原因。
+    NSString *ver = [[[NSBundle bundleForClass:[self class]] infoDictionary]
+        objectForKey:@"CFBundleShortVersionString"];
+    self.title = ver.length ? [NSString stringWithFormat:@"实时字幕翻译 %@", ver]
+                            : @"实时字幕翻译";
     self.view.backgroundColor = [UIColor systemBackgroundColor];
 
     if (!(self.navigationController && self.navigationController.viewControllers.count > 1)) {
@@ -272,6 +283,19 @@ static const CGFloat kLCFontMax = 72.0;
         else
             [self dismissViewControllerAnimated:YES completion:nil];
     } @catch (NSException *e) {}
+}
+
+// v2.2.18：主面板弹窗字号输入的严格解析（与 LCFontSizeController 的 lc_parse:value:
+// 同规则：整串必须被 NSScanner 完整消费）。返回 0 表示非法，调用方忽略、不写盘。
+- (double)lc_parseFontInput:(NSString *)raw {
+    NSString *s = [raw stringByTrimmingCharactersInSet:
+                   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (s.length == 0) return 0;
+    NSScanner *sc = [NSScanner scannerWithString:s];
+    double v = 0;
+    if (![sc scanDouble:&v] || ![sc isAtEnd]) return 0;
+    if (v < kLCFontMin || v > kLCFontMax) return 0;
+    return v;
 }
 
 - (UITableView *)lc_tv { return (UITableView *)[self.view viewWithTag:100]; }
@@ -570,14 +594,50 @@ static const CGFloat kLCFontMax = 72.0;
         [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 2 && indexPath.row == 0) {
-        @try {
-            LCFontSizeController *vc = [[LCFontSizeController alloc] init];
-            UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
-            nav.modalPresentationStyle = UIModalPresentationPageSheet;
-            [self presentViewController:nav animated:YES completion:nil];
-        } @catch (NSException *e) {
-            NSLog(@"[LiveCapPrefs] font size picker failed: %@", e);
-        }
+        // v2.2.18：改成【主面板直接弹输入框】。
+        // 旧版要点进二级页，而 Preferences 进程会缓存旧 PreferenceBundle，装了新版
+        // 仍看到旧滑块；且二级页「完成」用 pop 关模态 root 无效，点了没反应。
+        // 弹窗的「确定」是系统 UIAlertAction，一定可点，也没有关闭动画问题。
+        CGFloat fs = LCGetNum(@"fontSize", 16.0);
+        if (fs < kLCFontMin || fs > kLCFontMax) fs = 16.0;
+        UIAlertController *alert = [UIAlertController
+            alertControllerWithTitle:@"字体大小"
+                             message:@"直接输入 8~72 的数字（可小数），确定后立即生效"
+                      preferredStyle:UIAlertControllerStyleAlert];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+            tf.text = [NSString stringWithFormat:@"%g", (double)fs];
+            tf.placeholder = @"16";
+            tf.keyboardType = UIKeyboardTypeDecimalPad;
+            tf.textAlignment = NSTextAlignmentCenter;
+            tf.clearButtonMode = UITextFieldViewModeWhileEditing;
+            tf.autocorrectionType = UITextAutocorrectionTypeNo;
+        }];
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+            style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定"
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            NSString *raw = alert.textFields.firstObject.text;
+            double v = [self lc_parseFontInput:raw];
+            if (v <= 0) return;        // 非法输入：不写盘，保留原值
+            LCSet(@(v), @"fontSize");
+            [self.lc_tv reloadData];
+        }]];
+        // 高级入口：只想拖滑块微调时才进二级页（该页同样带输入框+实时预览）
+        [alert addAction:[UIAlertAction actionWithTitle:@"拖动微调"
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                @try {
+                    LCFontSizeController *vc = [[LCFontSizeController alloc] init];
+                    UINavigationController *nav = [[UINavigationController alloc]
+                        initWithRootViewController:vc];
+                    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+                    [self presentViewController:nav animated:YES completion:nil];
+                } @catch (NSException *e) {
+                    NSLog(@"[LiveCapPrefs] font size picker failed: %@", e);
+                }
+            });
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
     }
     else if (indexPath.section == 2 && indexPath.row == 2) {
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"文字颜色"
