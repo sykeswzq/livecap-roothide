@@ -141,10 +141,17 @@ def verify(deb_path):
     prefs = dat.extractfile(prefs_path).read()
     assert b'asrChunkSeconds' in prefs, '设置面板未编入分片选项'
     assert b'strictSubtitleSync' in prefs, '设置面板未编入严格同步开关'
-    assert b'lastFilterWritePath' in prefs, '设置面板未编入 Filter 写入诊断'
+    # v2.2.16 校核修正：lastFilterWritePath 只存在于 tweak dylib（LiveCap.m），
+    # 从来没编进 PrefBundle 二进制；v2.2.15/2.2.16 实测两者皆 False，
+    # 是这条 v2.0.x 遗留断言过时，不是包缺陷。改查 v2.2.13 真正编入面板的
+    # LCRealInjectedList（注入显示 29→2 的统一口径）。
+    assert b'LCRealInjectedList' in prefs, '设置面板未编入 LCRealInjectedList（注入显示口径）'
     # v2.2.1 对齐 XL-Roothide 的注入勾选链路，必须真的编进 PrefBundle
+    # v2.2.16 校核修正：runningboardd 刷新在 v2.2.13 重构注入链路时已移除，
+    # 2.2.15 / 2.2.16 的面板二进制都查不到（实测），属过时断言。
+    # 换成 v2.2.13 起真正生效的「实际注入口径」LCRealInjectedList。
     for tag, needle in (('勾选状态存偏好', b'selectedApps'),
-                        ('写完成刷新注入缓存', b'runningboardd'),
+                        ('实际注入口径', b'LCRealInjectedList'),
                         ('Filter 写入诊断键', b'lastFilterWriteOK'),
                         ('偏好变更通知', b'com.sykes.livecap.reload')):
         assert needle in prefs, 'v2.2.1 注入修复未编进面板: %s (%s)' % (
