@@ -157,6 +157,15 @@ def verify(deb_path):
         assert needle in prefs, 'v2.2.1 注入修复未编进面板: %s (%s)' % (
             tag, needle.decode())
         print('  含注入修复: %s OK' % tag)
+    # v2.2.17：字号改手动输入，确认新 UI 逻辑真的编进 PrefBundle。
+    # 只查 ASCII selector 名：中文文案在 Mach-O 里是 CFString(UTF-16LE)，
+    # 用 UTF-8 查会假阴性（v2.2.16 排障踩过）。
+    for tag, needle in (('字号输入回调', b'lc_inputChanged:'),
+                        ('字号严格解析', b'lc_parse:value:'),
+                        ('字号单一写入口', b'lc_apply:syncInput:')):
+        assert needle in prefs, 'v2.2.17 字号手动输入未编进面板: %s (%s)' % (
+            tag, needle.decode())
+        print('  含字号输入: %s OK' % tag)
     print('  PrefBundle: 含 asrChunkSeconds / strictSubtitleSync / Filter 写入诊断 OK')
     info = dat.extractfile(info_path).read().decode('utf-8', 'replace')
     assert info.count('<string>%s</string>' % TARGET_VER) == 2, 'Info.plist 版本未同步'

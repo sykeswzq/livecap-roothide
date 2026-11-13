@@ -90,7 +90,7 @@ static const CGFloat kLCFontMax = 72.0;
     // 主输入：数字键盘 + 严格数值校验（lc_parse:value: 整串匹配）。
     // 旧的竖直旋转滑块手指拖不准，现在只留水平滑块做微调。
     _input = [[UITextField alloc] init];
-    _input.borderStyle = UITextFieldBorderStyleRoundedRect;
+    _input.borderStyle = UITextBorderStyleRoundedRect;
     _input.keyboardType = UIKeyboardTypeDecimalPad;
     _input.textAlignment = NSTextAlignmentCenter;
     _input.font = [UIFont boldSystemFontOfSize:24];

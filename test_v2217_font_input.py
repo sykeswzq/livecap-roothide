@@ -219,6 +219,39 @@ for label, bad_panel, bad_src, keyword in NEGATIVE:
         continue
     print("  [PASS] %s -> %s" % (label, hit[0][:60]))
 
+
+# ---------------------------------------------------------------------------
+# 5) UIKit 符号白名单：面板里写错枚举名必须被静态扫描拦下
+#    CI Run 43445056817 实证：UITextFieldBorderStyleRoundedRect 不存在。
+# ---------------------------------------------------------------------------
+print("")
+print("=" * 70)
+print("E. UIKit 符号扫描（防 CI 编译错误）")
+print("=" * 70)
+import scan_uikit_symbols as U
+
+_, _, unknown = U.scan_text(PANEL)
+check(not unknown, "修复版面板零可疑符号", str([n for n, _ in unknown][:3]))
+
+bad_enum = mutate(PANEL, "UITextBorderStyleRoundedRect",
+                  "UITextFieldBorderStyleRoundedRect", "bad-enum")
+_, _, bad_unknown = U.scan_text(bad_enum)
+hit = [n for n, _ in bad_unknown if n == "UITextFieldBorderStyleRoundedRect"]
+check(bool(hit), "[错误枚举 UITextFieldBorderStyle*] 被拦截",
+      "unknown=%s" % ([n for n, _ in bad_unknown][:5],))
+if hit:
+    print("  [PASS] 错误枚举被拦 -> %s" % hit[0])
+
+# 反向：注释里提到错误写法不能误报（历史静态检查踩过这个坑）
+commented = PANEL.replace(
+    "    _input.borderStyle = UITextBorderStyleRoundedRect;",
+    "    // UITextFieldBorderStyleRoundedRect 是错误写法（CI 实证）\n"
+    "    _input.borderStyle = UITextBorderStyleRoundedRect;", 1)
+_, _, cm_unknown = U.scan_text(commented)
+check(not [n for n, _ in cm_unknown
+           if n == "UITextFieldBorderStyleRoundedRect"],
+      "注释里提及错误名不误报", str([n for n, _ in cm_unknown][:3]))
+
 print("")
 print("=" * 70)
 if failures:

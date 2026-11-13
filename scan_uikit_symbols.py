@@ -14,10 +14,16 @@ v1.0.84 在 CI 上栽了一轮：
 白名单来源：UIKit 公开 API 的常见符号 + 已在项目里成功编译过的符号。
 """
 import io
+import os
 import re
 import sys
 
 SRC = "LiveCap.m"
+# v2.2.17：CI Run 43445056817 在【面板】里写出 UITextFieldBorderStyleRoundedRect
+# （不存在的枚举，正确的是 UITextBorderStyleRoundedRect）导致编译失败。
+# 原来只扫 LiveCap.m，面板是盲区；现在把两个面板源码一起纳入白名单交叉检查。
+PANEL_SRCS = ("PrefBundle/LiveCapPrefs.m",
+              "PrefBundle/LiveCapAppListController.m")
 
 # 已确认存在于 UIKit 的符号（框架/类/常量/通知/函数）
 KNOWN = set("""
@@ -130,6 +136,15 @@ UIGestureRecognizerStateCancelled
 UIGestureRecognizerStateFailed
 UIGestureRecognizerStateRecognized
 UIGestureRecognizerSubclass
+UIBarButtonItem UIBarButtonItemStyleDone UIBarButtonSystemItemFlexibleSpace
+UIColorPickerViewController UIColorPickerViewControllerDelegate
+UIKeyboardTypeDecimalPad UIKeyboardTypeNumberPad
+UITableViewDataSource UITableViewDelegate
+UITableViewStyleGrouped UITableViewStylePlain UITableViewRowAnimationNone
+UITextAutocorrectionTypeNo UITextBorderStyleRoundedRect
+UITextBorderStyleNone UITextBorderStyleLine UITextBorderStyleBezel
+UITextFieldDelegate UITextFieldViewModeWhileEditing
+UIScrollView UISearchBarDelegate
 """.split())
 
 # 明确不是 UIKit 符号的（类型别名 / 注释里的词），避免误判
@@ -139,43 +154,51 @@ UIKit Foundation CoreFoundation
 """.split())
 
 
-def main():
-    src = io.open(SRC, encoding="utf-8").read()
-    # 剥离注释与字符串（复用 scan_compile_risk 的思路，这里用简单版）
+def scan_text(src):
+    """剥掉注释与字符串后提取 UI* 标识符，返回 (found, own, unknown)。
+
+    抽成函数是为了让回归测试能直接在内存里做双向验证：
+    把错误枚举注入文本，必须被判为 unknown。
+    """
     code = re.sub(r"/\*.*?\*/", " ", src, flags=re.S)
     code = re.sub(r"//[^\n]*", " ", code)
     code = re.sub(r'"(?:[^"\\]|\\.)*"', '""', code)
     code = re.sub(r"'(?:[^'\\]|\\.)*'", "''", code)
 
-    # 提取所有以 UI 开头的标识符（UIKit 符号惯例）
     found = {}
     for m in re.finditer(r"\b(UI[A-Za-z0-9_]+)\b", code):
         found.setdefault(m.group(1), []).append(code[:m.start()].count("\n") + 1)
 
-    # 项目内自定义的 UI 前缀类（本项目自己定义的，不属于 UIKit）
     own = set(re.findall(r"@interface\s+(UI[A-Za-z0-9_]+)", src))
     own |= set(re.findall(r"@implementation\s+(UI[A-Za-z0-9_]+)", src))
 
-    unknown = []
-    for name, ls in sorted(found.items()):
-        if name in KNOWN or name in own or name in NOT_UIKIT:
-            continue
-        # 排除明显的非符号（局部变量等）
-        unknown.append((name, ls))
+    unknown = [(name, ls) for name, ls in sorted(found.items())
+               if name not in KNOWN and name not in own and name not in NOT_UIKIT]
+    return found, own, unknown
 
+
+def main():
     print("=" * 70)
     print("UIKit 符号白名单交叉检查")
     print("=" * 70)
-    print("提取到 UI* 标识符 %d 个；项目自定义 %d 个" % (len(found), len(own)))
+    all_unknown = []
+    for path in (SRC,) + PANEL_SRCS:
+        # CI 双向验证会在临时目录里跑检查脚本，缺文件要静默跳过，不能误报
+        if not os.path.exists(path):
+            print("  (跳过 %s：文件不存在)" % path)
+            continue
+        src = io.open(path, encoding="utf-8").read()
+        found, own, unknown = scan_text(src)
+        print("  %-44s UI* %2d 个 / 自定义 %d 个 / 可疑 %d 个"
+              % (path, len(found), len(own), len(unknown)))
+        for name, ls in unknown:
+            print("     %-46s 行 %s"
+                  % (name, ",".join(str(x) for x in ls[:5])))
+            all_unknown.append((path, name, ls))
     print()
-    if not unknown:
+    if not all_unknown:
         print("未发现可疑符号 ✅")
         return 0
-
-    print("以下标识符不在白名单中（需人工确认是否为真实 UIKit API）：")
-    for name, ls in unknown:
-        print("  %-46s 行 %s" % (name, ",".join(str(x) for x in ls[:5])))
-    print()
     print("提示：若确认是真实 UIKit API，加入 KNOWN 白名单即可；")
     print("     若确认不存在 → 编译必然失败，必须修。")
     return 1
