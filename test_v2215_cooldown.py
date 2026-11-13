@@ -20,7 +20,8 @@ m = re.search(r'_mymemoryPausedUntil = \[NSDate timeIntervalSinceReferenceDate\]
 MYMEM_COOLDOWN = float(m.group(1)) if m else None
 m = re.search(r'_lastAgnesSendAt < ([\d.]+)', source)
 AGNES_MIN_GAP = float(m.group(1)) if m else None
-PROBE_EVERY = 5 if 'seq % 5 == 0' in source else None
+m = re.search(r'BOOL halfOpenProbe = \(seq % (\d+) == 0\);', source)
+PROBE_EVERY = int(m.group(1)) if m else None
 
 errors = []
 
@@ -30,10 +31,12 @@ def check(cond, msg):
         errors.append(msg)
 
 
-check(AGNES_COOLDOWN == 10.0, 'agnes 冷却应为 10 秒，实际 %s（旧版 90 秒会长时间没中文）' % AGNES_COOLDOWN)
+# v2.2.19：本地实测 10s 冷却 + 0.35s 节流下连续请求频繁撞 429，
+# 冷却期整段只有质量差的 MyMemory 兜底 → 缩到 4s / 0.5s / 每 3 句探测。
+check(AGNES_COOLDOWN == 4.0, 'agnes 冷却应为 4 秒，实际 %s（旧版 90 秒会长时间没中文）' % AGNES_COOLDOWN)
 check(MYMEM_COOLDOWN == 600.0, 'MyMemory 额度耗尽冷却应为 600 秒，实际 %s' % MYMEM_COOLDOWN)
-check(AGNES_MIN_GAP == 0.35, 'agnes 最小发送间隔应为 0.35s，实际 %s' % AGNES_MIN_GAP)
-check(PROBE_EVERY == 5, '半开探测应为每 5 句一次')
+check(AGNES_MIN_GAP == 0.5, 'agnes 最小发送间隔应为 0.5s，实际 %s' % AGNES_MIN_GAP)
+check(PROBE_EVERY == 3, '半开探测应为每 3 句一次，实际 %s' % PROBE_EVERY)
 for token, why in (
         ('_mymemoryPausedUntil', 'MyMemory 冷却状态'),
         ('mymemory daily quota exhausted', '429 日额度识别'),
@@ -107,9 +110,9 @@ for i in range(2, 10):
     check('mymemory' in ps, 'agnes 冷却期 MyMemory 应继续兜底 (t=%.1f)' % x.t)
     if 'agnes' in ps:
         seqs_with_agnes.append(x.seq)
-check(any(s % 5 == 0 for s in seqs_with_agnes), '冷却期内应有半开探测让 agnes 参赛')
-x.t = 11.0
-check('agnes' in x.decide(), '10 秒冷却到期后 agnes 必须恢复参赛')
+check(any(s % PROBE_EVERY == 0 for s in seqs_with_agnes), '冷却期内应有半开探测让 agnes 参赛')
+x.t = AGNES_COOLDOWN + 1.0
+check('agnes' in x.decide(), '冷却到期后 agnes 必须恢复参赛')
 
 # ---- 场景 3：MyMemory 当日额度耗尽（本次用户遇到的情况）----
 x = Translator()
@@ -137,7 +140,8 @@ for i in range(6):
     gaps.append(x.send_gap())
 check(gaps[0] == 0.0, '首个 agnes 请求不应延迟')
 check(all(g >= 0 for g in gaps), '节流延迟不能为负')
-check(x.last_agnes_send >= 0.5 - 1e-9, '预约机制应把 6 个请求摊开到至少 0.5 秒')
+check(x.last_agnes_send >= AGNES_MIN_GAP - 1e-9,
+      '预约机制应把 6 个请求摊开到至少 %.2f 秒' % AGNES_MIN_GAP)
 
 # ---- 场景 6：无 API key 且 MyMemory 冷却 → 仍不能空 ----
 x = Translator()

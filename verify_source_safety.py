@@ -1463,12 +1463,14 @@ def check_v2217_font_input(src, panel_src):
                       "面板输入的大字号不会生效")
 
 
-def check_v2218_fixes(src, panel_src, postinst_src):
-    """v2.2.18：字号改主面板弹窗 + 翻译链路按 PC 实时字幕方案加固。
+def check_v2219_fixes(src, panel_src, postinst_src):
+    """v2.2.18 字号弹窗修复保留；翻译链路回退到 2.2.17 并加防护。
 
-    实机反馈：装了新版设置页仍是滑块、点「完成」没反应；日语字幕出现
-    「有时我告诉它」「他 ✓」这类碎句。分别对应 Preferences 缓存旧 bundle /
-    pop 关模态 root 无效 / ASR 碎片被忠实直译。
+    实机反馈(2026-11-14)：2.2.18 照搬 PC 方案的「LLM 上下文 + 短句合并」后
+    译文更差（「你 ✓」「"我拿！"」「你提供的内容不完整，没有日语文本需要翻译…」）。
+    本地复现结论：ASR 稳态句本身就是残片，上下文让模型脑补、无分隔拼接把两句
+    粘成一句、写死 "Japanese" 的 prompt 遇到非日语正文会回元话语。
+    故回退激进改动，只留元话术/碎片闸门与限流调优。
     """
     if panel_src:
         for token, why in (
@@ -1480,40 +1482,47 @@ def check_v2218_fixes(src, panel_src, postinst_src):
                 ("becomeFirstResponder", "微调页进页面自动弹键盘"),
                 ("CFBundleShortVersionString", "标题显示版本号，便于确认 bundle 是否更新")):
             if token not in panel_src:
-                errors.append("v2.2.18 回归: 缺少 %s —— %s" % (token, why))
+                errors.append("v2.2.19 回归: 缺少 %s —— %s" % (token, why))
         m = panel_src.find("@implementation LCFontSizeController")
         if m < 0:
-            errors.append("v2.2.18 回归: 找不到 LCFontSizeController")
+            errors.append("v2.2.19 回归: 找不到 LCFontSizeController")
         else:
             end = panel_src.find("\n@end\n", m)
             body = panel_src[m:end if end > 0 else len(panel_src)]
             d = body.find("- (void)lc_done")
             done = body[d:body.find("\n}\n", d)] if d >= 0 else ""
             if "popViewControllerAnimated" in done:
-                errors.append("v2.2.18 回归: 字号页「完成」仍用 pop 关模态 root —— "
+                errors.append("v2.2.19 回归: 字号页「完成」仍用 pop 关模态 root —— "
                               "点了没反应")
             if "dismissViewControllerAnimated" not in done:
-                errors.append("v2.2.18 回归: 字号页「完成」没有 dismiss")
+                errors.append("v2.2.19 回归: 字号页「完成」没有 dismiss")
     if postinst_src and "killall -9 Preferences" not in postinst_src:
-        errors.append("v2.2.18 回归: postinst 未刷新 Preferences 进程 —— "
+        errors.append("v2.2.19 回归: postinst 未刷新 Preferences 进程 —— "
                       "设置页会继续显示缓存的旧 bundle（用户看到旧滑块）")
     for token, why in (
-            ("_recentLines", "LLM 上下文窗口（最近 1 句已送译原文）"),
-            ("fullPrompt", "上下文必须拼进 sysPrompt 传给 agnes"),
-            ("Context (previous line, do NOT translate)", "上下文说明：只作参考不得翻译"),
-            ("this Japanese subtitle", "prompt 明确日语字幕场景并要求自然中文"),
-            ("Output ONLY Chinese.", "prompt 必须精简，长 prompt 会拖慢 agnes 被兜底抢先"),
-            ("_shortCarry", "短句合并缓冲"),
-            ("carry timeout flush", "短句缓冲超时兜底，避免最后一句丢失"),
-            ("LCIsHallucination", "ASR 幻觉黑名单"),
-            ("LCIsJunkFragment", "碎片垃圾闸门"),
-            ("LCHasSentenceEnd", "句末标点判定（决定是否需要合并）"),
-            ("orig.length >= 6 && cjkCount <= 1", "译文最小长度闸门，拦「他」这类单字")):
+            ("LCIsMetaReply", "元话术闸门：拦模型追问 / 翻译记忆库串入的无关中文"),
+            ("LCIsMetaReply(norm)", "元话术闸门必须在 isUsableTranslation 内真正调用"),
+            ("translate: reject meta reply", "元话术命中需留日志便于排障"),
+            ("cjkCount <= 1 && norm.length <= 3", "单字译文一律不上屏（录屏里的「你 ✓」）"),
+            ("orig.length <= 6 && norm.length >= 20", "短原文却吐长段 → 拒（防脑补/串条目）"),
+            ("unquoted", "剥掉成对引号后再比对原文回显（「\"我拿！\"」）"),
+            ("LCIsHallucination", "ASR 幻觉黑名单（保留的有效防护）"),
+            ("LCIsJunkFragment", "极短碎片 / 同字重复闸门（保留的有效防护）"),
+            ("NEVER echo the input", "prompt 回退到 2.2.17 忠实直译基线"),
+            ("timeoutInterval = 4.5", "agnes 超时放宽，慢但正确的译文不再被判死"),
+            ("1.5 * NSEC_PER_SEC", "MyMemory 兜底窗口 1.5s"),
+            ("+ 4.0;", "agnes 429 冷却缩短到 4s"),
+            ("seq % 3 == 0", "冷却期半开探测频率")):
         if token not in src:
-            errors.append("v2.2.18 回归: 缺少 %s —— %s" % (token, why))
-    if "If the input is an incomplete fragment" in src:
-        errors.append("v2.2.18 回归: prompt 仍要求「半成品照翻不补全」，"
-                      "会把日语碎片直译成怪中文")
+            errors.append("v2.2.19 回归: 缺少 %s —— %s" % (token, why))
+    for token, why in (
+            ("_recentLines", "LLM 上下文窗口"),
+            ("fullPrompt", "上下文拼接进 sysPrompt"),
+            ("_shortCarry", "跨句拼接缓冲"),
+            ("LCHasSentenceEnd", "短句合并判定"),
+            ("this Japanese subtitle", "写死日语场景的 prompt")):
+        if token in src:
+            errors.append("v2.2.19 回归: 仍残留 %s —— %s 会让译文脑补/串句" % (token, why))
 
 
 def main():
@@ -1564,7 +1573,7 @@ def main():
     check_v229_fixes(src)
     check_v2216_fixes(src)
     check_v2217_font_input(src, panel_src)
-    check_v2218_fixes(src, panel_src, postinst_src)
+    check_v2219_fixes(src, panel_src, postinst_src)
     # v2.2.13 文件级断言只能放主流程：CI 双向验证会把脚本复制到临时目录后
     # 调用 check_* 函数，那边读不到工程文件，放进去会让每个用例都误报。
     # 注意：CI 的双向验证会 chdir 到临时目录后调用主流程，此时工程文件本来
@@ -1613,7 +1622,7 @@ def main():
                 ("forceAgnes", "兜底停摆时 agnes 强制参赛"),
                 ("providers.count == 0", "providers 永不为空"),
                 ("_lastAgnesSendAt", "agnes 请求节流"),
-                ("cooldown 10s", "agnes 429 短冷却")):
+                ("cooldown 4s", "agnes 429 短冷却")):
             if token not in lc_src:
                 errors.append("v2.2.15 回归: 缺少 %s —— %s" % (token, why))
         if "pause 90s" in lc_src:
@@ -1652,10 +1661,10 @@ def main():
     print("  OK: v2.2.8 修复在位（isUsableTranslation 拒绝日/韩文；MyMemory 按实际语种翻译）")
     print("  OK: v2.2.9 修复在位（asrEngine 默认 16k_multi_lang；PCM16 去 16k_zh；面板源语言接入翻译）")
     print("  OK: v2.2.14 图标规格在位（29/58/87 三件套带圆角，设置里与其他插件等大）")
-    print("  OK: v2.2.15 限流恢复在位（agnes 10s 短冷却+半开探测+节流，MyMemory 日额度冷却 600s）")
+    print("  OK: v2.2.15 限流恢复在位（agnes 4s 短冷却+半开探测+节流，MyMemory 日额度冷却 600s）")
     print("  OK: v2.2.16 听写链路在位（4004 降级可用引擎/译文闸门/回译复用冷却）")
     print("  OK: v2.2.17 字号手动输入在位（数字键盘/严格校验/8~72 三处一致）")
-    print("  OK: v2.2.18 修复在位（主面板弹窗输入/刷新 Preferences/上下文翻译/碎片闸门）")
+    print("  OK: v2.2.19 修复在位（弹窗输入/刷新 Preferences/回退激进链路/元话术闸门）")
     return 0
 
 

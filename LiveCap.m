@@ -488,7 +488,7 @@ static NSString *LCJBRootPath(NSString *path) {
     //     思维链吃光 256 token 时 content 返回空 → showFailed（日志里 15 次），
     //     碎片句还会回显英文。
     //   3.0-flash：p50 1.38s / max 17.4s，reasoning=0、不回显英文、译文更自然。
-    // 3.0 有极端长尾，靠 3.5s 超时 + MyMemory 延迟兜底窗口兜住。
+    // 3.0 有极端长尾，靠 4.5s 超时 + MyMemory 1.5s 延迟兜底窗口兜住。
     return (s && s.length) ? s : @"agnes-3.0-flash";
 }
 
@@ -791,8 +791,6 @@ static NSString *LCJBRootPath(NSString *path) {
     //   —— 但中文单行模式下 completion 丢失 = 那句话的中文整句不显示。
     // 改为 FIFO 队列（有限长，超长时丢【最旧】的，因为它已经过时）。
     NSMutableArray *_pendingItems;   // 每项 = @{@"text": NSString, @"comp": block}
-    // v2.2.18：最近 2 句已送译原文，作为 LLM 上下文（只给 agnes，MyMemory 不受影响）
-    NSMutableArray *_recentLines;
     BOOL _inflight;
     BOOL _tencentDisabled;   // 腾讯云机器翻译服务未开通时，本次会话内跳过
     // v2.0.2：agnes 免费额度限流后的暂停截止时间戳（0 = 正常参赛）
@@ -803,7 +801,7 @@ static NSString *LCJBRootPath(NSString *path) {
     // 既抢 ASR 上行带宽，又把免费额度刷爆。冷却期间不列入参赛厂商。
     NSTimeInterval _mymemoryPausedUntil;
     // v2.2.15：agnes 上次发请求的（预约）时间，用于 350ms 最小间隔节流；
-    // race 序号，用于冷却期内每 5 句做一次半开探测。
+    // race 序号，用于冷却期内每 3 句做一次半开探测。
     NSTimeInterval _lastAgnesSendAt;
     NSUInteger _raceSeq;
 }
@@ -926,42 +924,29 @@ static NSString *LCJBRootPath(NSString *path) {
 
     _inflight = YES;
 
-    // ===== prompt（v2.2.18 按 PC 实时字幕方案重写）=====
-    // 历史：长 prompt(1401B) 会让 agnes 排队 29~40s；精简到 ~230B 才可用。
-    // v2.2.0 定下的「忠实直译碎片、半成品照翻不补全」在日语生肉上翻车：
-    // ASR 碎片被逐字直译成「有时我告诉它」「他 ✓」这类怪中文（用户录屏实证）。
-    // 参考 realtime_subtitle / VideoCaptioner 的上下文感知翻译，改为：
-    //   ① 带最近 1 句原文作上下文，只用来消解代词/省略主语；
-    //   ② 要求译成自然中文短句，而不是词对词硬翻；
-    //   ③ 仍禁止臆造/补全（保留 v2.2.0 的防脑补约束）。
-    // 上下文只追加到 sysPrompt；MyMemory / TMT 拿的仍是单句 text，不受影响。
-    // v2.2.18 二次调优：本地实测长 prompt(564B) 让 agnes 从 0.7s 涨到 ~2.9s，
-    // 而竞速里 MyMemory 延时 1.0s 发出、约 1~2s 返回 → agnes 一慢就会被质量差的
-    // 兜底译文抢先赢。历史记录也明确：1401B 会排队 29~40s，232B 才可用。
-    // 故压到 ~180B，上下文只留最近 1 句，整条 sysPrompt 控制在 ~280B。
-    NSString *sysPrompt = @"Translate this Japanese subtitle into natural Simplified Chinese. "
-        @"Keep the meaning; do NOT add, infer, complete, or invent absent content. "
-        @"Output ONLY Chinese.";
-
-    // v2.2.18：最近 1 句【已送译】原文作为上下文（对齐 LLM_TRANSLATION_HISTORY_SIZE=1）。
-    // 必须在 pumpQueue（真正发请求时）才入列，不能在 translate: 入队时入列，
-    // 否则队列里还没翻的句子会变成「未来上下文」，反而误导模型。
-    NSString *ctx = @"";
-    @synchronized(self) {
-        if (_recentLines.count) ctx = [_recentLines componentsJoinedByString:@" / "];
-        if (!_recentLines) _recentLines = [NSMutableArray array];
-        [_recentLines addObject:text];
-        if (_recentLines.count > 1) [_recentLines removeObjectAtIndex:0];
-    }
-    NSString *fullPrompt = sysPrompt;
-    if (ctx.length) {
-        fullPrompt = [sysPrompt stringByAppendingFormat:
-            @"\nContext (previous line, do NOT translate): %@", ctx];
-    }
+    // v2.0.0：目标语言硬编码为中文
+    // ===== prompt 精简（v1.0.81）=====
+    // 实测（设备 → apihub.agnes-ai.cn 网关）：
+    //   agnes-3.0-flash + 1401 字节长 prompt → 29~40s（必然超时）
+    //   agnes-2.5-flash +  232 字节中 prompt → 0.96~7.6s（可用）
+    // 长 prompt 不只是慢，还会显著抬高网关排队时间。
+    // 这里保留最关键的三条约束（只输出译文 / 输入可能是脏片段要照翻 / 绝不回显英文），
+    // 去掉示例和冗长规则，压到 ~230 字节。
+    // v2.0.0：目标语言硬编码为中文，直接写死在 sysPrompt 里
+    // v2.2.0：改回「忠实直译」。
+    // v2.1.0 让模型顺手纠错、补全截断词，实测会把碎片脑补成另一句完整话，
+    // 译文和 YouTube 原版字幕对不上（用户反馈）。字幕翻译必须逐字忠实，
+    // 宁可译出半句，也不要替观众猜内容。
+    NSString *sysPrompt = @"You are a subtitle translator. Translate the given speech-to-text "
+        @"fragment faithfully into natural Simplified Chinese. Keep the original meaning and word "
+        @"order; do NOT add, infer, complete, summarize or correct anything absent from the input. "
+        @"If the input is an incomplete fragment, translate only that fragment and leave it "
+        @"incomplete. Output ONLY the Chinese translation: no quotes, no explanation, no English. "
+        @"NEVER echo the input.";
 
     __weak typeof(self) weakSelf = self;
     NSDate *t0 = [NSDate date];
-    [self raceTranslate:text sysPrompt:fullPrompt cacheKey:cacheKey
+    [self raceTranslate:text sysPrompt:sysPrompt cacheKey:cacheKey
              completion:^(NSString *result) {
         LCLogF(@"translate: inflight rtt=%lldms len=%lu",
                (long long)([[NSDate date] timeIntervalSinceDate:t0] * 1000),
@@ -974,6 +959,36 @@ static NSString *LCJBRootPath(NSString *path) {
             [strongSelf pumpQueue];
         });
     }];
+}
+
+// v2.2.19：模型/翻译记忆库返回的「元话语」闸门。
+// 设备录屏(2026-11-14)实证：字幕框里出现
+//   「你提供的内容不完整，没有日语文本需要翻译。请补充需要翻译的日语字幕内容。」
+// 这不是译文，是 LLM 收到非日语/空正文时给出的追问话术，或 MyMemory 翻译记忆库里
+// 串进来的无关本地化字符串。旧闸门只查「含汉字、无假名、无拉丁」，纯中文的元话语
+// 100% 放行上屏。这里按强特征词命中即拒、弱特征词命中 2 个才拒，避免误杀正常台词。
+static BOOL LCIsMetaReply(NSString *s) {
+    if (s.length == 0) return NO;
+    static NSArray *strong = nil;
+    static NSArray *weak = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        strong = @[
+            @"请补充", @"请提供需要", @"请重新输入", @"没有日语文本", @"没有需要翻译",
+            @"内容不完整", @"文本需要翻译", @"无法翻译", @"不能翻译", @"无法完成",
+            @"作为一个AI", @"作为AI语言", @"（无内容）", @"(无内容)",
+            @"字幕内容需要", @"请提供日语", @"No Japanese text", @"Please provide the",
+        ];
+        weak = @[@"请提供", @"请输入", @"抱歉", @"对不起", @"不清楚", @"无法", @"不完整"];
+    });
+    NSUInteger weakHits = 0;
+    for (NSString *w in strong) {
+        if ([s rangeOfString:w].location != NSNotFound) return YES;
+    }
+    for (NSString *w in weak) {
+        if ([s rangeOfString:w].location != NSNotFound) weakHits++;
+    }
+    return weakHits >= 2;
 }
 
 // v2.0.0：目标语言固定为中文，译文校验只需检查是否含中文字符
@@ -989,6 +1004,22 @@ static NSString *LCJBRootPath(NSString *path) {
     NSString *orig = [text stringByTrimmingCharactersInSet:
         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if ([norm isEqualToString:orig]) return NO;
+    // v2.2.19：模型常给回显包一对引号（录屏里的「"我拿！"」），
+    // 剥掉首尾成对引号后再比一次，避免「原文回显」绕过闸门。
+    NSString *unquoted = norm;
+    if (norm.length >= 3) {
+        unichar f = [norm characterAtIndex:0];
+        unichar l = [norm characterAtIndex:norm.length - 1];
+        BOOL paired = (f == 0x201C && l == 0x201D) || (f == '"' && l == '"') ||
+                      (f == 0x300C && l == 0x300D);
+        if (paired) unquoted = [norm substringWithRange:NSMakeRange(1, norm.length - 2)];
+    }
+    if ([unquoted isEqualToString:orig]) return NO;
+    // v2.2.19：拦「请补充需要翻译的日语字幕内容」这类模型/翻译记忆库元话语。
+    if (LCIsMetaReply(norm)) {
+        LCLogF(@"translate: reject meta reply [%@]", norm);
+        return NO;
+    }
     BOOL hasCJK = NO;
     BOOL hasKanaOrHangul = NO;
     NSUInteger cjkCount = 0;
@@ -1004,9 +1035,12 @@ static NSString *LCJBRootPath(NSString *path) {
     }
     if (!hasCJK) return NO;          // 完全不含汉字，肯定不是中文译文
     if (hasKanaOrHangul) return NO;  // 含假名/谚文 → 是日/韩文，拒绝上屏
-    // v2.2.18：原文不短却只翻出 1 个汉字（录屏里的「他 ✓」），
-    // 多半是 ASR 碎片或翻译通道回显残片，放行只会污染画面。
-    if (orig.length >= 6 && cjkCount <= 1) return NO;
+    // v2.2.19：单字译文（录屏里的「你 ✓」）一律不上屏，不论原文长短。
+    // 旧闸门要求 orig.length>=6 才拦，短原文漏了过去。
+    if (cjkCount <= 1 && norm.length <= 3) return NO;
+    // v2.2.19：短原文却吐出一大段（翻译记忆库串入无关条目 / 模型脑补）。
+    // 正常字幕译文长度与原文同量级，>20 字基本不可能是 <6 字残片的忠实翻译。
+    if (orig.length <= 6 && norm.length >= 20) return NO;
     // v2.2.16：拦「半中半洋」的垃圾译文。设备录屏里出现过
     // 「您好，我是 La Von。」「哇，花 khöp」——ASR 把日语听成多语种碎片后，
     // 旧校验只要含汉字就放行，用户看到的正是这种怪句子。中文译文里偶尔有
@@ -1058,7 +1092,7 @@ static NSString *LCDetectLang(NSString *text);
     //   同时断，连续 38 句 showFailed，用户看到的就是「没在翻译」。
     //   实测 agnes 事后单次 / 连续 6 次请求全部 HTTP 200 → 429 是短时 QPS
     //   限流而不是当日额度用尽，90 秒一刀切属于过度反应。
-    // 改法：① 429 后只冷却 10 秒；② 冷却期每 5 句做一次半开探测；
+    // 改法：① 429 后只冷却 4 秒（v2.2.19 由 10 秒缩短）；② 冷却期每 3 句做一次半开探测；
     //       ③ MyMemory 当日额度耗尽后冷却 10 分钟，不再发无效请求；
     //       ④ MyMemory 冷却时 agnes 即使处于冷却也强制参赛，保证任何时刻
     //          都有一条真正可用的翻译通道在跑；⑤ providers 永不为空。
@@ -1075,7 +1109,8 @@ static NSString *LCDetectLang(NSString *text);
         _raceSeq += 1;
         seq = _raceSeq;
     }
-    BOOL halfOpenProbe = (seq % 5 == 0);
+    // v2.2.19：冷却缩到 4s 后，每 3 句做一次半开探测即可，太密反而持续撞 429。
+    BOOL halfOpenProbe = (seq % 3 == 0);
     BOOL forceAgnes = mymemoryCooling;   // 免费兜底停摆时，agnes 是唯一希望
     if (apiKey.length && apiBase.length &&
         (!agnesPaused || halfOpenProbe || forceAgnes)) [providers addObject:@"agnes"];
@@ -1150,8 +1185,10 @@ static NSString *LCDetectLang(NSString *text);
             NSTimeInterval agnesDelay = 0;
             @synchronized(self) {
                 NSTimeInterval t = [NSDate timeIntervalSinceReferenceDate];
-                if (_lastAgnesSendAt > 0 && t - _lastAgnesSendAt < 0.35) {
-                    agnesDelay = 0.35 - (t - _lastAgnesSendAt);
+                // v2.2.19：0.35s 节流在密集短句下仍会撞 QPS 429（本地连续请求实测
+                // 多次 HTTP 429），放宽到 0.5s，减少被限流后整段由兜底通道出译文。
+                if (_lastAgnesSendAt > 0 && t - _lastAgnesSendAt < 0.5) {
+                    agnesDelay = 0.5 - (t - _lastAgnesSendAt);
                 }
                 _lastAgnesSendAt = t + agnesDelay;   // 预约，避免并发请求同时算出 0
             }
@@ -1167,7 +1204,7 @@ static NSString *LCDetectLang(NSString *text);
                 fireAgnes();
             }
         } else {
-            LCLogF(@"translate: race -> mymemory%@", preferAgnes ? @" (delayed 1.0s)" : @"");
+            LCLogF(@"translate: race -> mymemory%@", preferAgnes ? @" (delayed 1.5s)" : @"");
             void (^fireMyMemory)(void) = ^{
                 BOOL alreadyWon = NO;
                 @synchronized (state) { alreadyWon = [state[@"won"] boolValue]; }
@@ -1184,7 +1221,9 @@ static NSString *LCDetectLang(NSString *text);
                              completion:^(NSString *r) { onResult(p, r); }];
             };
             if (preferAgnes) {
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                // v2.2.19：兜底窗口 1.0s→1.5s，给 agnes 4.5s 超时内的正常响应
+                // 更多获胜机会；MyMemory 直译/回显只在 agnes 真失败时上屏。
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
                     dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), fireMyMemory);
             } else {
                 fireMyMemory();
@@ -1642,16 +1681,20 @@ static double LCSimilarity(NSString *a, NSString *b) {
     // v2.0.0 修复：竞速【全部失败】时 _inflight 要等最慢的一路超时才释放，
     // 30s 会把串行翻译队列堵死（设备日志实测中文滞后 5~8s、大量 showFailed）。
     // v2.1.0：agnes-3.0-flash p50 1.38s，但实测有 17.4s 级长尾（历史注释
-    // 里甚至出现过 29~40s）。压到 3.5s：正常请求都能回，长尾直接放弃，
+    // 里甚至出现过 29~40s）。历史曾压到 3.5s 放弃长尾；v2.2.19 实测长尾
+    // 只是慢不是错，放宽到 4.5s 让它们仍有机会赢（见下方 timeoutInterval）。
     // 交给延迟窗口里发出的 MyMemory 兜底，不让串行翻译队列被卡住。
-    req.timeoutInterval = 3.5;
+    // v2.2.19：本地实测 agnes 正常 p50≈0.7s，但有 4.6~5.2s 长尾；
+    // 3.5s 会把这些「慢但正确」的译文直接判死，只剩 MyMemory 的直译/回显上屏。
+    // 放宽到 4.5s，配合下面 1.5s 的兜底窗口，让 agnes 长尾仍能赢。
+    req.timeoutInterval = 4.5;
 
     LCLogF(@"translate: openai request url=%@ model=%@ attempt=%ld", chatUrl, trimmedModel, (long)attempt);
     NSURLSessionDataTask *task = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *taskErr) {
         // v2.0.2：网关限流识别。agnes 免费额度限流返回的是 HTTP 200 +
         // {"error":{"message":"...速率限制..."}}，不是 429，所以状态码和响应体都要判。
-        // v2.2.15：只冷却 10 秒（原 90 秒过长，期间没有任何翻译通道可用）；
+        // v2.2.15：只冷却 4 秒（原 90 秒过长，期间没有任何翻译通道可用）；
         // 配合 raceTranslate 的半开探测，限流一解除就能立刻恢复中文。
         // 只针对 agnes 域名，不误伤自建 API。
         BOOL isAgnes = ([apiBase rangeOfString:@"agnes"
@@ -1660,9 +1703,9 @@ static double LCSimilarity(NSString *a, NSString *b) {
             ? [(NSHTTPURLResponse *)resp statusCode] : 0;
         if (isAgnes && (status == 429 || status == 403)) {
             @synchronized(self) {
-                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 10.0;
+                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 4.0;
             }
-            LCLogF(@"translate: agnes http %ld -> cooldown 10s", (long)status);
+            LCLogF(@"translate: agnes http %ld -> cooldown 4s", (long)status);
         }
         if (taskErr) {
             LCLogF(@"translate: openai req err %@ url=%@ attempt=%ld", taskErr, chatUrl, (long)attempt);
@@ -1725,9 +1768,9 @@ static double LCSimilarity(NSString *a, NSString *b) {
              [gwMsg rangeOfString:@"Token Plan"].location != NSNotFound ||
              [gwMsg rangeOfString:@"rate" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
             @synchronized(self) {
-                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 10.0;
+                _agnesPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 4.0;
             }
-            LCLogF(@"translate: agnes rate-limited -> cooldown 10s");
+            LCLogF(@"translate: agnes rate-limited -> cooldown 4s");
         }
         NSArray *choices = json[@"choices"];
         if (![choices isKindOfClass:[NSArray class]] || choices.count == 0) {
@@ -1900,9 +1943,6 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     // v2.2.16：多语种大模型引擎资源包耗尽(4004)后的会话内降级引擎
     NSString *_engineOverride;
     BOOL _engineFallbackDone;
-    // v2.2.18：短句合并缓冲（参考 realtime_subtitle 的短句合并策略）
-    NSMutableString *_shortCarry;
-    NSTimeInterval _carryAt;
 }
 
 + (instancetype)shared {
@@ -1985,9 +2025,6 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     _lastRawPartial = nil;
     _lastChangeAt = now;
     _sentenceStartAt = 0;
-    if (!_shortCarry) _shortCarry = [NSMutableString string];
-    [_shortCarry setString:@""];
-    _carryAt = 0;
     NSURLSessionConfiguration *c = [NSURLSessionConfiguration defaultSessionConfiguration];
     c.connectionProxyDictionary = @{};   // 禁系统代理，直连（同 LCSessionDirect）
     _session = [NSURLSession sessionWithConfiguration:c delegate:self delegateQueue:nil];
@@ -2157,23 +2194,16 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     return NO;
 }
 
-// ===== v2.2.18：ASR 碎片 / 幻觉闸门 =====
-// 参考 PC 开源实时字幕方案：
-//   live-subtitle      —— 28 条 Whisper 幻觉黑名单（日语 16 / 英语 9 / 中文 3）
-//   realtime_subtitle  —— 短句合并(≤20 词) + 上下文管理(LLM_TRANSLATION_HISTORY_SIZE)
-//   VideoCaptioner     —— 上下文感知翻译、翻译-反思-翻译
-//   iOS Live Caption   —— partial 就地更新，完成的句子才滚动
-// 设备录屏里出现「有时我告诉它」「他 ✓」这类碎句：腾讯云 WS 的 slice_type=2
-// 稳态句本身可能被 VAD 切碎，旧代码无条件收句送译 + 忠实直译碎片 → 半句怪中文。
-static BOOL LCHasSentenceEnd(NSString *s) {
-    if (s.length == 0) return NO;
-    unichar last = [s characterAtIndex:s.length - 1];
-    return (last == '.' || last == '?' || last == '!' ||
-            last == 0x3002 || last == 0xFF1F || last == 0xFF01 ||
-            last == 0x3001 || last == 0xFF0C);
-}
-
-// 静音时 ASR 常编出片尾语/引导语，命中直接丢，不送译也不上屏。
+// 静音时服务端不再推 partial，靠 keepalive 定时器收句
+// ===== v2.2.19：只丢垃圾，不做跨句拼接 =====
+// 2.2.18 照搬 PC 实时字幕方案的「短句合并 + LLM 上下文」在本项目翻车，实测：
+//   ① 腾讯云 slice_type=2 稳态句本身就是残片（录屏音轨实测「スだけど。」），
+//      无分隔拼接会把相邻两句粘成「違いますエステだけど」这种不存在的句子；
+//   ② 带上一句原文作 Context 后，agnes 输出「但去美容的话，我想了想，好像不太合适。」
+//      凭空补出「我想了想」，无上下文时是「虽然说是美容，但感觉不太对劲。」；
+//   ③ 新 prompt 写死日语场景，遇到非日语/空正文会回元话语。
+// 故回退到 2.2.17 的逐句送译 + 忠实直译 prompt，只保留纯增益的两道闸门：
+// 片尾幻觉语黑名单、极短碎片/同字重复丢弃。绝不把不同句子拼在一起。
 static BOOL LCIsHallucination(NSString *s) {
     if (s.length == 0) return NO;
     static NSArray *words = nil;
@@ -2195,34 +2225,21 @@ static BOOL LCIsHallucination(NSString *s) {
     return NO;
 }
 
-// 单字/纯语气词/整句同一字符重复：不是有效字幕，直接丢。
+// 单字/双字或整句同一字符重复：不是有效台词，直接丢，不送译也不上屏。
 static BOOL LCIsJunkFragment(NSString *s) {
-    if (s.length < 4) return YES;
+    if (s.length < 3) return YES;
     unichar first = [s characterAtIndex:0];
-    BOOL allSame = YES;
     for (NSUInteger i = 1; i < s.length; i++) {
-        if ([s characterAtIndex:i] != first) { allSame = NO; break; }
+        if ([s characterAtIndex:i] != first) return NO;
     }
-    return allSame;
+    return YES;
 }
 
-// 静音时服务端不再推 partial，靠 keepalive 定时器收句
 - (void)lc_flushIfSettled {
     if (![[LCConfig shared] strictSubtitleSync]) return;
-    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-    // v2.2.18：短句合并缓冲超时先冲掉，否则视频最后一句（往往是短句）永远不出字幕
-    if (_shortCarry.length > 0 && now - _carryAt >= 2.5) {
-        NSString *carry = [_shortCarry copy];
-        [_shortCarry setString:@""];
-        if (carry.length >= 4 && !LCIsHallucination(carry)) {
-            LCLogF(@"asr: ws carry timeout flush [%@]", carry);
-            [self lc_translateFinal:carry];
-        } else {
-            LCLogF(@"asr: ws carry timeout drop junk [%@]", carry);
-        }
-    }
     NSString *s = [_sentence copy];
     if (s.length < 2) return;
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
     if (now - _lastChangeAt >= 2.5 && s.length >= 8)
         [self lc_commitSentence:s reason:@"silence"];
     else if (_sentenceStartAt > 0 && now - _sentenceStartAt >= 8.0)
@@ -2240,29 +2257,11 @@ static BOOL LCIsJunkFragment(NSString *s) {
     _lastChangeAt = now;
     _sentenceStartAt = 0;
     if (s.length < 2) return;
+    // v2.2.19：丢掉片尾幻觉语与极短碎片，但【不缓存、不拼接】——
+    // 拼接会把相邻两句粘成一句，正是 2.2.18 译文变怪的主因。
     if (LCIsHallucination(s)) {
         LCLogF(@"asr: ws drop hallucination [%@]", s);
         return;
-    }
-    // v2.2.18：短句合并（realtime_subtitle 的 ≤20 词合并思路）。
-    // 无句末标点且 < 8 字的稳态句先攒着，等下一句拼起来再送译；
-    // 攒到 12 字或下一句到来时一起翻。否则「時々…」「彼」这类碎片会被
-    // 忠实直译成「有时我告诉它」「他」，正是用户录屏里的问题。
-    BOOL weakEnd = !LCHasSentenceEnd(s);
-    if (weakEnd && s.length < 8 && !LCIsJunkFragment(s)) {
-        if (!_shortCarry) _shortCarry = [NSMutableString string];
-        [_shortCarry appendString:s];
-        _carryAt = now;
-        if (_shortCarry.length < 12) {
-            LCLogF(@"asr: ws hold short [%@] carry=[%@]", s, _shortCarry);
-            return;
-        }
-        s = [_shortCarry copy];
-        [_shortCarry setString:@""];
-    } else if (_shortCarry.length) {
-        s = [_shortCarry stringByAppendingString:s];
-        [_shortCarry setString:@""];
-        LCLogF(@"asr: ws carry merged -> [%@]", s);
     }
     if (LCIsJunkFragment(s)) {
         LCLogF(@"asr: ws drop junk [%@]", s);

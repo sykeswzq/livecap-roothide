@@ -130,12 +130,11 @@ def verify(deb_path):
                         ('v2.2.0 严格同步开关键', b'strictSubtitleSync'),
                         ('v2.2.0 滞后译文丢弃', b'overlay: drop lagging pair'),
                         ('v2.2.1 运行时不拦截注入', b'not in enabledBundles (log only'),
-                        ('v2.2.18 短句合并', b'asr: ws hold short'),
-                        ('v2.2.18 幻觉过滤', b'asr: ws drop hallucination'),
-                        ('v2.2.18 碎片过滤', b'asr: ws drop junk'),
-                        ('v2.2.18 合并送译', b'asr: ws carry merged'),
-                        ('v2.2.18 尾句兜底', b'asr: ws carry timeout flush'),
-                        ('v2.2.18 上下文窗口', b'Context (previous line, do NOT translate)')]:
+                        ('v2.2.19 幻觉过滤', b'asr: ws drop hallucination'),
+                        ('v2.2.19 碎片过滤', b'asr: ws drop junk'),
+                        ('v2.2.19 元话术闸门', b'translate: reject meta reply'),
+                        ('v2.2.19 429 短冷却', b'cooldown 4s'),
+                        ('v2.2.19 回退忠实直译', b'NEVER echo the input')]:
         assert needle in dl, '%s 未编进 dylib（%s）' % (tag, needle.decode())
         print('  含新代码: %s OK' % tag)
 
@@ -169,8 +168,8 @@ def verify(deb_path):
     for tag, needle in (('字号输入回调', b'lc_inputChanged:'),
                         ('字号严格解析', b'lc_parse:value:'),
                         ('字号单一写入口', b'lc_apply:syncInput:'),
-                        ('v2.2.18 主面板弹窗解析', b'lc_parseFontInput:'),
-                        ('v2.2.18 版本标题', b'CFBundleShortVersionString')):
+                        ('v2.2.19 主面板弹窗解析', b'lc_parseFontInput:'),
+                        ('v2.2.19 版本标题', b'CFBundleShortVersionString')):
         assert needle in prefs, 'v2.2.17 字号手动输入未编进面板: %s (%s)' % (
             tag, needle.decode())
         print('  含字号输入: %s OK' % tag)
