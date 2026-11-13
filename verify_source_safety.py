@@ -1392,6 +1392,39 @@ def check_v229_fixes(src):
         errors.append("v2.2.9 回归: raceTranslate 未把面板「视频源语言」接入 MyMemory 源语言")
 
 
+def check_v2216_fixes(src):
+    """v2.2.16：ASR 主链路 4004 自动降级 + 译文质量闸门 + 回译自检冷却。
+
+    本地实测（2026-11-13，同一账号/同一份日语音轨）：
+      实时 WebSocket 16k_multi_lang -> code=4004 资源包耗尽
+                     16k_ja/ko/en/zh -> code=0 可用
+      HTTP 一句话识别 16k_multi_lang -> 正常，但按 1.5s 切片会切碎日语
+    旧代码遇 4004 直接 stop 回落 HTTP 分片，把整句日语听成多语种乱码，
+    忠实直译后就是「您好，我是 La Von。」「哇，花 khöp」这类怪中文。
+    """
+    for token, why in (
+            ("if (s.length) return s;", "asrEngine 显式覆盖必须生效"),
+            ('return @"16k_ja";', "源语言=日语时改用可用单语种引擎"),
+            ('return @"16k_ko";', "源语言=韩语映射"),
+            ('return @"16k_en";', "源语言=英语映射"),
+            ('return @"16k_zh";', "源语言=中文映射"),
+            ("ws 4004 (multi_lang quota)", "4004 自动降级日志"),
+            ("_engineOverride.length ? _engineOverride : [cfg asrEngine]",
+             "降级引擎必须参与重新握手"),
+            ("_engineFallbackDone", "降级只能做一次，防止重连死循环"),
+            ("latin * 100 / total > 20", "译文闸门：拒绝半中半洋的垃圾结果"),
+            ("backcheck mymemory daily quota exhausted",
+             "回译自检必须复用 MyMemory 日额度冷却")):
+        if token not in src:
+            errors.append("v2.2.16 回归: 缺少 %s —— %s" % (token, why))
+    if 'NSString *eng = @"16k_multi_lang";' in src:
+        errors.append("v2.2.16 回归: HTTP 分片路径仍写死 16k_multi_lang，"
+                      "与流式主链路引擎不一致")
+    if "code == 4002 || code == 4003 || code == 4004" in src:
+        errors.append("v2.2.16 回归: 4004 仍与 4002/4003 一起直接 stop，"
+                      "会回落 HTTP 分片把日语切碎")
+
+
 def main():
     try:
         src = read_src()
@@ -1438,6 +1471,7 @@ def main():
     check_v221_fixes(src, applist_src, postinst_src)
     check_v228_fixes(src)
     check_v229_fixes(src)
+    check_v2216_fixes(src)
     # v2.2.13 文件级断言只能放主流程：CI 双向验证会把脚本复制到临时目录后
     # 调用 check_* 函数，那边读不到工程文件，放进去会让每个用例都误报。
     # 注意：CI 的双向验证会 chdir 到临时目录后调用主流程，此时工程文件本来
@@ -1526,6 +1560,7 @@ def main():
     print("  OK: v2.2.9 修复在位（asrEngine 默认 16k_multi_lang；PCM16 去 16k_zh；面板源语言接入翻译）")
     print("  OK: v2.2.14 图标规格在位（29/58/87 三件套带圆角，设置里与其他插件等大）")
     print("  OK: v2.2.15 限流恢复在位（agnes 10s 短冷却+半开探测+节流，MyMemory 日额度冷却 600s）")
+    print("  OK: v2.2.16 听写链路在位（4004 降级可用引擎/译文闸门/回译复用冷却）")
     return 0
 
 

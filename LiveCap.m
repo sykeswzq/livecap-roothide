@@ -514,11 +514,23 @@ static NSString *LCJBRootPath(NSString *path) {
 
 - (NSString *)asrEngine {
     NSString *s = _d[@"asrEngine"];
-    // 显式覆盖（如 16k_ja / 16k_zh_en）仍生效；但旧默认 16k_en 会把日/韩等语种
-    // 当英文喂给识别引擎 → 大量空结果/碎片（v2.2.9 实机日志：278 次空结果、识别出英文碎片）。
-    // 改用 16k_multi_lang（多语言大模型引擎，账号实测已开通，支持 15 语种自动识别），
-    // 对日语/韩语等正确识别；如需更高精度单语种引擎，在 plist 显式写 asrEngine 即可。
-    if (s.length && ![s isEqualToString:@"16k_en"]) return s;
+    // v2.2.16：显式覆盖一律生效。旧逻辑把 16k_en 当成「过期默认值」强行替换成
+    // 16k_multi_lang，导致用户在 plist 里明确选英文引擎也会被越权改写。
+    if (s.length) return s;
+    // v2.2.16 本地实测（2026-11-13，同一账号、同一份日语音轨）：
+    //   实时 WebSocket  16k_multi_lang -> code=4004「资源包耗尽」
+    //                  16k_ja / 16k_ko / 16k_en / 16k_zh -> code=0 可用
+    //   HTTP 一句话识别 16k_multi_lang -> 正常（但该路径按 1.5s 切片，日语被切碎）
+    // 主链路一旦 4004 就会 stop 并回落 HTTP 分片，把整句日语切碎片、听成多语种
+    // 乱码，忠实直译后就是「您好，我是 La Von。」「哇，花 khöp」这类怪中文。
+    // 因此面板「视频源语言」显式指定时，直接用对应可用的单语种引擎，不再赌
+    // 多语种资源包。auto / 其他语种仍优先多语种大模型，若握手 4004 由
+    // LCStreamASR 自动降级到 16k_ja（见 lc_onText）。
+    NSString *lang = [self srcLang];
+    if ([lang isEqualToString:@"ja"]) return @"16k_ja";
+    if ([lang isEqualToString:@"ko"]) return @"16k_ko";
+    if ([lang isEqualToString:@"en"]) return @"16k_en";
+    if ([lang isEqualToString:@"zh"]) return @"16k_zh";
     return @"16k_multi_lang";
 }
 
@@ -973,6 +985,26 @@ static NSString *LCJBRootPath(NSString *path) {
     }
     if (!hasCJK) return NO;          // 完全不含汉字，肯定不是中文译文
     if (hasKanaOrHangul) return NO;  // 含假名/谚文 → 是日/韩文，拒绝上屏
+    // v2.2.16：拦「半中半洋」的垃圾译文。设备录屏里出现过
+    // 「您好，我是 La Von。」「哇，花 khöp」——ASR 把日语听成多语种碎片后，
+    // 旧校验只要含汉字就放行，用户看到的正是这种怪句子。中文译文里偶尔有
+    // OK / TV 之类缩写，所以按占比放行（>20% 才拒），不做一刀切。
+    NSUInteger latin = 0;
+    BOOL hasLatinExt = NO;
+    NSUInteger total = norm.length ? norm.length : 1;
+    for (NSUInteger i = 0; i < norm.length; i++) {
+        unichar ch = [norm characterAtIndex:i];
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
+            latin++;
+        } else if (ch >= 0x00C0 && ch <= 0x024F) {
+            // 中文译文不可能带 ö / ế / ộ 这类带变音的拉丁字母（khöp 就是它）
+            hasLatinExt = YES;
+            latin++;
+        }
+    }
+    if (hasLatinExt) return NO;
+    // 双条件：既要够多（≥3 个字母）又要占比 >20%，避免误杀「好的，OK」这类短句
+    if (latin >= 3 && latin * 100 / total > 20) return NO;
     return YES;
 }
 
@@ -1442,6 +1474,16 @@ static double LCSimilarity(NSString *a, NSString *b) {
 // 回译兜底：MyMemory 免费翻译，中文(zh-CN) → 源语言(tmtLang)，无需密钥。
 - (void)backTranslateMyMemory:(NSString *)zhText toLang:(NSString *)tmtLang
                    completion:(void (^)(NSString *back))completion {
+    // v2.2.16：回译自检每句都会额外打一次 MyMemory，是主翻译之外最大的免费
+    // 额度消耗源。主链路识别到当日额度耗尽并进入 600s 冷却后，自检必须一起停，
+    // 否则继续刷 429，既抢 ASR 上行带宽又让冷却时间不断被重置。
+    @synchronized(self) {
+        if (_mymemoryPausedUntil > 0 &&
+            [NSDate timeIntervalSinceReferenceDate] < _mymemoryPausedUntil) {
+            if (completion) completion(nil);
+            return;
+        }
+    }
     NSString *langPair = [NSString stringWithFormat:@"zh-CN%%7C%@", tmtLang];
     NSString *urlStr = [NSString stringWithFormat:
         @"https://api.mymemory.translated.net/get?q=%@&langpair=%@",
@@ -1460,10 +1502,27 @@ static double LCSimilarity(NSString *a, NSString *b) {
         if (pe || !json) { if (completion) completion(nil); return; }
         NSDictionary *rd = json[@"responseData"];
         NSString *content = rd[@"translatedText"];
+        // v2.2.16：与主链路一样识别「当日额度耗尽」。旧代码只挡带空格的
+        // "MY MEMORY WARNING"，挡不住 "MYMEMORY WARNING: YOU USED ALL ..."。
+        id rs = json[@"responseStatus"];
+        BOOL quotaHit = ([rs isKindOfClass:[NSString class]] && [rs isEqualToString:@"429"]) ||
+                        [rs isEqual:@429] ||
+                        ([content isKindOfClass:[NSString class]] &&
+                         [content rangeOfString:@"USED ALL AVAILABLE FREE TRANSLATIONS"
+                                        options:NSCaseInsensitiveSearch].location != NSNotFound);
+        if (quotaHit) {
+            @synchronized(self) {
+                _mymemoryPausedUntil = [NSDate timeIntervalSinceReferenceDate] + 600.0;
+            }
+            LCLog("translate: backcheck mymemory daily quota exhausted -> cooldown 600s");
+            if (completion) completion(nil); return;
+        }
         if (![content isKindOfClass:[NSString class]] || content.length == 0) {
             if (completion) completion(nil); return;
         }
-        if ([content hasPrefix:@"MY MEMORY WARNING"] || [content hasPrefix:@"NO QUERY SPECIFIED"]) {
+        if ([content hasPrefix:@"MYMEMORY WARNING"] ||
+            [content hasPrefix:@"MY MEMORY WARNING"] ||
+            [content hasPrefix:@"NO QUERY SPECIFIED"]) {
             if (completion) completion(nil); return;
         }
         NSString *result = [[content stringByTrimmingCharactersInSet:
@@ -1816,6 +1875,9 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
     NSString *_lastRawPartial;          // 上一次原始 partial（前缀归一化用）
     NSTimeInterval _lastChangeAt;       // 累积文本最后变化时刻
     NSTimeInterval _sentenceStartAt;    // 本句起始时刻（0 = 尚未开始）
+    // v2.2.16：多语种大模型引擎资源包耗尽(4004)后的会话内降级引擎
+    NSString *_engineOverride;
+    BOOL _engineFallbackDone;
 }
 
 + (instancetype)shared {
@@ -1841,7 +1903,8 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
         return nil;
     }
     long long ts = (long long)[[NSDate date] timeIntervalSince1970];
-    NSString *engine = [cfg asrEngine];
+    // v2.2.16：4004 降级后本次会话内改用已验证可用的单语种引擎
+    NSString *engine = _engineOverride.length ? _engineOverride : [cfg asrEngine];
     NSDictionary *p = @{
         @"secretid": sid,
         @"timestamp": [NSString stringWithFormat:@"%lld", ts],
@@ -1951,10 +2014,31 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
         NSInteger code = [codeObj integerValue];
         if (code != 0) {
             LCLogF(@"asr: ws code=%ld msg=%@", (long)code, j[@"message"]);
-            // 4002 签名/密钥、4003 服务未开通、4004 大模型计费未开：不要无限重连
-            if (code == 4002 || code == 4003 || code == 4004) {
+            // 4002 签名/密钥、4003 服务未开通：配置错误，重连没有意义
+            if (code == 4002 || code == 4003) {
                 LCLog("asr: ws fatal -> stop, HTTP fallback takes over");
                 [self stop];
+                return;
+            }
+            // v2.2.16：4004 = 该大模型引擎资源包耗尽/计费项未开通。
+            // 旧逻辑直接 stop → 回落 HTTP 1.5s 分片，日语被切碎成多语种乱码，
+            // 这是「翻译还是有问题」的根因。改为只降级一次到实测可用的单语种
+            // 引擎并重连，保住流式整句识别；再失败才回落 HTTP。
+            if (code == 4004) {
+                if (_engineFallbackDone) {
+                    LCLog("asr: ws 4004 after fallback -> stop, HTTP fallback takes over");
+                    [self stop];
+                    return;
+                }
+                _engineFallbackDone = YES;
+                NSString *lang = [[LCConfig shared] srcLang];
+                NSString *fb = @"16k_ja";
+                if ([lang isEqualToString:@"ko"]) fb = @"16k_ko";
+                else if ([lang isEqualToString:@"en"]) fb = @"16k_en";
+                else if ([lang isEqualToString:@"zh"]) fb = @"16k_zh";
+                _engineOverride = [fb copy];
+                LCLogF(@"asr: ws 4004 (multi_lang quota) -> fallback engine=%@", fb);
+                [self lc_reconnect];
                 return;
             }
             [self lc_reconnect];
@@ -2610,7 +2694,9 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
                 // 我们抓的是视频音轨（背景音乐 + 对白），正属于低质量音频场景，
                 // 用普通引擎 16k_en 会被识别成碎片。
                 // v2.0.0：源语言自动检测，统一用多语言大模型引擎
-                NSString *eng = @"16k_multi_lang";   // 多语言大模型引擎（支持 15 语种自动识别）
+                // v2.2.16：与流式主链路共用同一个引擎选择（面板「视频源语言」/ plist
+                // 显式 asrEngine 覆盖都生效），避免两条路径用不同引擎造成识别结果分叉。
+                NSString *eng = [[LCConfig shared] asrEngine];
 
                 NSDictionary *body = @{
                     @"ProjectId": @0,
@@ -2869,8 +2955,8 @@ static NSString *LCWsHmacSha1B64(NSString *src, NSString *key) {
                     LC_ASR_DONE();
                     return;
                 }
-                // v2.2.9：PCM16 路径同样用多语言大模型引擎，避免中日韩语被中文引擎（16k_zh）误识别成碎片
-                NSString *eng = @"16k_multi_lang";
+                // v2.2.16：与流式主链路共用同一个引擎选择，不再写死 16k_multi_lang
+                NSString *eng = [[LCConfig shared] asrEngine];
 
                 NSDictionary *body = @{
                     @"ProjectId": @0,

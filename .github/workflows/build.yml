@@ -150,6 +150,9 @@ jobs:
           # 曾踩坑: AAC 包描述越界(官方描述是码流级的, 指向 buffer 外) -> AudioConverter 越界读
           python3 verify_source_safety.py
           echo "  (6) OK 源码无已知闪退风险"
+          # v2.2.16：ASR 引擎降级决策 + 译文闸门（纯 Python 镜像，不依赖设备）
+          python3 test_v2216_asr_engine.py
+          echo "  (6.1) OK v2.2.16 听写链路回归通过"
 
       - name: Verify no mediaserverd injection
         run: |
