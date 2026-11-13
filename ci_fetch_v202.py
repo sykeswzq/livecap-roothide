@@ -135,7 +135,7 @@ def verify(deb_path):
                         ('v2.2.18 碎片过滤', b'asr: ws drop junk'),
                         ('v2.2.18 合并送译', b'asr: ws carry merged'),
                         ('v2.2.18 尾句兜底', b'asr: ws carry timeout flush'),
-                        ('v2.2.18 上下文窗口', b'Context (previous subtitles')]:
+                        ('v2.2.18 上下文窗口', b'Context (previous line, do NOT translate)')]:
         assert needle in dl, '%s 未编进 dylib（%s）' % (tag, needle.decode())
         print('  含新代码: %s OK' % tag)
 

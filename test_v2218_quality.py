@@ -166,7 +166,7 @@ check(c3.commit("あ", 1.0) in ("drop-short", "drop-junk"),
 # ---------------------------------------------------------------------------
 print("")
 print("=" * 70)
-print("C. 上下文窗口（只含已送译的前 2 句）")
+print("C. 上下文窗口（只含已送译的前 1 句，控制 prompt 长度）")
 print("=" * 70)
 
 
@@ -177,15 +177,14 @@ class Context(object):
     def pump(self, text):
         ctx = " / ".join(self.recent)
         self.recent.append(text)
-        if len(self.recent) > 2:
+        if len(self.recent) > 1:
             self.recent.pop(0)
         return ctx
 
 
 ctx = Context()
 for line, want in [("第一句", ""), ("第二句", "第一句"),
-                   ("第三句", "第一句 / 第二句"),
-                   ("第四句", "第二句 / 第三句")]:
+                   ("第三句", "第二句"), ("第四句", "第三句")]:
     got = ctx.pump(line)
     check(got == want, "pump(%r)" % line, "期望上下文 %r 实得 %r" % (want, got))
 
@@ -293,9 +292,9 @@ NEGATIVE = [
      dict(src_text=SRC.replace("_recentLines", "_noRecent")),
      "上下文窗口"),
     ("prompt 改回半成品照翻",
-     dict(src_text=SRC.replace("Output ONLY Chinese: no quotes",
+     dict(src_text=SRC.replace("Output ONLY Chinese.",
                                "If the input is an incomplete fragment, leave it incomplete. "
-                               "Output ONLY Chinese: no quotes", 1)),
+                               "Output ONLY Chinese.", 1)),
      "半成品照翻不补全"),
     ("删掉幻觉黑名单",
      dict(src_text=SRC.replace("LCIsHallucination", "LCNoHallucination")),

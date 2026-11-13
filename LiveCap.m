@@ -931,17 +931,19 @@ static NSString *LCJBRootPath(NSString *path) {
     // v2.2.0 定下的「忠实直译碎片、半成品照翻不补全」在日语生肉上翻车：
     // ASR 碎片被逐字直译成「有时我告诉它」「他 ✓」这类怪中文（用户录屏实证）。
     // 参考 realtime_subtitle / VideoCaptioner 的上下文感知翻译，改为：
-    //   ① 带最近 2 句原文作上下文，只用来消解代词/省略主语；
+    //   ① 带最近 1 句原文作上下文，只用来消解代词/省略主语；
     //   ② 要求译成自然中文短句，而不是词对词硬翻；
     //   ③ 仍禁止臆造/补全（保留 v2.2.0 的防脑补约束）。
     // 上下文只追加到 sysPrompt；MyMemory / TMT 拿的仍是单句 text，不受影响。
-    NSString *sysPrompt = @"You translate live Japanese subtitles into natural Simplified Chinese. "
-        @"Translate ONLY the current line; make it natural, not a word-for-word gloss. "
-        @"Context lines (if any) only resolve pronouns and omitted subjects; never translate them. "
+    // v2.2.18 二次调优：本地实测长 prompt(564B) 让 agnes 从 0.7s 涨到 ~2.9s，
+    // 而竞速里 MyMemory 延时 1.0s 发出、约 1~2s 返回 → agnes 一慢就会被质量差的
+    // 兜底译文抢先赢。历史记录也明确：1401B 会排队 29~40s，232B 才可用。
+    // 故压到 ~180B，上下文只留最近 1 句，整条 sysPrompt 控制在 ~280B。
+    NSString *sysPrompt = @"Translate this Japanese subtitle into natural Simplified Chinese. "
         @"Keep the meaning; do NOT add, infer, complete, or invent absent content. "
-        @"Output ONLY Chinese: no quotes, explanation, Japanese or English.";
+        @"Output ONLY Chinese.";
 
-    // v2.2.18：最近 2 句【已送译】原文作为上下文（对齐 LLM_TRANSLATION_HISTORY_SIZE=2）。
+    // v2.2.18：最近 1 句【已送译】原文作为上下文（对齐 LLM_TRANSLATION_HISTORY_SIZE=1）。
     // 必须在 pumpQueue（真正发请求时）才入列，不能在 translate: 入队时入列，
     // 否则队列里还没翻的句子会变成「未来上下文」，反而误导模型。
     NSString *ctx = @"";
@@ -949,12 +951,12 @@ static NSString *LCJBRootPath(NSString *path) {
         if (_recentLines.count) ctx = [_recentLines componentsJoinedByString:@" / "];
         if (!_recentLines) _recentLines = [NSMutableArray array];
         [_recentLines addObject:text];
-        if (_recentLines.count > 2) [_recentLines removeObjectAtIndex:0];
+        if (_recentLines.count > 1) [_recentLines removeObjectAtIndex:0];
     }
     NSString *fullPrompt = sysPrompt;
     if (ctx.length) {
         fullPrompt = [sysPrompt stringByAppendingFormat:
-            @"\nContext (previous subtitles, for reference only; do NOT translate or quote): %@", ctx];
+            @"\nContext (previous line, do NOT translate): %@", ctx];
     }
 
     __weak typeof(self) weakSelf = self;

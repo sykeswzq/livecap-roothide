@@ -1498,10 +1498,11 @@ def check_v2218_fixes(src, panel_src, postinst_src):
         errors.append("v2.2.18 回归: postinst 未刷新 Preferences 进程 —— "
                       "设置页会继续显示缓存的旧 bundle（用户看到旧滑块）")
     for token, why in (
-            ("_recentLines", "LLM 上下文窗口（最近 2 句已送译原文）"),
+            ("_recentLines", "LLM 上下文窗口（最近 1 句已送译原文）"),
             ("fullPrompt", "上下文必须拼进 sysPrompt 传给 agnes"),
-            ("Context (previous subtitles", "上下文说明：只作参考不得翻译"),
-            ("word-for-word gloss", "prompt 不再要求词对词硬翻碎片"),
+            ("Context (previous line, do NOT translate)", "上下文说明：只作参考不得翻译"),
+            ("this Japanese subtitle", "prompt 明确日语字幕场景并要求自然中文"),
+            ("Output ONLY Chinese.", "prompt 必须精简，长 prompt 会拖慢 agnes 被兜底抢先"),
             ("_shortCarry", "短句合并缓冲"),
             ("carry timeout flush", "短句缓冲超时兜底，避免最后一句丢失"),
             ("LCIsHallucination", "ASR 幻觉黑名单"),
