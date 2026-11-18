@@ -6,20 +6,6 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>LiveCapPrefs</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.sykes.livecap.prefs</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>LiveCapPrefs</string>
-	<key>CFBundlePackageType</key>
-	<string>BNDL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>2.2.19</string>
-	<key>CFBundleVersion</key>
-	<string>2.2.19</string>
-	<key>NSPrincipalClass</key>
-	<string>LCRootListController</string>
 	<key>CFBundleIconFile</key>
 	<string>icon</string>
 	<key>CFBundleIcons</key>
@@ -32,5 +18,19 @@
 			</array>
 		</dict>
 	</dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.sykes.livecap.prefs</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>LiveCapPrefs</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.2.20</string>
+	<key>CFBundleVersion</key>
+	<string>2.2.20</string>
+	<key>NSPrincipalClass</key>
+	<string>LCRootListController</string>
 </dict>
 </plist>

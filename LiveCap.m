@@ -3329,6 +3329,9 @@ static BOOL LCIsJunkFragment(NSString *s) {
         [parent addSubview:container];
         _container = container;
         _installed = YES;
+        // v2.2.20：addSubview 是插入末尾，如果 App 全屏/半屏切换时新建了更高 z-order 的 view
+        // （暮色 AvBox 就爱这么干），container 会被盖住 → 白点看不见。立刻提到顶层保命。
+        [parent bringSubviewToFront:container];
 
         // 关键：立即给 container 一个可见的尺寸和位置。
         // 否则在 ASR 首次出结果之前，字幕框是 CGRectZero（不可见），
@@ -3442,6 +3445,7 @@ static BOOL LCIsJunkFragment(NSString *s) {
     @try {
         [_container removeFromSuperview];
         [host addSubview:_container];
+        [host bringSubviewToFront:_container];   // v2.2.20：确保搬到新 window 后仍在最上层
         // 按新窗口尺寸还原相对位置
         CGPoint c = CGPointMake(relX * host.bounds.size.width,
                                 relY * host.bounds.size.height);
