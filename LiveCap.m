@@ -3215,8 +3215,10 @@ static BOOL LCIsJunkFragment(NSString *s) {
     // ===== v1.0.87：配置热重载（字号改完立即生效）=====
     // _lastFontSize：上次渲染用的字号；配置监听器发现变化就重排重绘。
     // _configTimer：0.4s 一次的轻量定时器，只比对字号数值（一次 plist 读取）。
+    // _keepAliveTimer：每 3s 守护一次，保证 overlay 不被暮色等 App 的播放层盖住。
     CGFloat _lastFontSize;
     dispatch_source_t _configTimer;
+    dispatch_source_t _keepAliveTimer;
 }
 
 + (instancetype)shared {
@@ -3343,6 +3345,8 @@ static BOOL LCIsJunkFragment(NSString *s) {
 
         // v1.0.87：启动配置监听（字号改了立即重排）
         [self startConfigWatcher];
+        // v2.2.20：启动 keep-alive 守护，防止暮色等 App 新建播放层盖住 overlay
+        [self startKeepAlive];
 
         LCLog("overlay: installed");
     } @catch (NSException *e) {
@@ -3378,7 +3382,45 @@ static BOOL LCIsJunkFragment(NSString *s) {
     LCLog(@"overlay: config watcher started");
 }
 
-// 检查字号是否变化 → 变了就重排重绘
+// v2.2.20：保持字幕 overlay 在最上层。
+// 暮色（AvBox）在进入视频播放器时会创建全屏 UIWindow 或在其上叠加新的遮罩层，
+// addSubview / bringSubviewToFront 的一次性调用扛不住——新 view 加入后会把我们盖住。
+// 这里起一个 3s 周期的守护定时器，检测到 container 不在父视图末尾就立刻拉回来。
+- (void)startKeepAlive {
+    if (_keepAliveTimer) return;
+    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                                      dispatch_get_main_queue());
+    if (!timer) return;
+    dispatch_source_set_timer(timer,
+                              dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
+                              3 * NSEC_PER_SEC,
+                              100 * NSEC_PER_MSEC);
+    __weak LCSubtitleOverlay *weakSelf = self;
+    dispatch_source_set_event_handler(timer, ^{
+        [weakSelf keepAliveTick];
+    });
+    dispatch_resume(timer);
+    _keepAliveTimer = timer;
+    LCLog(@"overlay: keep-alive timer started");
+}
+
+- (void)keepAliveTick {
+    @try {
+        if (!_installed || !_container) return;
+        UIView *parent = _container.superview;
+        if (!parent) return;
+        // 确保挂在正确的 window 上（scene 切换 / 全屏新建 window 的情况）
+        [self ensureInBestWindow];
+        parent = _container.superview;
+        if (!parent) return;
+        // 已经是最后一个 subview 就不用动，避免不必要的 layout pass
+        if (parent.subviews.lastObject == _container) return;
+        [parent bringSubviewToFront:_container];
+        LCLog(@"overlay: keep-alive → brought to front");
+    } @catch (NSException *e) {
+        LCLog(@"overlay: keepAliveTick error");
+    }
+}
 - (void)checkConfigChange {
     @try {
         if (!_installed || !_container) return;
