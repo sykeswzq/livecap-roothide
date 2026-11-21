@@ -3219,6 +3219,12 @@ static BOOL LCIsJunkFragment(NSString *s) {
     CGFloat _lastFontSize;
     dispatch_source_t _configTimer;
     dispatch_source_t _keepAliveTimer;
+    // v2.2.22：自建 UIWindow 承载 overlay，彻底脱离 App 的窗口层级。
+    // 问题：暮色/YouTube 播放器会创建新 UIWindow（更高 z-level），
+    // 我们挂在 App keyWindow 上的 container 会被新 window 完全盖住，
+    // keepAlive bringToFront 在同一 window 内无法触及另一个 window。
+    // 解法：自建 UIWindow + 高 windowLevel，永不受 App 窗口切换影响。
+    UIWindow *_overlayWindow;
 }
 
 + (instancetype)shared {
@@ -3231,47 +3237,14 @@ static BOOL LCIsJunkFragment(NSString *s) {
 - (void)install {
     if (_installed) return;
     @try {
-        UIApplication *app = [UIApplication sharedApplication];
-        UIWindow *keyWindow = nil;
-
-        // iOS 13+ 必须用 connectedScenes 获取窗口（YouTube 多场景 App keyWindow 可能为 nil）
-        for (UIScene *scene in app.connectedScenes) {
-            if (scene.activationState != UISceneActivationStateForegroundActive) continue;
-            UIWindowScene *windowScene = (UIWindowScene *)scene;
-            if (!windowScene) continue;
-            // 优先找 keyWindow
-            for (UIWindow *w in windowScene.windows) {
-                if (w.isKeyWindow) { keyWindow = w; break; }
-            }
-            if (keyWindow) break;
-            // Fallback: 找第一个有 rootViewController.view 的窗口
-            for (UIWindow *w in windowScene.windows) {
-                if (w.rootViewController && w.rootViewController.view) {
-                    keyWindow = w;
-                    LCLog("overlay: using foreground scene window");
-                    break;
-                }
-            }
-            if (keyWindow) break;
-        }
-
-        // 最后兜底：遍历 app.windows
-        if (!keyWindow) {
-            for (UIWindow *w in app.windows) {
-                if (w.rootViewController && w.rootViewController.view) {
-                    keyWindow = w;
-                    LCLog("overlay: using fallback all-windows");
-                    break;
-                }
-            }
-        }
-
-        if (!keyWindow) { LCLog("overlay: no keyWindow found"); return; }
-        // 挂到 keyWindow 本身（而不是 rootViewController.view）：
-        // 1) 层级最高，不会被 App 内部的全屏播放层/手势层盖住导致拖不动
-        // 2) 不受 App 视图树变化影响
-        UIView *parent = keyWindow;
-        if (!parent) { LCLog("overlay: no rootVC view"); return; }
+        // v2.2.22：自建高 windowLevel 的 UIWindow，彻底脱离 App 的窗口树。
+        // 之前挂在 keyWindow 上会被暮色/YouTube 的播放器新 window 完全盖住，
+        // keepAlive bringToFront 在同一 window 内也救不回来。
+        UIWindow *screenWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+        screenWindow.windowLevel = UIWindowLevelAlert + 100; // 远高于普通 App 层级
+        screenWindow.backgroundColor = [UIColor clearColor];
+        screenWindow.hidden = NO;
+        _overlayWindow = screenWindow;
 
         CGFloat fs = [LCConfig shared].fontSize;
         BOOL bold = [[LCConfig shared] boldText];
@@ -3328,24 +3301,19 @@ static BOOL LCIsJunkFragment(NSString *s) {
         hp.delegate = self;   // 关键：允许与 YouTube 的手势同时识别
         [handle addGestureRecognizer:hp];
 
-        [parent addSubview:container];
+        [_overlayWindow addSubview:container];
         _container = container;
         _installed = YES;
-        // v2.2.20：addSubview 是插入末尾，如果 App 全屏/半屏切换时新建了更高 z-order 的 view
-        // （暮色 AvBox 就爱这么干），container 会被盖住 → 白点看不见。立刻提到顶层保命。
-        [parent bringSubviewToFront:container];
+        LCLog("overlay: installed in dedicated UIWindow (windowLevel=%.0f)", _overlayWindow.windowLevel);
 
         // 关键：立即给 container 一个可见的尺寸和位置。
         // 否则在 ASR 首次出结果之前，字幕框是 CGRectZero（不可见），
         // 把手也跟着不可见 —— 表现为「字幕框没有、右上角没有白点」。
         [self layoutInitialFrame];
 
-        // v1.0.84：注册窗口变化监听（全屏/旋转时重新布局 + 提到最上层）
-        [self observeWindowChanges];
-
         // v1.0.87：启动配置监听（字号改了立即重排）
         [self startConfigWatcher];
-        // v2.2.20：启动 keep-alive 守护，防止暮色等 App 新建播放层盖住 overlay
+        // v2.2.21：keep-alive 守护不再需要了（自有 UIWindow 不受 App 影响），但保留以防万一
         [self startKeepAlive];
 
         LCLog("overlay: installed");
@@ -3407,16 +3375,13 @@ static BOOL LCIsJunkFragment(NSString *s) {
 - (void)keepAliveTick {
     @try {
         if (!_installed || !_container) return;
-        UIView *parent = _container.superview;
-        if (!parent) return;
-        // 确保挂在正确的 window 上（scene 切换 / 全屏新建 window 的情况）
-        [self ensureInBestWindow];
-        parent = _container.superview;
-        if (!parent) return;
-        // 已经是最后一个 subview 就不用动，避免不必要的 layout pass
-        if (parent.subviews.lastObject == _container) return;
-        [parent bringSubviewToFront:_container];
-        LCLog(@"overlay: keep-alive → brought to front");
+        // v2.2.22：我们已有独立高层级 UIWindow，App 的窗口切换不影响我们。
+        // 只确保渲染时尺寸基于正确的屏幕 bounds（旋转等场景）。
+        CGRect screenBounds = [UIScreen mainScreen].bounds;
+        if (!CGRectEqualToRect(_container.superview.bounds, screenBounds)) {
+            // bounds 变了（比如旋转），重渲一次即可
+            [self renderCurrent];
+        }
     } @catch (NSException *e) {
         LCLog(@"overlay: keepAliveTick error");
     }
@@ -3436,114 +3401,18 @@ static BOOL LCIsJunkFragment(NSString *s) {
     }
 }
 
-// v1.0.84：找出当前应该承载字幕的 window。
-// 优先用 key window：YouTube 全屏若新建 window，那个新 window 会成为 key，
-// 我们必须跟着搬过去，否则字幕留在旧 window 里被完全盖住。
-// 注意：键盘 window 的 windowLevel 很高但不是 key，且不是我们的目标 ——
-//       所以只用 key window 判定，不按 windowLevel 挑。
-- (UIWindow *)bestHostWindow {
-    UIApplication *app = [UIApplication sharedApplication];
-    UIWindow *key = nil;
-    for (UIScene *scene in app.connectedScenes) {
-        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
-        UIWindowScene *ws = (UIWindowScene *)scene;
-        for (UIWindow *w in ws.windows) {
-            if (w.isKeyWindow && !w.hidden && w.alpha > 0.01) { key = w; break; }
-        }
-        if (key) break;
-    }
-    if (key) return key;
-    // 兜底：遍历 app.windows 找 key
-    for (UIWindow *w in app.windows) {
-        if (w.isKeyWindow && !w.hidden) return w;
-    }
-    // 再兜底：第一个有 rootViewController 的可见 window
-    for (UIScene *scene in app.connectedScenes) {
-        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
-        UIWindowScene *ws = (UIWindowScene *)scene;
-        for (UIWindow *w in ws.windows) {
-            if (!w.hidden && w.rootViewController && w.rootViewController.view) return w;
-        }
-    }
-    return nil;
-}
-
-// v1.0.84：确保 container 挂在正确的 window 上。
-// 全屏新建 window 时把 container 搬过去（保留相对位置比例）。
-- (void)ensureInBestWindow {
-    if (!_container) return;
-    UIWindow *host = [self bestHostWindow];
-    if (!host) return;
-    if (_container.superview == host) return;
-    UIWindow *old = _container.window;
-    // 记录迁移前的相对位置比例，迁移后按新窗口尺寸还原
-    CGFloat oldW = old ? old.bounds.size.width : 0;
-    CGFloat oldH = old ? old.bounds.size.height : 0;
-    CGFloat relX = 0.5, relY = 0.5;
-    if (oldW > 0 && oldH > 0) {
-        relX = _container.center.x / oldW;
-        relY = _container.center.y / oldH;
-    }
-    @try {
-        [_container removeFromSuperview];
-        [host addSubview:_container];
-        [host bringSubviewToFront:_container];   // v2.2.20：确保搬到新 window 后仍在最上层
-        // 按新窗口尺寸还原相对位置
-        CGPoint c = CGPointMake(relX * host.bounds.size.width,
-                                relY * host.bounds.size.height);
-        _container.center = c;
-        _userCenter = c;
-        LCLogF(@"overlay: re-homed to new window (old=%@ new=%@ size=%@)",
-               NSStringFromClass([old class]), NSStringFromClass([host class]),
-               NSStringFromCGRect(host.bounds));
-    } @catch (NSException *e) {
-        LCLog(@"overlay: re-home error");
-    }
-}
-
-// v1.0.84：把字幕 container 提到所在 window 的最顶层。
-// 解决「YouTube 全屏时字幕被全屏 VC 的 view 盖住」的问题。
-- (void)bringToFrontIfNeeded {
-    // 先确保挂在正确的 window 上（全屏新建 window 的情况）
-    [self ensureInBestWindow];
-    UIView *parent = _container.superview;
-    if (!parent) return;
-    // 已经是最后一个 subview 就没必要再动（避免每次渲染都触发重排）
-    if (parent.subviews.lastObject == _container) return;
-    @try {
-        [parent bringSubviewToFront:_container];
-        LCLogF(@"overlay: brought to front (parent=%@ subviews=%lu)",
-               NSStringFromClass([parent class]), (unsigned long)parent.subviews.count);
-    } @catch (NSException *e) {
-        LCLog(@"overlay: bringToFront error");
-    }
-}
-
+// v2.2.22：自有独立 UIWindow 承载 overlay，不再依赖 App 的窗口层级。
+// bestHostWindow / ensureInBestWindow / bringToFrontIfNeeded 全部废弃（同 window 内操作无法跨 window）。
 // v1.0.84：窗口尺寸/可见性变化监听。
 // 全屏播放时 window bounds 会从竖屏 393x852 变成横屏 852x393，
 // 若不重新布局，字幕会按旧的竖屏尺寸排版（宽度过大、位置偏移）。
+// v2.2.22：自有独立 UIWindow，不需要监听 App 窗口变化，只关心旋转
 - (void)observeWindowChanges {
     static BOOL registered = NO;
     if (registered) return;
     registered = YES;
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-    // UIWindowDidBecomeVisible：全屏 VC 出现后把我们提到最上层
-    [nc addObserverForName:UIWindowDidBecomeVisibleNotification
-                    object:nil queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification *n) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self bringToFrontIfNeeded];
-            [self renderCurrent];
-            LCLogF(@"overlay: window became visible, re-layout (super=%@)",
-                   NSStringFromCGRect(_container.superview.bounds));
-        });
-    }];
-    // 尺寸变化：旋转 / 全屏切换都会触发。
-    // 注意：UIKit 没有「window frame 变化」这种通知
-    //（UIKit 根本没有「window frame 变化」通知，CI 编译会报 undeclared identifier）。
-    // 旋转用下面这两个通知覆盖：
-    //   UIDeviceOrientationDidChangeNotification —— 设备物理旋转
-    //   UIApplicationDidChangeStatusBarOrientationNotification —— 状态栏方向变化
+    // 旋转时重渲（自有 window bounds 会随旋转更新）
     [nc addObserverForName:UIDeviceOrientationDidChangeNotification
                     object:nil queue:[NSOperationQueue mainQueue]
                 usingBlock:^(NSNotification *n) {
@@ -3558,17 +3427,7 @@ static BOOL LCIsJunkFragment(NSString *s) {
             [self renderCurrent];
         });
     }];
-    // v1.0.84：key window 变化 = 全屏新建了 window → 必须把字幕搬过去
-    [nc addObserverForName:UIWindowDidBecomeKeyNotification
-                    object:nil queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification *n) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self ensureInBestWindow];
-            [self renderCurrent];
-            LCLogF(@"overlay: key window changed -> re-homed (super=%@)",
-                   NSStringFromCGRect(_container.superview.bounds));
-        });
-    }];
+    LCLog(@"overlay: observeWindowChanges registered (rotation only)");
 }
 
 // 初始化字幕框位置/尺寸（ASR 尚未出结果时也保证可见）
@@ -3872,13 +3731,8 @@ static NSMutableAttributedString *LCStrokedText(NSString *text, UIColor *color, 
         }
 
         // ===== v1.0.84：全屏字幕不显示 =====
-        // 根因：YouTube 全屏播放时会 present 一个全屏 VC，
-        //       该 VC 的 view 被加到 window 的 subviews【末尾】= 最上层，
-        //       把我们挂在 window 上的字幕 container 直接盖住。
-        // 现象：竖屏能显示，一进全屏字幕就消失。
-        // 修复：每次渲染前把 container 提到 window 最顶层。
-        // 代价：可忽略（一次 bringSubviewToFront）。
-        [self bringToFrontIfNeeded];
+        // v2.2.22：自建独立 UIWindow 承载 overlay，不再依赖 App 窗口层级。
+        // bringToFrontIfNeeded 不再需要（自有 window 不受 App 影响）。
 
         CGFloat fs = [LCConfig shared].fontSize;
         // v1.0.87：同步记录本次使用的字号，供配置监听器比对
